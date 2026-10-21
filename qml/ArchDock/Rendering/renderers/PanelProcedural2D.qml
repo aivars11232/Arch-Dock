@@ -95,8 +95,13 @@ Item {
     readonly property bool rendererReady: width > 0 && height > 0
     readonly property var surfacePath: LayoutEngine.surface(
         layout, geometry, drawnAngle, polygonSides)
-    readonly property var surfaceStyle: LayoutEngine.themeStyle(
-        appearance, customColor, Number(geometry.iconSize || 40))
+    // The look's band, as wide as a bar holding widgets asks (bandWidth) so
+    // that they stand inside it.
+    readonly property var surfaceStyle: {
+        const style = LayoutEngine.themeStyle(appearance, customColor, Number(geometry.iconSize || 40))
+        const band = Number(geometry.bandWidth || 0)
+        return band > 0 ? Object.assign({}, style, { lineWidth: band }) : style
+    }
     // A clear-ground look (lightning, aurora) in its chosen palette.
     property string lookPalette: ""
     // The picture of the "picture" look, Arch Dock's copy of it.
@@ -162,6 +167,33 @@ Item {
         const width = surfaceStyle.lineWidth
         if (!(total > 0) || !(width > 0)) return
         const texture = 512
+        // A bar's band, as deep as the bar, is a capsule along a straight
+        // line: its round ends carry the material as its middle does, the
+        // picture laid once over the whole capsule.
+        const first = points[0], end = points[count - 1]
+        const straight = !closed && points.every(point =>
+            Math.abs((end.x - first.x) * (point.y - first.y) - (end.y - first.y) * (point.x - first.x))
+                <= 0.5 * Math.max(1, total))
+        if (straight && Number(geometry.bandWidth || 0) > 0) {
+            context.save()
+            context.translate(first.x, first.y)
+            context.rotate(Math.atan2(end.y - first.y, end.x - first.x))
+            const radius = width / 2
+            context.beginPath()
+            context.moveTo(0, -radius)
+            context.lineTo(total, -radius)
+            context.arc(total, 0, radius, -Math.PI / 2, Math.PI / 2, false)
+            context.lineTo(0, radius)
+            context.arc(0, 0, radius, Math.PI / 2, Math.PI * 3 / 2, false)
+            context.closePath()
+            context.clip()
+            context.translate(-width / 2, -width / 2)
+            context.scale((total + width) / texture, width / texture)
+            context.fillStyle = context.createPattern(String(materialSource), "repeat")
+            context.fillRect(0, 0, texture, texture)
+            context.restore()
+            return
+        }
         // Pieces overlap by `margin` texels so no hairline shows between
         // them; the run keeps that far inside the picture, so an overlap at
         // either end never wraps round to its other edge.
@@ -514,7 +546,10 @@ Item {
 
             context.lineWidth = root.surfaceStyle.lineWidth
             context.strokeStyle = root.surfaceStyle.stroke
-            context.shadowColor = root.lookGlow > 0 ? root.surfaceStyle.shadow : "transparent"
+            // A bar's band fills the bar's depth: a halo round it would only
+            // be cut square at the bar's edges, so it has none.
+            context.shadowColor = root.lookGlow > 0 && !(Number(root.geometry.bandWidth || 0) > 0)
+                ? root.surfaceStyle.shadow : "transparent"
             context.shadowBlur = root.surfaceStyle.blur * root.lookGlow
             context.lineCap = "round"
             context.lineJoin = "round"

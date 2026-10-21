@@ -7,10 +7,12 @@ no ambient socket is opened.
 
 Usage: eis-pointer.py X Y [X Y ...]
        eis-pointer.py push X Y DX DY [TIMES]
+       eis-pointer.py click X Y [left|right]
 The first moves the pointer to each point in turn, waiting for KWin to take
 each move. The second puts it at X Y and pushes it by DX DY again and again
 (five times unless told), a tenth of a second apart, as a hand pushes a mouse
-against a screen edge.
+against a screen edge. The third moves it to X Y and clicks there with the
+left button, or the right one.
 ARCHDOCK_PRIVATE_KWIN_PID must name the private KWin the test started; the
 pointer is moved only when that KWin's runtime folder, session bus and
 Wayland display are this process's own, so a session outside the test is
@@ -43,11 +45,18 @@ def private_kwin_or_exit():
 
 def main(arguments):
     push = None
+    button = None
     if arguments and arguments[0] == "push":
         if len(arguments) not in (5, 6):
             sys.exit(__doc__)
         push = [float(value) for value in arguments[1:5]] + [int(arguments[5]) if len(arguments) == 6 else 5]
         points = [(push[0], push[1])]
+    elif arguments and arguments[0] == "click":
+        if len(arguments) not in (3, 4) or (len(arguments) == 4 and arguments[3] not in ("left", "right")):
+            sys.exit(__doc__)
+        # The Linux input codes of the left and right buttons (BTN_LEFT, BTN_RIGHT).
+        button = 0x111 if len(arguments) == 4 and arguments[3] == "right" else 0x110
+        points = [(float(arguments[1]), float(arguments[2]))]
     else:
         if len(arguments) < 2 or len(arguments) % 2:
             sys.exit(__doc__)
@@ -71,6 +80,7 @@ def main(arguments):
         "device_ref": (pointer, [pointer]), "device_start_emulating": (None, [pointer, c.c_uint32]),
         "device_pointer_motion_absolute": (None, [pointer, c.c_double, c.c_double]),
         "device_pointer_motion": (None, [pointer, c.c_double, c.c_double]),
+        "device_button_button": (None, [pointer, c.c_uint32, c.c_bool]),
         "device_frame": (None, [pointer, c.c_uint64]), "now": (c.c_uint64, [pointer]),
         "new_ping": (pointer, [pointer]), "ping": (None, [pointer]), "ping_unref": (pointer, [pointer]),
     }
@@ -98,7 +108,8 @@ def main(arguments):
             if kind == 8:
                 device = lib.ei_event_get_device(event)
                 started = False
-                for capability in (1, 2):
+                # Relative pointer, absolute pointer, buttons.
+                for capability in (1, 2, 32):
                     if lib.ei_device_has_capability(device, capability) and capability not in devices:
                         devices[capability] = lib.ei_device_ref(device)
                         started = True
@@ -131,6 +142,13 @@ def main(arguments):
         lib.ei_device_frame(devices[2], lib.ei_now(context))
         taken()
         time.sleep(0.05)
+    if button is not None:
+        wait_for(lambda: 32 in devices, "buttons from KWin")
+        for pressed in (True, False):
+            lib.ei_device_button_button(devices[32], button, pressed)
+            lib.ei_device_frame(devices[32], lib.ei_now(context))
+            taken()
+            time.sleep(0.05)
     if push:
         wait_for(lambda: 1 in devices, "relative pointer from KWin")
         for _ in range(push[4]):

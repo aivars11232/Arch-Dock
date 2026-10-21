@@ -1276,6 +1276,62 @@ Item {
     // The icons' centres at rest, for a decoration to stand round: where
     // they stand before any travel along the path, and on a turning panel
     // turned back to the resting angle the decoration is drawn at.
+    // An Arch Dock bar draws its look along its whole length and as deep as
+    // the bar, its widgets and icons inside it: the surface
+    // reaches surfaceSpanBefore before this scene's box and surfaceSpanAfter
+    // after it along the bar, and surfaceSpanThickness across, while the
+    // entries keep their place. For looks drawn flat along a line.
+    property real surfaceSpanBefore: 0
+    property real surfaceSpanAfter: 0
+    property real surfaceSpanThickness: 0
+    readonly property bool surfaceSpanned: (surfaceSpanBefore > 0 || surfaceSpanAfter > 0 || surfaceSpanThickness > 0)
+        && ["horizontal", "vertical", "adaptive"].includes(layoutPath)
+        && !segmentedScene && !bakedMetadataUsable && resolvedRendererTier !== "true3d"
+    // The band, as deep as the bar but for a little room at its sides.
+    readonly property real surfaceBand: surfaceSpanned && surfaceSpanThickness > 0
+        ? Math.max(1, surfaceSpanThickness - 8) : 0
+    // The band is drawn round a line that ends half an icon and the padding
+    // in from its box's ends, with round ends half the band deep: the box
+    // reaches that much past the bar's ends, so the band ends at them.
+    readonly property real surfaceLineInset: Math.max(0, Number(layoutGeometry.padding || 0)
+        + Number(layoutGeometry.iconSize || 0) / 2
+        - (surfaceBand > 0 ? surfaceBand : Number(rendererStyle.lineWidth || 0)) / 2)
+    // The surface's box in this scene's coordinates.
+    readonly property rect surfaceBox: {
+        if (!surfaceSpanned) return Qt.rect(0, 0, width, height)
+        const before = surfaceSpanBefore + surfaceLineInset
+        const along = surfaceSpanBefore + surfaceSpanAfter + 2 * surfaceLineInset
+        const across = Math.max(0, surfaceSpanThickness - (verticalLayout ? width : height))
+        return verticalLayout
+            ? Qt.rect(-across / 2, -before, width + across, height + along)
+            : Qt.rect(-before, -across / 2, width + along, height + across)
+    }
+    readonly property var spannedRendererGeometry: Object.assign({}, rendererGeometry, {
+        width: surfaceBox.width, height: surfaceBox.height, bandWidth: surfaceBand
+    })
+    // The surface's motion as the surface has it: a clip (an opening or
+    // closing panel's) reaching this box's sides reaches the surface's.
+    readonly property var spannedMotionTracks: {
+        const tracks = motionTracks
+        const clip = tracks && tracks.surface ? tracks.surface.clip : null
+        if (!surfaceSpanned || !clip || typeof clip !== "object") return tracks
+        const box = surfaceBox
+        const fit = (start, length, full, boxStart, boxLength) => {
+            const end = start + length
+            const first = start <= 0 ? 0 : start - boxStart
+            const last = end >= full ? boxLength : end - boxStart
+            return [first, Math.max(0, last - first)]
+        }
+        const x = fit(Number(clip.x || 0), Number(clip.width === undefined ? width : clip.width),
+                      width, box.x, box.width)
+        const y = fit(Number(clip.y || 0), Number(clip.height === undefined ? height : clip.height),
+                      height, box.y, box.height)
+        const spannedClip = Object.assign({}, clip, { x: x[0], width: x[1], y: y[0], height: y[1] })
+        return Object.assign({}, tracks, { surface: Object.assign({}, tracks.surface, { clip: spannedClip }) })
+    }
+    // The icons' centres where the surface has them.
+    readonly property var surfaceIconCentres: !surfaceSpanned ? decorationIconCentres
+        : decorationIconCentres.map(centre => ({ x: centre.x - surfaceBox.x, y: centre.y - surfaceBox.y }))
     readonly property var decorationIconCentres: {
         if (!panelDecoration.length) return []
         const turn = layoutGeometry && layoutGeometry.rotationEnvelope === true ? sceneRotationAngle : 0
@@ -1737,7 +1793,11 @@ Item {
     PanelSurfaceLoader {
         id: surfaceLoader
 
-        anchors.fill: parent
+        // The scene's box, or along a bar the bar's whole length and depth.
+        x: root.surfaceBox.x
+        y: root.surfaceBox.y
+        width: root.surfaceBox.width
+        height: root.surfaceBox.height
         visible: !root.segmentedScene
         requestedRendererTier: root.resolvedRendererTier
         themeId: root.themeId
@@ -1767,8 +1827,8 @@ Item {
         decorationAnimated: root.decorationAnimated
         decorationSpeed: root.decorationSpeed
         decorationEdge: root.freeHost ? "" : root.screenEdge
-        iconCentres: root.decorationIconCentres
-        geometry: root.rendererGeometry
+        iconCentres: root.surfaceIconCentres
+        geometry: root.surfaceSpanned ? root.spannedRendererGeometry : root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
         restingAngle: root.layoutAngle
         polygonSides: root.polygonSides
@@ -1782,7 +1842,7 @@ Item {
         customColor: root.customColor
         panelOpacity: root.panelOpacity
         sparkleIntensity: root.sparkleIntensity
-        motionTracks: root.motionTracks
+        motionTracks: root.spannedMotionTracks
         collapseProgress: root.collapseProgress
         mechanism: root.collapseMechanism
         trackMetrics: root.bakedTrackMetrics || ({})

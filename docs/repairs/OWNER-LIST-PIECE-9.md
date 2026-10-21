@@ -420,3 +420,67 @@ Checks: unit tests for the list and the move; bar-host-smoke with a clock
 and the system tray in a bar; Panel Studio's Widgets page; on a private
 Plasma desktop: widgets added, ordered and removed, a widget's popup and
 settings window, hiding with widgets, the look before/after.
+
+## Step 4: Plasma widgets in bars — checkpoint (2026-10-21, in progress)
+
+The owner asked to commit, sync and stop here; step 4 continues from
+`docs/repairs/OWNER-LIST-PIECE-9-HANDOFF.md`.
+
+### What works now (on a private Plasma desktop)
+
+- **Plasma's own widgets in a bar**, beside its dock: the application
+  launcher, the digital clock and the system tray (with its own items), in
+  the order the bar's record keeps; moving one along the bar or taking it out
+  follows at once. Each widget keeps its settings under a key of its own.
+- **A widget's own menu** on a right-click: "Configure <widget>…" and the
+  widget's own actions (the owner ticked it). Plasma's widget explorer and
+  "Show Alternatives…" are left out, since Panel Studio adds and removes a
+  bar's widgets.
+- **One panel for the whole bar**: every bar draws its Arch Dock look along
+  its whole length and as deep as the bar, its icons and widgets inside it
+  (the owner: "They have to be inside the panel", and for a bar holding only
+  its dock, "the icons also should be inside the panel"); the glass reaches
+  into the panel's round ends.
+- **Stopping the bar host empties no bar**: Arch Dock starts it again and it
+  makes the same widgets.
+
+### Found on the way, and fixed
+
+1. The first widget handling would, as the bar host closed, have reported
+   every widget as removed by the user, and so emptied every bar's list; it
+   also made the bar host end with a failure. The handling now goes before
+   Plasma's own closing does.
+2. The system tray was not offered: it is a widget holding a containment of
+   its own, which Plasma's widget list offers and the first filter left out.
+3. The look reached only the dock's own part of the bar: the panel's opening
+   and closing clip and the drawn line's insets held it to the dock's length.
+4. The glass stopped short of the panel's round ends, leaving a line beside
+   the tray's Wi-Fi symbol (the owner marked it).
+
+### Still open
+
+1. Faint square corners outside the panel's round ends (the owner: "no need
+   for those corners if ends are rounded"). Ruled out so far: the look's glow
+   (off), the band's own halo (now off for bars), any blur asked of KWin, a
+   rectangle in the surface loader.
+2. Panel Studio's Widgets page (add from the installed widgets, order,
+   remove).
+3. "Enter Edit Mode" still shows in a widget's menu.
+4. A widget's settings window seen on screen; side bars; looks other than the
+   flat ones (skins, decorations, 3D) along a bar.
+5. Moving Arch Dock's Plasma-held edge panels into bars with their widgets.
+6. Docs, the complete suite, the step's commit and recheck.
+
+Pictures: `/mnt/F/archdock-audit-2026-10-08/evidence/piece9-bars-step4/`
+(`widgets-inside-the-panel.png`, `icons-inside-the-panel.png`,
+`open-corners-at-the-round-ends.png`); runs `bars-step4-widgets-*`.
+
+### Tests
+
+- New: `barwidgets-test`; `barrecord-test` widget cases;
+  `PanelWindowCapabilityTest::barWidgetsFollowTheirOperations`;
+  `bar-host-smoke` widget checks (made in order, moved, removed) and its clean
+  stop; `tests/eis-pointer.py click`.
+- At this checkpoint 19 related tests passed (the bar tests, panel model,
+  registry, profiles, the scene, skin, parity, icon and decoration tests and
+  the template check). The complete suite has not been run on it.

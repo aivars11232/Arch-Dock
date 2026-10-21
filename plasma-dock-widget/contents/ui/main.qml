@@ -42,6 +42,14 @@ PlasmoidItem {
 
     readonly property bool renderingModuleReady: RenderingModuleProbe.ready
     readonly property string panelId: Plasmoid.configuration.panelId || ""
+    // In an Arch Dock bar, how far the bar reaches before and after this
+    // dock along it and how deep it is, set by the bar: the dock draws the
+    // bar's look over all of it, a panel its icons and the bar's other
+    // widgets stand inside.
+    property real barSurfaceBefore: 0
+    property real barSurfaceAfter: 0
+    property real barSurfaceThickness: 0
+    readonly property bool drawsBarSurface: barSurfaceThickness > 0
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property bool bootstrapPending: panelId.length === 0
         && Boolean(Plasmoid.configuration.bootstrapFreeDock)
@@ -1397,6 +1405,16 @@ PlasmoidItem {
                     // An edge panel's decoration may reach farther at one end.
                     anchors.horizontalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetX || 0)
                     anchors.verticalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetY || 0)
+                    // Along a bar holding other widgets, from where the bar
+                    // starts to where it ends (not from the window the dock
+                    // overflows into, which is no bar).
+                    surfaceSpanBefore: root.drawsBarSurface && !overflowHost.hosting
+                        ? Math.max(0, root.barSurfaceBefore + (root.vertical ? y : x)) : 0
+                    surfaceSpanAfter: root.drawsBarSurface && !overflowHost.hosting
+                        ? Math.max(0, root.barSurfaceAfter + (root.vertical ? dockContent.height - y - height
+                                                                            : dockContent.width - x - width)) : 0
+                    surfaceSpanThickness: root.drawsBarSurface && !overflowHost.hosting
+                        ? root.barSurfaceThickness : 0
                     panelDefinition: root.scenePanelDefinition
                     runtimeState: root.sceneRuntimeState
                     orderedEntries: root.entries

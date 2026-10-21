@@ -120,6 +120,10 @@ struct PanelContent
     // reordering a free panel is a permutation of this list and nothing else.
     QStringList entryOrder;
     QStringList kdeWidgets;
+    // What a bar of Arch Dock's own holds, in order along it: "dock" for
+    // Arch Dock's dock and "<key>:<plugin id>" for each Plasma widget, whose
+    // key its settings are kept under (BarWidgets).
+    QStringList barWidgets;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
     // A free panel's own folder shapes (ADREP-TASK-003): the fan's opening in

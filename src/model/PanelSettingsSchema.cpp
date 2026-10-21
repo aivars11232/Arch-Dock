@@ -431,6 +431,10 @@ const QVector<Descriptor> &schemaFields()
               Normalization::StringList, QStringList{}, "content.entryOrder"),
         panel("kdeWidgets", Access::Internal, Type::StringList,
               Normalization::StringList, QStringList{}, "content.kdeWidgets"),
+        // A bar's dock and Plasma widgets in order. Internal: it changes only
+        // through the bar widget operations.
+        panel("barWidgets", Access::Internal, Type::StringList,
+              Normalization::StringList, QStringList{}, "content.barWidgets"),
         panel("segments", Access::Editor, Type::List, Normalization::None,
               QVariantList{QVariantMap{{QStringLiteral("id"), QStringLiteral("main")}}},
               "segments", {}, {}, {}, false, true,

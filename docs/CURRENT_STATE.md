@@ -128,6 +128,17 @@ host, hiding, and Panel Studio, profiles, presets and the start at login.
   `PanelRegistryTest::adoptsAPreviewBarWithNothingInPlasma`,
   `ProfileStoreTest::barsStayBarsInAProfile`,
   `ProfileApplyTransactionTest::aBarInTheProfileNeverTakesOverAPlasmaPanel`.
+- **Step 4, Plasma widgets in bars (in progress, checkpoint)**: a bar's
+  `barWidgets` ("dock" and "<key>:<plugin id>", `src/bars/BarWidgets.*`) goes
+  to the bar host in each record's `widgets`; `BarCorona` makes, removes and
+  orders the widgets (the containment's `AppletOrder`, as Plasma's panels
+  keep theirs), reports one removed through its own menu (`barWidgetRemoved`)
+  and trims Plasma's menus of what Panel Studio does. Backend:
+  `barWidgetList`, `availableBarWidgets`, `addBarWidget`, `removeBarWidget`,
+  `moveBarWidget`. The dock draws one panel along the whole bar and as deep
+  as it (`PanelScene.surfaceBox`, `bandWidth` in the flat renderer), its icons
+  and the widgets inside. The bar shell holds plasma-desktop's widget
+  settings window. Open items: `docs/repairs/OWNER-LIST-PIECE-9-HANDOFF.md`.
 <!-- LIST_PIECE_9_END -->
 
 <!-- LIST_PIECE_8_BEGIN -->

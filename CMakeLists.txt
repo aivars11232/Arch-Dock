@@ -458,6 +458,8 @@ qt_add_executable(
   src/panel/BarHostSupervisor.cpp
   src/panel/BarAutostart.h
   src/panel/BarAutostart.cpp
+  src/bars/BarWidgets.h
+  src/bars/BarWidgets.cpp
   src/WindowItem.h
   src/WindowModel.h
   src/WindowModel.cpp
@@ -523,7 +525,8 @@ target_link_libraries(
           Qt6::Quick
           KF6::Kirigami
           KF6::Service
-          KF6::KIOGui)
+          KF6::KIOGui
+          KF6::Package)
 
 target_compile_definitions(
   arch-dock
@@ -553,7 +556,8 @@ find_package(PlasmaQuick 6.8 REQUIRED)
 find_package(LayerShellQt 6.8 REQUIRED)
 set(ARCHDOCK_BAR_LOGIC_SOURCES
     src/bars/BarLayout.h src/bars/BarLayout.cpp
-    src/bars/BarRecord.h src/bars/BarRecord.cpp)
+    src/bars/BarRecord.h src/bars/BarRecord.cpp
+    src/bars/BarWidgets.h src/bars/BarWidgets.cpp)
 add_executable(
   arch-dock-bars
   src/bars/main.cpp
@@ -640,7 +644,7 @@ if(BUILD_TESTING)
   target_link_libraries(bar-autostart-test PRIVATE Qt6::Core Qt6::Test)
   add_test(NAME bar-autostart-test COMMAND bar-autostart-test)
 
-  foreach(bar_test IN ITEMS BarLayout BarRecord)
+  foreach(bar_test IN ITEMS BarLayout BarRecord BarWidgets)
     string(TOLOWER "${bar_test}" bar_test_name)
     qt_add_executable(${bar_test_name}-test tests/${bar_test}Test.cpp ${ARCHDOCK_BAR_LOGIC_SOURCES})
     target_include_directories(${bar_test_name}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -1439,6 +1443,8 @@ if(BUILD_TESTING)
     src/panel/BarHostSupervisor.cpp
     src/panel/BarAutostart.h
     src/panel/BarAutostart.cpp
+    src/bars/BarWidgets.h
+    src/bars/BarWidgets.cpp
     src/model/PresetIdentity.h
     src/model/PresetIdentity.cpp
     src/model/IconPresetDefinition.h
@@ -1499,7 +1505,8 @@ if(BUILD_TESTING)
             Qt6::QuickTest
             KF6::Kirigami
             KF6::Service
-            KF6::KIOGui)
+            KF6::KIOGui
+            KF6::Package)
   target_compile_definitions(
     panel-window-capability-test
     PRIVATE ARCHDOCK_SOURCE_KWIN_SCRIPT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/kwin-script/contents/code/main.js"

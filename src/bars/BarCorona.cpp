@@ -6,9 +6,12 @@
 #include <Plasma/Applet>
 #include <Plasma/Containment>
 
+#include <QAction>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QScreen>
+
+#include <algorithm>
 
 namespace ArchDock::Bars
 {
@@ -16,6 +19,8 @@ namespace
 {
 // Where a containment keeps which bar it is.
 constexpr const char *BarIdKey = "archDockBar";
+// Where a widget keeps the key its bar's record knows it by.
+constexpr const char *WidgetKeyEntry = "archDockWidget";
 
 Plasma::Types::Location location(const QString &edge)
 {
@@ -37,26 +42,31 @@ Plasma::Applet *dockApplet(const Plasma::Containment *containment)
     return nullptr;
 }
 
+void hideAction(QAction *action)
+{
+    if (action)
+        action->setVisible(false);
+}
+
+// Sets one of an applet's own settings as its settings page would, so that
+// its QML follows; whether it changed (and is still to be saved).
+bool changeSetting(KConfigLoader *settings, const QString &name, const QString &value)
+{
+    KConfigSkeletonItem *item = settings ? settings->findItemByName(name) : nullptr;
+    if (!item || item->property().toString() == value)
+        return false;
+    item->setProperty(value);
+    return true;
+}
+
 // The dock widget learns which panel it draws from its own settings, the
 // same two the backend writes when it puts the dock in a Plasma panel.
 void configureDock(Plasma::Applet *applet, const BarRecord &record)
 {
     KConfigLoader *settings = applet->configScheme();
-    if (!settings)
-        return;
-    bool changed = false;
-    const auto set = [settings, &changed](const QString &name, const QString &value)
-    {
-        KConfigSkeletonItem *item = settings->findItemByName(name);
-        if (item && item->property().toString() != value)
-        {
-            item->setProperty(value);
-            changed = true;
-        }
-    };
-    set(QStringLiteral("panelId"), record.id);
-    set(QStringLiteral("panelType"), record.type);
-    if (changed)
+    const bool panel = changeSetting(settings, QStringLiteral("panelId"), record.id);
+    const bool type = changeSetting(settings, QStringLiteral("panelType"), record.type);
+    if (panel || type)
         settings->save();
 }
 }
@@ -133,6 +143,7 @@ void BarCorona::followRecord(Plasma::Containment *containment, const BarRecord &
 {
     containment->setFormFactor(record.vertical() ? Plasma::Types::Vertical : Plasma::Types::Horizontal);
     containment->setLocation(location(record.edge));
+    trimMenus(containment);
 
     Plasma::Applet *dock = dockApplet(containment);
     const bool wantsDock = record.type != QStringLiteral("empty");
@@ -144,13 +155,133 @@ void BarCorona::followRecord(Plasma::Containment *containment, const BarRecord &
         dock = nullptr;
     }
     if (dock)
+    {
         configureDock(dock, record);
+        trimMenus(dock);
+    }
+    followWidgets(containment, dock, record);
+}
+
+void BarCorona::followWidgets(Plasma::Containment *containment, Plasma::Applet *dock, const BarRecord &record)
+{
+    watchRemovals(containment);
+    // Each widget made for the bar carries the key its record knows it by;
+    // one the record no longer lists, or one with no key, goes.
+    QHash<QString, Plasma::Applet *> byKey;
+    const QList<Plasma::Applet *> applets = containment->applets();
+    for (Plasma::Applet *applet : applets)
+    {
+        if (applet->destroyed() || applet->pluginName() == QLatin1String(DockPlugin))
+            continue;
+        const QString key = applet->config().readEntry(WidgetKeyEntry, QString());
+        const bool listed = std::any_of(record.widgets.cbegin(), record.widgets.cend(),
+                                        [&key, applet](const BarWidget &widget)
+                                        { return widget.key == key && widget.plugin == applet->pluginName(); });
+        if (listed && !byKey.contains(key))
+        {
+            byKey.insert(key, applet);
+            rememberWidget(applet, key);
+            continue;
+        }
+        m_removing.insert(applet);
+        applet->destroy();
+    }
+
+    // In the record's order: Plasma's panels keep theirs the same way, as
+    // the applet ids in the containment's AppletOrder setting.
+    QStringList order;
+    for (const BarWidget &widget : record.widgets)
+    {
+        Plasma::Applet *applet = widget.dock() ? dock : byKey.value(widget.key);
+        if (!applet && !widget.dock())
+        {
+            applet = containment->createApplet(widget.plugin);
+            if (applet)
+            {
+                KConfigGroup settings = applet->config();
+                settings.writeEntry(WidgetKeyEntry, widget.key);
+                rememberWidget(applet, widget.key);
+                requireConfigSync();
+            }
+            else
+                qWarning() << "The Plasma widget" << widget.plugin << "could not be added to the bar" << record.id;
+        }
+        if (applet)
+        {
+            order.append(QString::number(applet->id()));
+            trimMenus(applet);
+        }
+    }
+    KConfigLoader *settings = containment->configScheme();
+    if (changeSetting(settings, QStringLiteral("AppletOrder"), order.join(QLatin1Char(';'))))
+        settings->save();
+}
+
+void BarCorona::trimMenus(Plasma::Applet *applet)
+{
+    // Panel Studio adds, orders and removes a bar's widgets, so what Plasma's
+    // menus offer for that stays out of them: its widget explorer and edit
+    // mode, which the bar host has neither of; a widget's alternatives (an
+    // analog clock for the digital one, a widget the bar's record does not
+    // hold, which the bar host would take out again); and Remove on the
+    // dock, which goes with its bar. Plasma makes these actions after a widget
+    // starts and may show them again, so they are hidden as each menu opens.
+    const auto trim = [this, applet]
+    {
+        hideAction(action(QStringLiteral("edit mode")));
+        if (applet->isContainment())
+            hideAction(applet->internalAction(QStringLiteral("add widgets")));
+        else
+            hideAction(applet->internalAction(QStringLiteral("alternatives")));
+        if (applet->pluginName() == QLatin1String(DockPlugin))
+            hideAction(applet->internalAction(QStringLiteral("remove")));
+    };
+    trim();
+    if (m_trimmed.contains(applet))
+        return;
+    m_trimmed.insert(applet);
+    connect(applet, &Plasma::Applet::contextualActionsAboutToShow, &m_widgetWatch, trim);
+    connect(applet, &QObject::destroyed, &m_widgetWatch, [this, applet] { m_trimmed.remove(applet); });
+}
+
+void BarCorona::rememberWidget(Plasma::Applet *applet, const QString &key)
+{
+    if (!m_widgetKeys.contains(applet))
+    {
+        // The containment tells of a removal from the widget's own destroyed
+        // signal, connected before this one: the key is still here then.
+        connect(applet, &QObject::destroyed, &m_widgetWatch, [this, applet]
+        {
+            m_widgetKeys.remove(applet);
+            m_removing.remove(applet);
+        });
+    }
+    m_widgetKeys.insert(applet, key);
+}
+
+void BarCorona::watchRemovals(Plasma::Containment *containment)
+{
+    if (m_watched.contains(containment))
+        return;
+    m_watched.insert(containment);
+    connect(containment, &QObject::destroyed, &m_widgetWatch, [this, containment] { m_watched.remove(containment); });
+    connect(containment, &Plasma::Containment::appletRemoved, &m_widgetWatch, [this, containment](Plasma::Applet *applet)
+    {
+        const QString key = m_widgetKeys.take(applet);
+        if (m_removing.remove(applet) || key.isEmpty())
+            return;
+        Q_EMIT widgetRemovedByUser(barId(containment), key);
+    });
 }
 
 void BarCorona::removeBar(Plasma::Containment *containment)
 {
     if (!containment)
         return;
+    // Its widgets go with it, by no one's own removal.
+    const QList<Plasma::Applet *> applets = containment->applets();
+    for (Plasma::Applet *applet : applets)
+        m_removing.insert(applet);
     // Plasma deletes a containment a moment after it is destroyed, and only
     // then is it gone from the layout: the layout is written once it is.
     connect(containment, &QObject::destroyed, this, [this] { requireConfigSync(); });

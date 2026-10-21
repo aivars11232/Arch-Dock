@@ -11,6 +11,8 @@
 #include "WindowModel.h"
 
 #include <limits>
+#include <KPluginMetaData>
+
 #include <QDir>
 #include <QDBusConnection>
 #include <QElapsedTimer>
@@ -371,6 +373,7 @@ private slots:
     void barsFollowTheirRecords();
     void studioAddsBars();
     void presetTrialsOnANewPanelAreBars();
+    void barWidgetsFollowTheirOperations();
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
@@ -2758,6 +2761,62 @@ void PanelWindowCapabilityTest::presetTrialsOnANewPanelAreBars()
     QCOMPARE(definition->host.nativePanelId, -1);
     QVERIFY(definition->host.nativeOwnershipToken.isEmpty());
     QCOMPARE(bars(), QStringList{kept});
+}
+
+void PanelWindowCapabilityTest::barWidgetsFollowTheirOperations()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    const QString bar = backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher"));
+    QVERIFY(!bar.isEmpty());
+    // What the bar host is told the bar holds, in order.
+    const auto held = [&backend, &bar] {
+        QStringList held;
+        for (const QJsonValue &record : QJsonDocument::fromJson(backend.barHostRecordsJson().toUtf8()).array())
+            if (record.toObject().value("id").toString() == bar)
+                for (const QJsonValue &widget : record.toObject().value("widgets").toArray())
+                    held.append(widget.toObject().value("key").toString() == QLatin1String("dock")
+                        ? QStringLiteral("dock") : widget.toObject().value("plugin").toString());
+        return held;
+    };
+    QCOMPARE(held(), QStringList{QStringLiteral("dock")});
+
+    // Plasma's installed widgets, never Arch Dock's own.
+    QStringList installed;
+    for (const QVariant &widget : backend.availableBarWidgets())
+        installed.append(widget.toMap().value("plugin").toString());
+    QVERIFY(!installed.contains(QStringLiteral("org.archdock.dock")));
+    QVERIFY(std::none_of(installed.cbegin(), installed.cend(),
+                         [](const QString &plugin) { return plugin.contains(QLatin1String(".private.")); }));
+    // The system tray is a widget holding a containment of its own: Plasma
+    // offers it for panels, and bars offer it too.
+    if (KPluginMetaData::findPluginById(QStringLiteral("plasma/applets"), QStringLiteral("org.kde.plasma.systemtray")).isValid())
+        QVERIFY(installed.contains(QStringLiteral("org.kde.plasma.systemtray")));
+    const QString clock = QStringLiteral("org.kde.plasma.digitalclock");
+    if (!installed.contains(clock))
+        QSKIP("Plasma's digital clock is not installed here");
+    QVERIFY(backend.addBarWidget(bar, QStringLiteral("org.archdock.dock")).isEmpty());
+    QVERIFY(backend.addBarWidget(bar, QStringLiteral("no.such.widget")).isEmpty());
+    QVERIFY(backend.addBarWidget(QStringLiteral("bottom"), clock).isEmpty());
+
+    const QString first = backend.addBarWidget(bar, clock);
+    const QString second = backend.addBarWidget(bar, clock);
+    QVERIFY(!first.isEmpty() && !second.isEmpty() && first != second);
+    QCOMPARE(held(), (QStringList{QStringLiteral("dock"), clock, clock}));
+    QVERIFY(backend.moveBarWidget(bar, QStringLiteral("dock"), 99));
+    QCOMPARE(held(), (QStringList{clock, clock, QStringLiteral("dock")}));
+    const QVariantList listed = backend.barWidgetList(bar);
+    QCOMPARE(listed.size(), 3);
+    QCOMPARE(listed.first().toMap().value("key").toString(), first);
+    QVERIFY(!listed.first().toMap().value("name").toString().isEmpty());
+    QCOMPARE(listed.last().toMap().value("key").toString(), QStringLiteral("dock"));
+
+    // The dock stays; a widget goes from Panel Studio or from its own menu.
+    QVERIFY(!backend.removeBarWidget(bar, QStringLiteral("dock")));
+    QVERIFY(backend.removeBarWidget(bar, first));
+    QVERIFY(backend.barWidgetRemoved(bar, second));
+    QVERIFY(!backend.removeBarWidget(bar, second));
+    QCOMPARE(held(), QStringList{QStringLiteral("dock")});
 }
 
 void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()

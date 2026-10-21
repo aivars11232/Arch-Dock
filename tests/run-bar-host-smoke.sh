@@ -171,6 +171,56 @@ expect 'the maximised window takes the room the left bar left' '0|0|1280|644' te
 removed_bar() { grep -c '^archDockBar=bar-c$' "$layout" || true; }
 expect 'a bar taken off the list leaves the layout' '0' removed_bar
 
+# Plasma's own widgets in a bar: made with the keys the list gives them, in
+# the list's order (the containment's AppletOrder, as Plasma's panels keep
+# theirs), moved and taken out as the list changes.
+bar_b_holds() {
+    python3 - "$layout" <<'PY'
+import re, sys
+groups, current = {}, None
+for line in open(sys.argv[1], encoding="utf-8"):
+    line = line.strip()
+    if line.startswith("["):
+        current = tuple(re.findall(r"\[([^\]]*)\]", line)); groups.setdefault(current, {})
+    elif "=" in line and current is not None:
+        key, value = line.split("=", 1); groups[current][key] = value
+for group, values in groups.items():
+    if len(group) == 2 and group[0] == "Containments" and values.get("archDockBar") == "bar-b":
+        applets = {g[3]: v for g, v in groups.items() if len(g) == 4 and g[:3] == group + ("Applets",)}
+        # A widget's own settings are its group's [Configuration].
+        keys = {g[3]: v.get("archDockWidget", "-") for g, v in groups.items()
+                if len(g) == 5 and g[:3] == group + ("Applets",) and g[4] == "Configuration"}
+        order = next((v.get("AppletOrder", "") for g, v in groups.items()
+                      if g[:2] == group and "AppletOrder" in v), "")
+        print(",".join(applets[i].get("plugin", "?") + ":" + keys.get(i, "-")
+                       for i in order.split(";") if i in applets))
+PY
+}
+widgets='[{"key": "wclock", "plugin": "org.kde.plasma.digitalclock"}, {"key": "dock"}]'
+write_records "[
+  {\"id\": \"bar-a\", \"type\": \"empty\", \"edge\": \"bottom\", \"alignment\": \"center\", \"thickness\": 60,
+   \"lengthMode\": \"fixed\", \"fixedLength\": 500},
+  {\"id\": \"bar-b\", \"type\": \"launcher\", \"edge\": \"bottom\", \"alignment\": \"end\", \"thickness\": 76,
+   \"lengthMode\": \"fixed\", \"fixedLength\": 400, \"offset\": 40, \"widgets\": $widgets}
+]"
+expect "a Plasma widget in a bar, before the dock as listed" \
+    'org.kde.plasma.digitalclock:wclock,org.archdock.dock:-' bar_b_holds
+write_records "[
+  {\"id\": \"bar-a\", \"type\": \"empty\", \"edge\": \"bottom\", \"alignment\": \"center\", \"thickness\": 60,
+   \"lengthMode\": \"fixed\", \"fixedLength\": 500},
+  {\"id\": \"bar-b\", \"type\": \"launcher\", \"edge\": \"bottom\", \"alignment\": \"end\", \"thickness\": 76,
+   \"lengthMode\": \"fixed\", \"fixedLength\": 400, \"offset\": 40,
+   \"widgets\": [{\"key\": \"dock\"}, {\"key\": \"wclock\", \"plugin\": \"org.kde.plasma.digitalclock\"}]}
+]"
+expect 'the widget moved after the dock' 'org.archdock.dock:-,org.kde.plasma.digitalclock:wclock' bar_b_holds
+write_records '[
+  {"id": "bar-a", "type": "empty", "edge": "bottom", "alignment": "center", "thickness": 60,
+   "lengthMode": "fixed", "fixedLength": 500},
+  {"id": "bar-b", "type": "launcher", "edge": "bottom", "alignment": "end", "thickness": 76,
+   "lengthMode": "fixed", "fixedLength": 400, "offset": 40, "widgets": [{"key": "dock"}]}
+]'
+expect 'the widget taken off the list leaves the bar' 'org.archdock.dock:-' bar_b_holds
+
 # A deeper bar: its edge's strip reserves its depth, and the maximised window
 # makes room for it.
 write_records '[

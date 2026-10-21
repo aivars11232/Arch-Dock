@@ -56,6 +56,15 @@ QList<BarRecord> parseBarRecords(const QByteArray &json, QString *error)
         record.type = choice(object, "type",
                              {QStringLiteral("empty"), QStringLiteral("launcher"), QStringLiteral("tasks"),
                               QStringLiteral("hybrid")}, record.type);
+        QList<BarWidget> widgets;
+        const QJsonArray listed = object.value(QLatin1String("widgets")).toArray();
+        for (const QJsonValue &value : listed)
+        {
+            const QJsonObject widget = value.toObject();
+            widgets.append({widget.value(QLatin1String("key")).toString().trimmed(),
+                            widget.value(QLatin1String("plugin")).toString().trimmed()});
+        }
+        record.widgets = normalizedBarWidgets(widgets, record.type != QStringLiteral("empty"));
         record.screenId = object.value(QLatin1String("screenId")).toString().trimmed();
         record.screenIndex = number(object, "screen", 0, 0, 64);
         record.alignment = choice(object, "alignment",

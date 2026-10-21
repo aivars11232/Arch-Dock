@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "BarWidgets.h"
+
 #include <QByteArray>
 #include <QList>
 #include <QString>
@@ -14,6 +16,9 @@ struct BarRecord
     QString id;
     // What Arch Dock's dock in it shows; an empty bar holds no dock.
     QString type = QStringLiteral("hybrid");
+    // What it holds, in order along it: the dock (unless it is an empty bar)
+    // and Plasma widgets.
+    QList<BarWidget> widgets{BarWidget{BarWidget::dockKey(), {}}};
     // Its screen: by the screen's lasting name, else by its place in the
     // screen list (ScreenIdentity).
     QString screenId;
@@ -47,10 +52,11 @@ struct BarRecord
 };
 
 // Reads the backend's list of bars, a JSON array of objects with the fields
-// above. A record without an id, with an id already listed, or with no screen
-// edge is left out; an unknown or missing value takes the default above,
-// numbers are kept in bounds, and a missing order is the record's place in
-// the list. On a document that is no list, returns nothing and says why in
-// `error`.
+// above; "widgets" is a list of {"key", "plugin"} objects, the dock's key
+// being "dock". A record without an id, with an id already listed, or with
+// no screen edge is left out; an unknown or missing value takes the default
+// above, numbers are kept in bounds, a missing order is the record's place in
+// the list, and the widgets are kept as normalizedBarWidgets keeps them. On a
+// document that is no list, returns nothing and says why in `error`.
 QList<BarRecord> parseBarRecords(const QByteArray &json, QString *error = nullptr);
 }

@@ -11,6 +11,11 @@ ContainmentItem {
     id: root
 
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
+    // The widgets' applet ids in their order along the bar, as the bar host
+    // writes it from the bar's record.
+    readonly property var appletOrder: String(Plasmoid.configuration.AppletOrder || "")
+        .split(";").filter(id => id.length > 0)
+    property int arrivals: 0
 
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
@@ -31,9 +36,46 @@ ContainmentItem {
         id: appletSlot
 
         Item {
+            id: slot
+
             property var plasmaApplet: null
             property Item applet: null
             property bool dock: false
+            // The dock draws the bar's look, the panel the bar's widgets and
+            // its own icons stand inside, along the whole bar and as deep as
+            // it: it is told how far the bar reaches before and after it, and
+            // how deep the bar is, and lies under the other widgets.
+            z: dock ? -1 : 0
+            Binding {
+                when: slot.dock && slot.applet !== null
+                target: slot.applet
+                property: "barSurfaceBefore"
+                value: root.vertical ? slot.y : slot.x
+                restoreMode: Binding.RestoreNone
+            }
+            Binding {
+                when: slot.dock && slot.applet !== null
+                target: slot.applet
+                property: "barSurfaceAfter"
+                value: root.vertical ? row.height - slot.y - slot.height : row.width - slot.x - slot.width
+                restoreMode: Binding.RestoreNone
+            }
+            Binding {
+                when: slot.dock && slot.applet !== null
+                target: slot.applet
+                property: "barSurfaceThickness"
+                value: root.vertical ? row.width : row.height
+                restoreMode: Binding.RestoreNone
+            }
+            // Its place along the bar: where the bar's order puts it, else
+            // after every widget the order names, in the order they came.
+            property int arrival: 0
+            readonly property int place: {
+                const index = plasmaApplet ? root.appletOrder.indexOf(String(plasmaApplet.id)) : -1
+                return index >= 0 ? index : root.appletOrder.length + arrival
+            }
+            Layout.column: root.vertical ? 0 : place
+            Layout.row: root.vertical ? place : 0
             readonly property var hints: applet ? applet.Layout : null
             readonly property real minimumAlong: !hints || dock ? 0
                 : Math.max(0, root.vertical ? hints.minimumHeight : hints.minimumWidth)
@@ -75,7 +117,8 @@ ContainmentItem {
         const slot = appletSlot.createObject(row, {
             plasmaApplet: applet,
             applet: item,
-            dock: applet.pluginName === "org.archdock.dock"
+            dock: applet.pluginName === "org.archdock.dock",
+            arrival: root.arrivals++
         })
         item.parent = slot
         item.anchors.fill = slot

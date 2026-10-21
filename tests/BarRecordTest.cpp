@@ -92,6 +92,30 @@ private slots:
         QVERIFY(parseBarRecords("[]", &error).isEmpty());
         QVERIFY(error.isEmpty());
     }
+
+    void widgetsAreReadInTheirOrder()
+    {
+        const QList<BarRecord> records = parseBarRecords(R"([
+            {"id": "panel-1", "edge": "bottom", "type": "launcher", "widgets": [
+                {"key": "w1", "plugin": "org.kde.plasma.kickoff"}, {"key": "dock"},
+                {"key": "w2", "plugin": "org.kde.plasma.digitalclock"},
+                {"key": "w2", "plugin": "org.kde.plasma.systemtray"}, {"key": "w3"}]},
+            {"id": "panel-2", "edge": "top"},
+            {"id": "panel-3", "edge": "top", "type": "empty", "widgets": [
+                {"key": "dock"}, {"key": "w1", "plugin": "org.kde.plasma.digitalclock"}]}
+        ])");
+        QCOMPARE(records.size(), 3);
+        const auto &first = records.at(0).widgets;
+        QCOMPARE(first.size(), 3);
+        QCOMPARE(first.at(0).plugin, QStringLiteral("org.kde.plasma.kickoff"));
+        QVERIFY(first.at(1).dock());
+        QCOMPARE(first.at(2).plugin, QStringLiteral("org.kde.plasma.digitalclock"));
+        // Without a list a bar holds its dock alone; an empty bar no dock.
+        QCOMPARE(records.at(1).widgets.size(), 1);
+        QVERIFY(records.at(1).widgets.first().dock());
+        QCOMPARE(records.at(2).widgets.size(), 1);
+        QCOMPARE(records.at(2).widgets.first().key, QStringLiteral("w1"));
+    }
 };
 
 QTEST_GUILESS_MAIN(BarRecordTest)

@@ -448,6 +448,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.content.entryOrder = definition.content.canonicalEntryOrder();
     definition.content.kdeWidgets = normalized(
         QStringLiteral("kdeWidgets"), definition.content.kdeWidgets).toStringList();
+    definition.content.barWidgets = normalized(
+        QStringLiteral("barWidgets"), definition.content.barWidgets).toStringList();
     definition.content.acceptDrops = normalized(
         QStringLiteral("acceptDrops"), definition.content.acceptDrops).toBool();
     definition.content.folderLayout = normalized(
@@ -1251,6 +1253,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("contentUrls"), content.urls);
     record.insert(QStringLiteral("contentOrder"), content.canonicalEntryOrder());
     record.insert(QStringLiteral("kdeWidgets"), content.kdeWidgets);
+    record.insert(QStringLiteral("barWidgets"), content.barWidgets);
     record.insert(QStringLiteral("acceptDrops"), content.acceptDrops);
     record.insert(QStringLiteral("folderLayout"), content.folderLayout);
     record.insert(QStringLiteral("folderFanOpening"), content.folderFanOpening);

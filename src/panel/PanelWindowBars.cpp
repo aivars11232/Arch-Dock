@@ -8,10 +8,16 @@
 #include "PanelWindow.h"
 #include "PanelWindowHelpers.h"
 
+#include <KPackage/PackageLoader>
+#include <KPluginMetaData>
+
+#include <QCollator>
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+#include <algorithm>
 
 using PanelWindowHelpers::isNativeDockPanelEdge;
 using PanelWindowHelpers::isNativeDockPanelType;
@@ -140,9 +146,17 @@ QString PanelWindow::barHostRecordsJson() const
         const bool reserves = placement.reservedSpace == ArchDock::NativePanelReservedSpace::Reserve
             || (placement.reservedSpace == ArchDock::NativePanelReservedSpace::Automatic
                 && placement.visibilityMode == ArchDock::NativePanelVisibilityMode::Always);
+        QJsonArray widgets;
+        const auto held = ArchDock::Bars::barWidgetsFromEntries(
+            definition->content.barWidgets, definition->content.type != QLatin1String("empty"));
+        for (const ArchDock::Bars::BarWidget &widget : held)
+            widgets.append(widget.dock()
+                ? QJsonObject{{QStringLiteral("key"), widget.key}}
+                : QJsonObject{{QStringLiteral("key"), widget.key}, {QStringLiteral("plugin"), widget.plugin}});
         bars.append(QJsonObject{
             {QStringLiteral("id"), panelId},
             {QStringLiteral("type"), definition->content.type},
+            {QStringLiteral("widgets"), widgets},
             {QStringLiteral("screen"), definition->host.screenIndex},
             {QStringLiteral("screenId"), definition->host.screenId},
             {QStringLiteral("edge"), edgeName(placement.edge)},
@@ -177,6 +191,140 @@ bool PanelWindow::showEdgePanelAsBar(const QString &panelId)
             return false;
     }
     return setPanelVisible(panelId, true);
+}
+
+QList<ArchDock::Bars::BarWidget> PanelWindow::barWidgetsOf(const QString &panelId) const
+{
+    return ArchDock::Bars::barWidgetsFromEntries(
+        m_panelRegistry.panelValue(panelId, QStringLiteral("barWidgets")).toStringList(),
+        m_panelRegistry.panelValue(panelId, QStringLiteral("type")).toString() != QLatin1String("empty"));
+}
+
+bool PanelWindow::setBarWidgets(const QString &panelId, const QList<ArchDock::Bars::BarWidget> &widgets)
+{
+    return m_panelRegistry.updatePanelChecked(
+        panelId, {{QStringLiteral("barWidgets"), ArchDock::Bars::barWidgetEntries(widgets)}});
+}
+
+const QVariantMap &PanelWindow::installedBarWidgets(bool reread) const
+{
+    if (m_installedBarWidgetsRead && !reread)
+        return m_installedBarWidgets;
+    m_installedBarWidgetsRead = true;
+    m_installedBarWidgets.clear();
+    // Plasma's widgets are packages of QML or compiled plugins; Plasma's own
+    // widget explorer lists both.
+    QList<KPluginMetaData> found = KPackage::PackageLoader::self()->listPackages(QStringLiteral("Plasma/Applet"));
+    found += KPluginMetaData::findPlugins(QStringLiteral("plasma/applets"));
+    for (const KPluginMetaData &metadata : std::as_const(found))
+    {
+        const QString plugin = metadata.pluginId();
+        // Containments (but the system tray, a widget holding its own),
+        // Plasma's private parts, Arch Dock's own and hidden widgets are no
+        // widgets to add; nor is one only for the desktop.
+        const QString containment = metadata.value(QStringLiteral("X-Plasma-ContainmentType"));
+        const QStringList formFactors = metadata.value(QStringLiteral("X-Plasma-FormFactors"), QStringList{});
+        const bool panelWidget = formFactors.isEmpty() || formFactors.contains(QLatin1String("panel"))
+            || formFactors.contains(QLatin1String("horizontal")) || formFactors.contains(QLatin1String("vertical"));
+        if (!ArchDock::Bars::validWidgetPlugin(plugin) || plugin.startsWith(QLatin1String("org.archdock."))
+            || plugin.contains(QLatin1String(".private."))
+            || (!containment.isEmpty() && containment != QLatin1String("CustomEmbedded"))
+            || metadata.isHidden() || metadata.value(QStringLiteral("NoDisplay"), false) || !panelWidget
+            || m_installedBarWidgets.contains(plugin))
+            continue;
+        m_installedBarWidgets.insert(plugin, QVariantMap{
+            {QStringLiteral("plugin"), plugin},
+            {QStringLiteral("name"), metadata.name().isEmpty() ? plugin : metadata.name()},
+            {QStringLiteral("icon"), metadata.iconName().isEmpty() ? QStringLiteral("plasma") : metadata.iconName()},
+            {QStringLiteral("description"), metadata.description()},
+            {QStringLiteral("category"), metadata.category()},
+        });
+    }
+    return m_installedBarWidgets;
+}
+
+QVariantList PanelWindow::barWidgetList(const QString &panelId) const
+{
+    if (!barHosted(panelId))
+        return {};
+    const QVariantMap &installed = installedBarWidgets();
+    QVariantList list;
+    for (const ArchDock::Bars::BarWidget &widget : barWidgetsOf(panelId))
+    {
+        if (widget.dock())
+        {
+            list.append(QVariantMap{{QStringLiteral("key"), widget.key},
+                                    {QStringLiteral("plugin"), QStringLiteral("org.archdock.dock")},
+                                    {QStringLiteral("name"), tr("Arch Dock icons")},
+                                    {QStringLiteral("icon"), QStringLiteral("org.archdock.ArchDock")}});
+            continue;
+        }
+        QVariantMap entry = installed.value(widget.plugin).toMap();
+        if (entry.isEmpty())
+            entry = {{QStringLiteral("name"), widget.plugin}, {QStringLiteral("icon"), QStringLiteral("plasma")}};
+        entry.insert(QStringLiteral("key"), widget.key);
+        entry.insert(QStringLiteral("plugin"), widget.plugin);
+        list.append(entry);
+    }
+    return list;
+}
+
+QVariantList PanelWindow::availableBarWidgets() const
+{
+    QVariantList list;
+    const QVariantMap &installed = installedBarWidgets(true);
+    for (auto it = installed.cbegin(); it != installed.cend(); ++it)
+        list.append(it.value());
+    QCollator collator;
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    std::sort(list.begin(), list.end(), [&collator](const QVariant &left, const QVariant &right)
+    {
+        return collator.compare(left.toMap().value(QStringLiteral("name")).toString(),
+                                right.toMap().value(QStringLiteral("name")).toString()) < 0;
+    });
+    return list;
+}
+
+QString PanelWindow::addBarWidget(const QString &panelId, const QString &plugin)
+{
+    if (profileBusy() || !barHosted(panelId) || !installedBarWidgets().contains(plugin))
+        return {};
+    QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
+    const QString key = ArchDock::Bars::newWidgetKey(widgets);
+    widgets.append({key, plugin});
+    return setBarWidgets(panelId, widgets) ? key : QString();
+}
+
+bool PanelWindow::removeBarWidget(const QString &panelId, const QString &key)
+{
+    if (profileBusy() || !barHosted(panelId) || key == ArchDock::Bars::BarWidget::dockKey())
+        return false;
+    QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
+    const qsizetype removed = widgets.removeIf([&key](const ArchDock::Bars::BarWidget &widget)
+                                               { return widget.key == key; });
+    return removed > 0 && setBarWidgets(panelId, widgets);
+}
+
+bool PanelWindow::moveBarWidget(const QString &panelId, const QString &key, int index)
+{
+    if (profileBusy() || !barHosted(panelId))
+        return false;
+    QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
+    const auto found = std::find_if(widgets.cbegin(), widgets.cend(),
+                                    [&key](const ArchDock::Bars::BarWidget &widget) { return widget.key == key; });
+    if (found == widgets.cend())
+        return false;
+    const qsizetype from = std::distance(widgets.cbegin(), found);
+    const qsizetype to = std::clamp<qsizetype>(index, 0, widgets.size() - 1);
+    if (from == to)
+        return true;
+    widgets.move(from, to);
+    return setBarWidgets(panelId, widgets);
+}
+
+bool PanelWindow::barWidgetRemoved(const QString &panelId, const QString &key)
+{
+    return removeBarWidget(panelId, key);
 }
 
 QString PanelWindow::barHostWindowsJson() const

@@ -52,6 +52,15 @@ BarHost::BarHost(BarCorona *corona, const QUrl &barView, QObject *parent)
     m_evaluateTimer.setSingleShot(true);
     m_evaluateTimer.setInterval(0);
     connect(&m_evaluateTimer, &QTimer::timeout, this, &BarHost::evaluateBars);
+    // A widget removed through its own menu leaves the bar's record too, or
+    // the next list would put it straight back.
+    connect(m_corona, &BarCorona::widgetRemovedByUser, this, [](const QString &barId, const QString &key)
+    {
+        QDBusMessage call = QDBusMessage::createMethodCall(
+            BackendService, BackendPath, BackendInterface, QStringLiteral("barWidgetRemoved"));
+        call << barId << key;
+        QDBusConnection::sessionBus().asyncCall(call);
+    });
     // KWin's auto-hide edges may come after the bars do.
     connect(m_edges, &QWaylandClientExtension::activeChanged, this, &BarHost::scheduleLayout);
     // A popup opening or closing keeps its bar shown or lets it hide.

@@ -32,6 +32,7 @@
 #include "../presets/PresetLibrary.h"
 #include "../presets/PresetPreviewSession.h"
 #include "BarHostSupervisor.h"
+#include "../bars/BarWidgets.h"
 #include "FreePanelController.h"
 #include "PanelContentTransaction.h"
 #include "ProfileManager.h"
@@ -125,6 +126,22 @@ public slots:
     // screen). barHostWindowsChanged says when it changes, while there are
     // bars.
     QString barHostWindowsJson() const;
+    // What a bar holds, in order along it: one map per thing with its key
+    // ("dock" for Arch Dock's dock), its plugin id, name and icon. Nothing for
+    // a panel that is no bar.
+    QVariantList barWidgetList(const QString &panelId) const;
+    // The Plasma widgets installed that a bar can hold, each with its plugin
+    // id, name, icon, description and category, in name order.
+    QVariantList availableBarWidgets() const;
+    // Adds a Plasma widget at the end of a bar; the new widget's key, or
+    // nothing when the panel is no bar or no such widget is installed.
+    QString addBarWidget(const QString &panelId, const QString &plugin);
+    // Takes a widget out of a bar (the dock stays: an empty bar holds none).
+    bool removeBarWidget(const QString &panelId, const QString &key);
+    // Moves a widget, or the dock, to another place along its bar.
+    bool moveBarWidget(const QString &panelId, const QString &key, int index);
+    // From the bar host: a widget was removed through its own menu.
+    bool barWidgetRemoved(const QString &panelId, const QString &key);
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
@@ -717,8 +734,18 @@ private:
     bool persistBarVisibility(const QString &panelId,
                               std::optional<ArchDock::PanelVisibilityMode> requestedMode,
                               const QVariantMap &persistValues);
+    // A bar's dock and Plasma widgets, as its record keeps them, and a new
+    // list saved; the bar host follows the record.
+    [[nodiscard]] QList<ArchDock::Bars::BarWidget> barWidgetsOf(const QString &panelId) const;
+    bool setBarWidgets(const QString &panelId, const QList<ArchDock::Bars::BarWidget> &widgets);
+    // The installed Plasma widgets a bar can hold, by plugin id (each a map
+    // of its name, icon, description and category), read once and again
+    // whenever the list for Panel Studio is asked for.
+    const QVariantMap &installedBarWidgets(bool reread = false) const;
     BarHostSupervisor m_barHost;
     QTimer m_barRecordsTimer;
     QString m_barRecordsJson;
     QTimer m_barWindowsTimer;
+    mutable QVariantMap m_installedBarWidgets;
+    mutable bool m_installedBarWidgetsRead = false;
 };
