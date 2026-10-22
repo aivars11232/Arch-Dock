@@ -1218,6 +1218,7 @@ function platform(spec) {
         textureRepeats = Math.max(textureRepeats, runRepeats(run))
     if (relief)
         return reliefPlatform(options, shape, half, twisted, section, faces, track, runs, sectionLength, across)
+    const topFace = faces.find(function(face) { return face.part === "top" }) || null
     const addFace = function(mesh, run, face) {
         const from = section[face.from], to = section[face.to]
         // The section runs clockwise (up the inner wall, over the top, down
@@ -1227,8 +1228,21 @@ function platform(spec) {
         const sectionNormal = normalized([-along[1], along[0], 0])
         const color = colour(options.palette, face.part)
         // The underside runs back from the outer foot to the inner one.
-        const vFrom = face.part === "under" ? 1 : across(face.from)
-        const vTo = face.part === "under" ? 0 : twisted && face.to === 0 ? across(section.length) : across(face.to)
+        let vFrom = face.part === "under" ? 1 : across(face.from)
+        let vTo = face.part === "under" ? 0 : twisted && face.to === 0 ? across(section.length) : across(face.to)
+        // A material (an aurora, plasma, water) is worn the same all round:
+        // the walls and the underside show what the top shows, and a rim the
+        // top's edge it meets, so the sides are that material too and no
+        // strip of another part of the picture draws a line.
+        if (options.allRound === true && !twisted && topFace) {
+            const topFrom = across(topFace.from), topTo = across(topFace.to)
+            if (face.part === "rim")
+                vFrom = vTo = face.from === topFace.to ? topTo : topFrom
+            else if (face.part !== "top") {
+                vFrom = topFrom
+                vTo = topTo
+            }
+        }
         const lengths = runLengths(run)
         const total = Math.max(1e-6, lengths[lengths.length - 1])
         // A shorter run (a polygon's side) uses that share of the repeats.

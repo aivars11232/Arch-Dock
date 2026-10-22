@@ -222,11 +222,19 @@ Item {
     readonly property var generatedSpec: (sceneDefinition || ({})).generated || null
     readonly property var generatedShape: generatedSpec
         ? PlatformGeometry.shapeForLayout(generatedSpec.layout, generatedSpec.polygonSides) : null
-    readonly property var generatedPalette: materialColour.length || materialLook !== "theme"
+    readonly property var shapedPalette: materialColour.length || materialLook !== "theme"
         ? PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(
             materialLook === "theme" ? appearance : materialLook, materialColour, 48))
         : generatedSpec && generatedSpec.palette ? generatedSpec.palette
         : PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(appearance, customColor, 48))
+    // A platform wearing a material (an aurora, plasma, water) wears it the
+    // same all round: its walls, rims and underside in the top's colour, so
+    // the material shows on its sides too and no lighter rim draws a line
+    // between them.
+    readonly property var generatedPalette: !shapedPalette || textureChoice === "none" || !textureMaterial.length
+        ? shapedPalette
+        : Object.assign({}, shapedPalette, { wall: shapedPalette.top, rim: shapedPalette.top,
+                                             under: shapedPalette.top })
     // The platform is rebuilt only when what it is built from changes: a
     // string compares by value, so an edit elsewhere in the scene's
     // definition leaves the mesh, and the GPU buffers made from it, alone.
@@ -299,7 +307,8 @@ Item {
             : Number(generatedPlatform.textureRepeats || 1)
     readonly property string generatedKey: generatedShape ? JSON.stringify(Object.assign({
         shape: generatedShape, band: resolvedBand,
-        bend: bounded("bend", 0, -1, 1), palette: generatedPalette }, pictureRelief ? { relief: true } : {})) : ""
+        bend: bounded("bend", 0, -1, 1), palette: generatedPalette,
+        allRound: textureChoice !== "none" && textureMaterial.length > 0 }, pictureRelief ? { relief: true } : {})) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
     // A decoration is worn in a generated platform's place, along its
