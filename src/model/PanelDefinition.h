@@ -124,6 +124,9 @@ struct PanelContent
     // Arch Dock's dock and "<key>:<plugin id>" for each Plasma widget, whose
     // key its settings are kept under (BarWidgets).
     QStringList barWidgets;
+    // The settings of the Plasma widgets a bar was given when it was moved
+    // from a Plasma panel, by widget key (BarWidget::settings).
+    QVariantMap barWidgetSettings;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
     // A free panel's own folder shapes (ADREP-TASK-003): the fan's opening in

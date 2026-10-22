@@ -40,11 +40,16 @@ Arch Dock's own bars, which can stand side by side on one edge, are shown by
 Arch Dock's bar host (`arch-dock-bars`) and are being built in steps
 (`docs/repairs/OWNER-LIST-PIECE-9.md`). So far: Panel Studio adds edge panels
 as bars, and profiles and preset trials take them; a bar holds Plasma's own
-widgets beside its dock, inside one panel along the bar, but Panel Studio's
-page for adding and ordering them is still to come; edge panels made before
-bars stay Plasma panels until they are moved into bars; a profile brings each
-edge panel back as it was saved, a Plasma panel as a Plasma panel; launcher
-bars share one application list. Live window previews in a bar need the installed entry
+widgets beside its dock, inside the panel its look draws along the whole bar,
+its ends the application menu and the system tray's hidden-icons button, and
+Panel Studio's Widgets page adds, orders and removes them; an edge panel made
+before bars stays a Plasma panel until "Make it an Arch Dock bar" in its
+right-click menu moves it, its widgets and their settings with it (a system
+tray moved so starts from Plasma's defaults for the icons it hides); a
+profile brings each edge panel back as it was saved, a Plasma panel as a
+Plasma panel; launcher bars share one application list; on a narrow
+decoration a clock's text can reach the decoration's side edge, Plasma's
+clock drawing no smaller than its smallest font. Live window previews in a bar need the installed entry
 `org.archdock.ArchDock.Bars.desktop`, by which KWin grants the bar host the
 interfaces they use; a bar host run from a build tree runs without them.
 A bar that hides draws its stands and holograms inside itself, cut at its

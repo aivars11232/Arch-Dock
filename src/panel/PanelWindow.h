@@ -142,6 +142,10 @@ public slots:
     bool moveBarWidget(const QString &panelId, const QString &key, int index);
     // From the bar host: a widget was removed through its own menu.
     bool barWidgetRemoved(const QString &panelId, const QString &key);
+    // Moves an edge panel Plasma holds for Arch Dock into a bar of Arch
+    // Dock's own: the Plasma widgets beside its dock, in their order and with
+    // their settings, go with it; the Plasma panel goes.
+    bool moveEdgePanelIntoBar(const QString &panelId);
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);

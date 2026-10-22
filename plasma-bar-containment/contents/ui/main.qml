@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
 import QtQuick.Layouts
+import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 
@@ -16,6 +17,65 @@ ContainmentItem {
     readonly property var appletOrder: String(Plasmoid.configuration.AppletOrder || "")
         .split(";").filter(id => id.length > 0)
     property int arrivals: 0
+    // The dock draws the bar's panel and says where inside it the widgets
+    // stand: so far in from the bar's ends and from its long sides. The
+    // widget at each end keeps that room there; the dock keeps the room it
+    // asks for itself.
+    readonly property Item dockApplet: {
+        for (const child of row.children)
+            if (child.dock)
+                return child.applet
+        return null
+    }
+    readonly property var widgetRoom: dockApplet && dockApplet.barWidgetRoom ? dockApplet.barWidgetRoom
+        : ({ start: 0, end: 0, sideStart: 0, sideEnd: 0 })
+    readonly property var dockRoom: dockApplet && dockApplet.barDockRoom ? dockApplet.barDockRoom
+        : ({ start: 0, end: 0 })
+    // The panel's ends: its start is the bar's application menu and its end
+    // the system tray's button for the icons it hides (^), in any look.
+    readonly property var endCaps: dockApplet && dockApplet.barEndCaps ? dockApplet.barEndCaps
+        : ({ start: 0, end: 0 })
+    readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
+        "org.kde.plasma.kickerdash"]
+    function slotWith(plugins) {
+        let found = null
+        for (const child of row.children)
+            if (child.plasmaApplet && plugins.includes(String(child.plasmaApplet.pluginName))
+                    && (!found || child.place < found.place))
+                found = child
+        return found
+    }
+    readonly property Item launcherSlot: endCaps.start > 0 ? slotWith(launcherPlugins) : null
+    readonly property Item traySlot: endCaps.end > 0 ? slotWith(["org.kde.plasma.systemtray"]) : null
+    // The first and last widgets along the row; the menu on the look's
+    // start is out of it.
+    function endSlot(last) {
+        let found = null
+        for (const child of row.children)
+            if (child.place !== undefined && child !== launcherSlot
+                    && (!found || (last ? child.place > found.place : child.place < found.place)))
+                found = child
+        return found
+    }
+    readonly property Item firstSlot: endSlot(false)
+    readonly property Item lastSlot: endSlot(true)
+    // The widgets' text and symbols: light on a dark panel and dark on a
+    // light one, as Plasma's own panels are drawn, in the desktop colour
+    // scheme's own light and dark (its complementary colours, the ones
+    // Plasma puts on dark panels).
+    readonly property real panelLightness: dockApplet && dockApplet.barSurfaceLightness !== undefined
+        ? Number(dockApplet.barSurfaceLightness) : -1
+    readonly property bool panelDark: panelLightness >= 0 && panelLightness < 0.42
+    Item {
+        id: complementary
+        Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
+        Kirigami.Theme.inherit: false
+    }
+    Kirigami.Theme.inherit: false
+    Kirigami.Theme.textColor: panelDark ? complementary.Kirigami.Theme.textColor
+        : complementary.Kirigami.Theme.backgroundColor
+    Kirigami.Theme.disabledTextColor: panelDark ? complementary.Kirigami.Theme.disabledTextColor
+        : Qt.tint(complementary.Kirigami.Theme.backgroundColor, "#80808080")
 
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
@@ -28,10 +88,96 @@ ContainmentItem {
         columnSpacing: 0
     }
 
+    // The look's end pieces are the bar's application menu and the system
+    // tray's button for the icons it hides (^): each stands in the middle of
+    // its piece, half as large as the bar is deep, the menu with its own
+    // icon, the tray's button the tray's own.
+    readonly property real capButton: Math.round(Math.min(root.vertical ? root.width : root.height,
+        Math.max(endCaps.start, endCaps.end)) / 2)
+    Item {
+        id: startCap
+        visible: root.launcherSlot !== null
+        width: root.capButton
+        height: root.capButton
+        x: root.vertical ? (root.width - width) / 2 : (root.endCaps.start - width) / 2
+        y: root.vertical ? (root.endCaps.start - height) / 2 : (root.height - height) / 2
+    }
+    Item {
+        id: endCap
+        visible: root.trayApplet !== null
+        width: root.capButton
+        height: root.capButton
+        x: root.vertical ? (root.width - width) / 2 : root.width - (root.endCaps.end + width) / 2
+        y: root.vertical ? root.height - (root.endCaps.end + height) / 2 : (root.height - height) / 2
+    }
+    function seat(slot) {
+        const item = slot.applet
+        if (!item)
+            return
+        item.parent = root.launcherSlot === slot ? startCap : slot
+        item.anchors.fill = item.parent
+    }
+    // Plasma's system tray draws its button as an ExpanderArrow among its
+    // icons; it is moved onto the end piece and back. The tray builds it
+    // after it loads, so it is looked for a few times.
+    property Item trayExpander: null
+    property Item trayExpanderHome: null
+    function findExpander(item) {
+        for (const child of item ? item.children : []) {
+            if (String(child).includes("ExpanderArrow"))
+                return child
+            const found = findExpander(child)
+            if (found)
+                return found
+        }
+        return null
+    }
+    function seatTrayExpander() {
+        if (!trayExpander)
+            return
+        const onCap = root.trayApplet !== null
+        trayExpander.anchors.centerIn = undefined
+        trayExpander.parent = onCap ? endCap : trayExpanderHome
+        if (onCap) {
+            // As large as the tray's own icons, in the middle of the end.
+            const size = Math.min(endCap.width, Number(trayExpander.iconSize || endCap.width))
+            trayExpander.width = size
+            trayExpander.height = size
+            trayExpander.anchors.centerIn = endCap
+        }
+    }
+    readonly property Item trayApplet: traySlot ? traySlot.applet : null
+    onTrayAppletChanged: {
+        if (trayExpander && trayApplet === null) {
+            seatTrayExpander()
+            trayExpander = null
+        }
+        expanderSearch.tries = 0
+        expanderSearch.running = trayApplet !== null && trayExpander === null
+    }
+    Timer {
+        id: expanderSearch
+        property int tries: 0
+        interval: 500
+        repeat: true
+        onTriggered: {
+            const found = root.findExpander(root.trayApplet)
+            if (found) {
+                root.trayExpander = found
+                root.trayExpanderHome = found.parent
+                root.seatTrayExpander()
+                running = false
+            } else if (++tries >= 10) {
+                running = false
+                console.warn("Arch Dock bar: the system tray's button for its hidden icons was not found")
+            }
+        }
+    }
+
     // A widget's place in the bar: as long along the bar as the widget asks,
-    // and as thick across it as the bar whatever the widget's own minimum
-    // there, as a Plasma panel holds its widgets. Arch Dock's dock takes the
-    // bar's whole length and centres its drawing in it.
+    // and as thick across it as the panel's inside whatever the widget's own
+    // minimum there, as a Plasma panel holds its widgets. Arch Dock's dock
+    // takes the bar's whole length and centres its drawing in it.
     Component {
         id: appletSlot
 
@@ -76,6 +222,35 @@ ContainmentItem {
             }
             Layout.column: root.vertical ? 0 : place
             Layout.row: root.vertical ? place : 0
+            // The application menu on the look's start is out of the row.
+            visible: root.launcherSlot !== slot
+            onVisibleChanged: root.seat(slot)
+            // Something stands before the dock: a widget, or the menu on the
+            // look's start. Its icons then start right after it.
+            readonly property bool widgetBefore: root.firstSlot !== slot || root.launcherSlot !== null
+            Binding {
+                when: slot.dock && slot.applet !== null
+                target: slot.applet
+                property: "barWidgetBefore"
+                value: slot.widgetBefore
+                restoreMode: Binding.RestoreNone
+            }
+            // Inside the panel the dock draws: clear of its ends, and a
+            // widget clear of its sides. A dock first along the bar keeps the
+            // room it asks for itself.
+            readonly property var room: dock && !widgetBefore ? root.dockRoom : root.widgetRoom
+            // The menu and the tray's button on the panel's ends keep their
+            // room there.
+            readonly property real roomBefore: root.firstSlot !== slot ? 0
+                : Math.max(Number(room.start || 0), root.launcherSlot ? Number(root.endCaps.start || 0) : 0)
+            readonly property real roomAfter: root.lastSlot !== slot ? 0
+                : Math.max(Number(room.end || 0), root.trayApplet ? Number(root.endCaps.end || 0) : 0)
+            readonly property real roomSideStart: dock ? 0 : Number(room.sideStart || 0)
+            readonly property real roomSideEnd: dock ? 0 : Number(room.sideEnd || 0)
+            Layout.leftMargin: root.vertical ? roomSideStart : roomBefore
+            Layout.rightMargin: root.vertical ? roomSideEnd : roomAfter
+            Layout.topMargin: root.vertical ? roomBefore : roomSideStart
+            Layout.bottomMargin: root.vertical ? roomAfter : roomSideEnd
             readonly property var hints: applet ? applet.Layout : null
             readonly property real minimumAlong: !hints || dock ? 0
                 : Math.max(0, root.vertical ? hints.minimumHeight : hints.minimumWidth)
@@ -123,6 +298,7 @@ ContainmentItem {
         item.parent = slot
         item.anchors.fill = slot
         item.visible = true
+        root.seat(slot)
     }
 
     Connections {

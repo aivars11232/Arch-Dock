@@ -3,8 +3,9 @@
 <!-- LIST_PIECE_9_BEGIN -->
 ## The owner's list, piece 9: Arch Dock's own bars — 2026-10-21
 
-Report `docs/repairs/OWNER-LIST-PIECE-9.md`; steps 1 to 3 of six: the bar
-host, hiding, and Panel Studio, profiles, presets and the start at login.
+Report `docs/repairs/OWNER-LIST-PIECE-9.md`; steps 1 to 4 of six: the bar
+host, hiding, Panel Studio, profiles, presets and the start at login, and
+Plasma widgets in bars.
 
 - **`arch-dock-bars`** (`src/bars/`), a program beside the backend.
   `BarCorona`, a `Plasma::Corona` as plasma-sdk's plasmoidviewer hosts
@@ -128,7 +129,7 @@ host, hiding, and Panel Studio, profiles, presets and the start at login.
   `PanelRegistryTest::adoptsAPreviewBarWithNothingInPlasma`,
   `ProfileStoreTest::barsStayBarsInAProfile`,
   `ProfileApplyTransactionTest::aBarInTheProfileNeverTakesOverAPlasmaPanel`.
-- **Step 4, Plasma widgets in bars (in progress, checkpoint)**: a bar's
+- **Step 4, Plasma widgets in bars**: a bar's
   `barWidgets` ("dock" and "<key>:<plugin id>", `src/bars/BarWidgets.*`) goes
   to the bar host in each record's `widgets`; `BarCorona` makes, removes and
   orders the widgets (the containment's `AppletOrder`, as Plasma's panels
@@ -138,7 +139,19 @@ host, hiding, and Panel Studio, profiles, presets and the start at login.
   `moveBarWidget`. The dock draws one panel along the whole bar and as deep
   as it (`PanelScene.surfaceBox`, `bandWidth` in the flat renderer), its icons
   and the widgets inside. The bar shell holds plasma-desktop's widget
-  settings window. Open items: `docs/repairs/OWNER-LIST-PIECE-9-HANDOFF.md`.
+  settings window. The scene reports the panel's inside (`barWidgetRoom`),
+  its ends (`barEndCaps`), the room a dock at an end keeps (`barDockRoom`)
+  and how light it is drawn (`surfaceLightness`, measured from a grab); the
+  bar containment keeps widgets inside, puts the application menu and the
+  tray's hidden-icons button on the ends and sets the widgets' text colour.
+  A skin along a bar is drawn whole (`skinSpansBar`, icons fitted by
+  `barIconFit`); a decoration's lean comes from the baker (`reachIn`,
+  `reachOut`). Panel Studio's Widgets page (`StudioWidgetsPage.qml`, Panels
+  tab 12, bars only). `moveEdgePanelIntoBar` makes an edge panel Plasma holds
+  for Arch Dock a bar with its widgets and their settings
+  (`barWidgetSettings`, given to the new widgets by `BarCorona`); the dock's
+  right-click menu offers it. A bar set to a length is at least as long as
+  what it holds.
 <!-- LIST_PIECE_9_END -->
 
 <!-- LIST_PIECE_8_BEGIN -->

@@ -35,7 +35,8 @@ TestCase {
             "My Panel Presets",
             "Animations",
             "3D",
-            "Hologram"
+            "Hologram",
+            "Widgets"
         ])
         // The icon style is chosen only on Icons > Appearance, so the Icon
         // Styles tab that repeated it is gone.
@@ -68,7 +69,7 @@ TestCase {
 
     function test_clampsSubtabIndices() {
         compare(StudioNavigation.clampSubtabIndex(0, -1), 0)
-        compare(StudioNavigation.clampSubtabIndex(1, 99), 11)
+        compare(StudioNavigation.clampSubtabIndex(1, 99), 12)
         compare(StudioNavigation.clampSubtabIndex(2, 3), 3)
         compare(StudioNavigation.clampSubtabIndex(2, 99), 6)
         compare(StudioNavigation.clampSubtabIndex(3, 99), 0)

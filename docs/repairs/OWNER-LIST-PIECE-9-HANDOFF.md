@@ -1,5 +1,30 @@
 # Owner list, piece 9: Arch Dock's own bars - handoff for the next session
 
+Updated 2026-10-22: **step 4, Plasma widgets in bars, is closed** with the
+commit that carries this note (report: `OWNER-LIST-PIECE-9.md`, "Step 4 -
+Report 1"). Steps 1 to 4 are done. Next: step 5 (each bar its own icons: a
+launcher bar still shares one application list with the others) and step 6
+(the package and the owner's update steps: `pacman -U`, `pkill -x
+arch-dock`, restart plasmashell; never `arch-dock &` or `--quit`). The owner
+agreed (2026-10-22) to finish step 4 and then build the package with about
+10% of the week's usage left; step 5 may follow after the reset.
+
+What the next session needs from step 4:
+
+- The bar asks the dock (`barWidgetRoom`, `barDockRoom`, `barEndCaps`,
+  `barSurfaceLightness`) and keeps widgets inside, puts the application menu
+  (Plasma's Application Launcher, Menu, Dashboard) and the tray's
+  ExpanderArrow on the panel's ends, and sets the widgets' text colour.
+- `moveEdgePanelIntoBar` reads the Plasma panel's widgets with a Plasma
+  script (`configKeys`, `configGroups`, `readConfig`), removes the Plasma
+  panel and makes the record a bar; `BarCorona::followWidgets` writes the
+  carried settings into each new widget (`giveSettings`).
+- Private-desktop steps: `bars-looks-steps.sh` (glass, chassis with its ends
+  pressed, decoration) and `bars-move-steps.sh` (an edge panel made a bar)
+  in the audit tools folder.
+
+The notes below are the 2026-10-21 checkpoint's, kept for its history.
+
 Written 2026-10-21 late, at the owner's word: "And now, commit and Sync
 current changes, make a report and handoff for tomorrow and stop". Piece 9
 gives Arch Dock bars of its own that stand side by side on a screen edge.

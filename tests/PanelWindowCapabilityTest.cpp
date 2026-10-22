@@ -374,6 +374,7 @@ private slots:
     void studioAddsBars();
     void presetTrialsOnANewPanelAreBars();
     void barWidgetsFollowTheirOperations();
+    void studioWidgetsPageEditsTheBar();
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
@@ -2817,6 +2818,67 @@ void PanelWindowCapabilityTest::barWidgetsFollowTheirOperations()
     QVERIFY(backend.barWidgetRemoved(bar, second));
     QVERIFY(!backend.removeBarWidget(bar, second));
     QCOMPARE(held(), QStringList{QStringLiteral("dock")});
+}
+
+// Panel Studio's Widgets page is a bar's: it lists the bar's widgets in their
+// order and changes the bar through the backend; a free panel has no such
+// page.
+void PanelWindowCapabilityTest::studioWidgetsPageEditsTheBar()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString bar = backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher"));
+    QVERIFY(!bar.isEmpty());
+    const QString free = registry->addFreePanel();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto offered = [&](QObject *popup) {
+        QVariant available;
+        QMetaObject::invokeMethod(popup, "subtabAvailable", Q_RETURN_ARG(QVariant, available),
+                                  Q_ARG(QVariant, 1), Q_ARG(QVariant, 12));
+        return available.toBool();
+    };
+    std::unique_ptr<QObject> freeStudio(component.createWithInitialProperties({{"selectedPanelId", free},
+        {"mainTabIndex", 1}, {"subTabIndex", 0}}));
+    QVERIFY(freeStudio);
+    QVERIFY(!offered(freeStudio.get()));
+
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", bar},
+        {"mainTabIndex", 1}, {"subTabIndex", 12}}));
+    auto *studio = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(studio);
+    QVERIFY(offered(popup.get()));
+    studio->show();
+    QVERIFY(QTest::qWaitForWindowExposed(studio));
+    QVERIFY(QQuickTest::qWaitForPolish(studio));
+    QQuickItem *page = visibleItem(studio, QStringLiteral("panel-studio-widgets-page"));
+    QVERIFY(page);
+    QVERIFY(!visibleItem(studio, QStringLiteral("studio-page-form")));
+    const auto listed = [&page] {
+        const QVariant value = page->property("widgets");
+        return value.metaType() == QMetaType::fromType<QJSValue>()
+            ? value.value<QJSValue>().toVariant().toList() : value.toList();
+    };
+    QCOMPARE(listed().size(), 1);
+    QCOMPARE(listed().first().toMap().value("key").toString(), QStringLiteral("dock"));
+
+    const QString clock = QStringLiteral("org.kde.plasma.digitalclock");
+    QVERIFY(QMetaObject::invokeMethod(page, "installedListOpened"));
+    const QVariantList installed = backend.availableBarWidgets();
+    if (std::none_of(installed.cbegin(), installed.cend(),
+                     [&clock](const QVariant &widget) { return widget.toMap().value("plugin").toString() == clock; }))
+        QSKIP("Plasma's digital clock is not installed here");
+    QVERIFY(QMetaObject::invokeMethod(page, "addRequested", Q_ARG(QString, clock)));
+    QTRY_COMPARE(listed().size(), 2);
+    const QString key = listed().last().toMap().value("key").toString();
+    QVERIFY(QMetaObject::invokeMethod(page, "moveRequested", Q_ARG(QString, key), Q_ARG(int, 0)));
+    QTRY_COMPARE(listed().first().toMap().value("key").toString(), key);
+    QVERIFY(QMetaObject::invokeMethod(page, "removeRequested", Q_ARG(QString, key)));
+    QTRY_COMPARE(listed().size(), 1);
+    QCOMPARE(popup->property("barWidgetsNotice").toString(), QString());
 }
 
 void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()

@@ -178,6 +178,9 @@ Item {
             context.save()
             context.translate(first.x, first.y)
             context.rotate(Math.atan2(end.y - first.y, end.x - first.x))
+            // The capsule's outline is fixed as it is drawn; the picture
+            // follows the scale the fill is made with, so it is stretched over
+            // the capsule while the round ends stay round.
             const radius = width / 2
             context.beginPath()
             context.moveTo(0, -radius)
@@ -186,12 +189,14 @@ Item {
             context.lineTo(0, radius)
             context.arc(0, 0, radius, Math.PI / 2, Math.PI * 3 / 2, false)
             context.closePath()
-            context.clip()
-            context.translate(-width / 2, -width / 2)
+            context.translate(-radius, -radius)
             context.scale((total + width) / texture, width / texture)
             context.fillStyle = context.createPattern(String(materialSource), "repeat")
-            context.fillRect(0, 0, texture, texture)
+            context.fill()
             context.restore()
+            // Saving and restoring keeps no path: the passes after this one
+            // stroke the band's own line, not the capsule's outline.
+            trace(context)
             return
         }
         // Pieces overlap by `margin` texels so no hairline shows between

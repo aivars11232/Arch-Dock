@@ -6,6 +6,7 @@
 
 #include <QImage>
 #include <QObject>
+#include <QPointF>
 #include <QPointer>
 #include <QRectF>
 #include <QStringList>
@@ -81,6 +82,11 @@ class DecorationBaker : public QObject
     // The half-width the band was drawn at (smaller than asked when it had
     // to fit an edge panel).
     Q_PROPERTY(qreal drawnHalfWidth READ drawnHalfWidth NOTIFY baked)
+    // How far the drawn band reaches from its line towards the screen's edge
+    // and into the screen, on an edge panel (a decoration may lean to one
+    // side of its line); 0 on a free panel.
+    Q_PROPERTY(qreal reachIn READ reachIn NOTIFY baked)
+    Q_PROPERTY(qreal reachOut READ reachOut NOTIFY baked)
     // Where the decoration's launcher seat is, in the path's pixels:
     // { x, y, size }, or null when it has none.
     Q_PROPERTY(QVariant launcher READ launcher NOTIFY baked)
@@ -145,6 +151,8 @@ public:
     int frameCount() const { return m_frameCount; }
     qreal loop() const { return m_loop; }
     qreal drawnHalfWidth() const { return m_drawnHalfWidth; }
+    qreal reachIn() const { return m_reachIn; }
+    qreal reachOut() const { return m_reachOut; }
     QVariant launcher() const { return m_launcher; }
     QVariantList lightSpots() const { return m_lightSpots; }
     QString error() const { return m_error; }
@@ -180,8 +188,8 @@ public:
     Q_INVOKABLE QRectF lightRect(const QString &name) const;
 
     // A frame lit on the worker's thread.
-    void acceptFrame(int generation, int index, int count, qreal loop, qreal halfWidth, const QVariant &launcher,
-                     const QVariantList &lightSpots, const ArchDock::DecorationBake &bake);
+    void acceptFrame(int generation, int index, int count, qreal loop, qreal halfWidth, QPointF reach,
+                     const QVariant &launcher, const QVariantList &lightSpots, const ArchDock::DecorationBake &bake);
     // A solid made on the worker's thread.
     void acceptSolid(int generation, qreal halfWidth, const QVariant &launcher, const QVariantList &lightSpots,
                      const std::shared_ptr<const ArchDock::DecorationSurface> &surface,
@@ -222,6 +230,8 @@ private:
     int m_frameCount = 0;
     qreal m_loop = 0;
     qreal m_drawnHalfWidth = 0;
+    qreal m_reachIn = 0;
+    qreal m_reachOut = 0;
     QVariant m_launcher;
     QVariantList m_lightSpots;
     QString m_error;

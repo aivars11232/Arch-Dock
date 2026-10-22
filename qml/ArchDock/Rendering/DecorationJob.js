@@ -105,16 +105,23 @@ function prepare(text) {
     if (!decoration) return JSON.stringify({ error: "unknown-decoration" })
     if (!input.path || !input.path.points || input.path.points.length < 2) return JSON.stringify({ error: "no-path" })
     let halfWidth = Math.max(1, Number(input.halfWidth) || 24)
+    // How far the fitted band reaches from its line, each way: a decoration
+    // may lean to one side of it.
+    let reachOut = 0, reachIn = 0
     if (input.fit) {
         const probeLayout = laidOut(input, halfWidth)
         const probe = Scene.scene(decoration, probeLayout.path, halfWidth, probeLayout.slots, { choices: input.choices || ({}) })
         const reach = reachAcross(probe, input.path)
         const room = { out: Math.max(1, Number(input.fit.out) || 0), in: Math.max(1, Number(input.fit.in) || 0) }
         const share = Math.min(1, reach.out > room.out ? room.out / reach.out : 1, reach.in > room.in ? room.in / reach.in : 1)
-        halfWidth = Math.max(4, halfWidth * share)
+        const fitted = Math.max(4, halfWidth * share)
+        reachOut = reach.out * fitted / halfWidth
+        reachIn = reach.in * fitted / halfWidth
+        halfWidth = fitted
     }
     const frames = input.animated ? Scene.motionFrames(decoration) : 0
-    return JSON.stringify({ frames: frames, loop: frames ? Scene.motionLoop(decoration) : 0, halfWidth: halfWidth })
+    return JSON.stringify({ frames: frames, loop: frames ? Scene.motionLoop(decoration) : 0, halfWidth: halfWidth,
+                            reachOut: reachOut, reachIn: reachIn })
 }
 
 // The point `distance` pixels along a path from its first point.

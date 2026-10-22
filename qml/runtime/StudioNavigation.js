@@ -13,10 +13,12 @@ var sections = [
     {
         // Presets holds the panel presets, built-in and your own, and the
         // looks: both restyle the panel. The two tabs after it are never
-        // offered; their places keep the later tabs' numbers.
+        // offered; their places keep the later tabs' numbers. Widgets is a
+        // bar's own: the Plasma widgets in it.
         label: "Panels",
         subtabs: ["General", "Size", "Appearance", "Behavior", "Layout", "Segments",
-            "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D", "Hologram"]
+            "Presets", "Built-in Panel Presets", "My Panel Presets", "Animations", "3D", "Hologram",
+            "Widgets"]
     },
     {
         // The icon style is chosen in one place, Icons > Appearance; there

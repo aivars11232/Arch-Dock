@@ -488,6 +488,7 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/StudioThemePreview.qml
   qml/runtime/StudioThemes.js
   qml/runtime/StudioThemesPage.qml
+  qml/runtime/StudioWidgetsPage.qml
   qml/runtime/ThemeSampleCard.qml
   qml/runtime/SettingsPopup.qml)
 qt_add_qml_module(
@@ -2107,6 +2108,10 @@ if(BUILD_TESTING)
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
       -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_ProfilePage.qml)
   set_tests_properties(profile-page-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+  add_test(NAME studio-widgets-page-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioWidgetsPage.qml)
+  set_tests_properties(studio-widgets-page-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
   foreach(profile_matrix_group apply shortcuts)
     add_test(NAME profile-matrix-${profile_matrix_group}
       COMMAND ${CMAKE_COMMAND} -E env

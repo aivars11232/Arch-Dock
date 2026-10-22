@@ -688,7 +688,7 @@ Item {
         }))
     readonly property var segmentLayout: segmentedScene ? LayoutEngine.segmentGeometry(
         segmentDefinitions, orderedEntries, layoutPath, iconSize, iconSpacing,
-        layoutScale, layoutPadding, verticalLayout, layoutAngle,
+        layoutScale * barIconFit, layoutPadding, verticalLayout, layoutAngle,
         pathOrientation, geometryCompatibilityProfile, placementEdge) : null
     readonly property var segmentSurfaces: segmentRepeater
     // Consumers ask for the segment layout itself. Asking whether the scene is
@@ -696,7 +696,7 @@ Item {
     // the flag changes first.
     readonly property var configuredLayoutGeometry: segmentLayout
         ? segmentLayout.geometry : LayoutEngine.metrics(
-        layoutPath, rowEntryCount, iconSize, iconSpacing, layoutScale,
+        layoutPath, rowEntryCount, iconSize, iconSpacing, layoutScale * barIconFit,
         layoutRadius, layoutRows, layoutPadding, verticalLayout,
         layoutAngle, polygonSides)
     // While rotation is enabled the scene keeps the square every angle fits
@@ -1207,17 +1207,20 @@ Item {
                 handleExtent: 0
             }
         }
-        if (!skinMetadataUsable) {
+        // A skin along a bar is drawn along the whole bar, round icons laid
+        // out as on a flat panel.
+        if (!skinMetadataUsable || skinSpansBar) {
             return {
                 width: layoutGeometry.width,
                 height: layoutGeometry.height,
                 contentX: 0,
                 contentY: 0,
-                // A decoration reaches out as far as it is drawn.
-                effectLeft: Math.max(effectMargin, surfaceLoader.decorationReach.left) + pedestalHeadroom.left,
-                effectTop: Math.max(effectMargin, surfaceLoader.decorationReach.top) + pedestalHeadroom.top,
-                effectRight: Math.max(effectMargin, surfaceLoader.decorationReach.right) + pedestalHeadroom.right,
-                effectBottom: Math.max(effectMargin, surfaceLoader.decorationReach.bottom) + pedestalHeadroom.bottom,
+                // A decoration reaches out as far as it is drawn; in a bar
+                // it is drawn within the bar's panel.
+                effectLeft: Math.max(effectMargin, sceneDecorationReach.left) + pedestalHeadroom.left,
+                effectTop: Math.max(effectMargin, sceneDecorationReach.top) + pedestalHeadroom.top,
+                effectRight: Math.max(effectMargin, sceneDecorationReach.right) + pedestalHeadroom.right,
+                effectBottom: Math.max(effectMargin, sceneDecorationReach.bottom) + pedestalHeadroom.bottom,
                 handleExtent: 0
             }
         }
@@ -1266,8 +1269,8 @@ Item {
     // its own room: the ends lie along the panel, where a thin panel has
     // room; across it the decoration fits the panel's thickness.
     readonly property var decorationAlongRoom: {
-        const reach = surfaceLoader.decorationReach
-        if (freeHost || !surfaceLoader.decorationActive) return ({ width: 0, height: 0, offsetX: 0, offsetY: 0 })
+        const reach = sceneDecorationReach
+        if (freeHost || inBar || !surfaceLoader.decorationActive) return ({ width: 0, height: 0, offsetX: 0, offsetY: 0 })
         return verticalLayout
             ? ({ width: 0, height: reach.top + reach.bottom, offsetX: 0, offsetY: (reach.top - reach.bottom) / 2 })
             : ({ width: reach.left + reach.right, height: 0, offsetX: (reach.left - reach.right) / 2, offsetY: 0 })
@@ -1284,27 +1287,188 @@ Item {
     property real surfaceSpanBefore: 0
     property real surfaceSpanAfter: 0
     property real surfaceSpanThickness: 0
+    // In an Arch Dock bar: told by the bar's depth alone, which nothing in
+    // this scene's own size feeds back into.
+    readonly property bool inBar: surfaceSpanThickness > 0
+    // How far a decoration reaches past the panel. A bar's panel spans the
+    // whole bar and holds the decoration's ends: no reach adds to the scene
+    // there, which would otherwise feed the bar-wide surface back into its
+    // own size.
+    readonly property var sceneDecorationReach: inBar
+        ? ({ left: 0, top: 0, right: 0, bottom: 0 }) : surfaceLoader.decorationReach
     readonly property bool surfaceSpanned: (surfaceSpanBefore > 0 || surfaceSpanAfter > 0 || surfaceSpanThickness > 0)
         && ["horizontal", "vertical", "adaptive"].includes(layoutPath)
         && !segmentedScene && !bakedMetadataUsable && resolvedRendererTier !== "true3d"
+    // A skin along a bar is drawn whole, its ends and rims as deep as the
+    // bar, its middle stretched between them; the icons stand in its content
+    // region, drawn smaller where they would not fit it.
+    readonly property bool skinSpansBar: inBar && surfaceSpanned && skinMetadataUsable
+    readonly property real barSkinScale: skinSpansBar
+        ? surfaceSpanThickness / Math.max(1, Number(activeThemeSlice.sourceRect.height || 0)) : 1
+    readonly property real barIconFit: {
+        if (!skinSpansBar) return 1
+        const inside = Number(activeThemeContentRegion.rect.height || 0) * barSkinScale - 4
+        const icon = iconSize * layoutScale
+        return icon > 0 && inside > 0 ? Math.min(1, inside / icon) : 1
+    }
     // The band, as deep as the bar but for a little room at its sides.
     readonly property real surfaceBand: surfaceSpanned && surfaceSpanThickness > 0
         ? Math.max(1, surfaceSpanThickness - 8) : 0
     // The band is drawn round a line that ends half an icon and the padding
     // in from its box's ends, with round ends half the band deep: the box
-    // reaches that much past the bar's ends, so the band ends at them.
-    readonly property real surfaceLineInset: Math.max(0, Number(layoutGeometry.padding || 0)
+    // reaches that much past the bar's ends, so the band ends at them. A
+    // skin's own ends are its box's.
+    readonly property real surfaceLineInset: skinSpansBar ? 0 : Math.max(0, Number(layoutGeometry.padding || 0)
         + Number(layoutGeometry.iconSize || 0) / 2
         - (surfaceBand > 0 ? surfaceBand : Number(rendererStyle.lineWidth || 0)) / 2)
-    // The surface's box in this scene's coordinates.
+    // The surface's box in this scene's coordinates. A skin's box is exactly
+    // as deep as the bar, even where the scene is deeper.
     readonly property rect surfaceBox: {
         if (!surfaceSpanned) return Qt.rect(0, 0, width, height)
         const before = surfaceSpanBefore + surfaceLineInset
         const along = surfaceSpanBefore + surfaceSpanAfter + 2 * surfaceLineInset
-        const across = Math.max(0, surfaceSpanThickness - (verticalLayout ? width : height))
+        const deeper = surfaceSpanThickness - (verticalLayout ? width : height)
+        const across = skinSpansBar ? deeper : Math.max(0, deeper)
         return verticalLayout
             ? Qt.rect(-across / 2, -before, width + across, height + along)
             : Qt.rect(-before, -across / 2, width + along, height + across)
+    }
+    // Where the bar's widgets stand inside the panel drawn along it: so far
+    // in from the bar's ends, and from its long sides (sideStart the top or
+    // left one, sideEnd the bottom or right one). Clear of the flat band's
+    // round ends and inside its sides; inside a skin's content region;
+    // inside what a decoration draws, which may lean to one side of its
+    // line (a console into the screen).
+    readonly property var barWidgetRoom: {
+        if (!inBar || !surfaceSpanned) return ({ start: 0, end: 0, sideStart: 0, sideEnd: 0 })
+        if (skinSpansBar) {
+            const source = activeThemeSlice.sourceRect
+            const content = activeThemeContentRegion.rect
+            const sourceX = Number(source.x || 0), sourceY = Number(source.y || 0)
+            const contentX = Number(content.x || 0), contentY = Number(content.y || 0)
+            const afterX = sourceX + Number(source.width || 0) - contentX - Number(content.width || 0)
+            const afterY = sourceY + Number(source.height || 0) - contentY - Number(content.height || 0)
+            return ({ start: (contentX - sourceX) * barSkinScale, end: afterX * barSkinScale,
+                      sideStart: (contentY - sourceY) * barSkinScale, sideEnd: afterY * barSkinScale })
+        }
+        if (surfaceLoader.decorationActive) {
+            const decoration = surfaceLoader.decorationItem
+            const baker = decoration ? decoration.baker : null
+            const half = decoration ? Number(decoration.halfWidth || 0) : Number(layoutGeometry.iconSize || 0) / 1.7
+            // How far the drawn band reaches from its line, along the bar's
+            // middle, towards the screen's edge and into the screen.
+            const reachIn = baker && baker.reachIn > 0 ? Number(baker.reachIn) : half
+            const reachOut = baker && baker.reachOut > 0 ? Number(baker.reachOut) : half
+            const sideIn = Math.max(0, surfaceSpanThickness / 2 - reachIn)
+            const sideOut = Math.max(0, surfaceSpanThickness / 2 - reachOut)
+            // Into the screen is up from a bottom bar and left from a right one.
+            const outFirst = placementEdge === "bottom" || placementEdge === "right"
+            return ({ start: half, end: half, sideStart: outFirst ? sideOut : sideIn,
+                      sideEnd: outFirst ? sideIn : sideOut })
+        }
+        const side = Math.max(0, (surfaceSpanThickness - surfaceBand) / 2)
+        return ({ start: surfaceBand / 2, end: surfaceBand / 2, sideStart: side, sideEnd: side })
+    }
+    // The room a dock standing at a bar's end keeps there: its own padding
+    // keeps its icons clear of a round end, not of a skin's ends.
+    readonly property var barDockRoom: skinSpansBar
+        ? ({ start: Math.max(0, barWidgetRoom.start - layoutPadding),
+             end: Math.max(0, barWidgetRoom.end - layoutPadding) })
+        : ({ start: 0, end: 0 })
+    // The panel's ends along a bar, which the bar makes its application menu
+    // and its tray's hidden-icons button, in any look: a skin's end pieces,
+    // the flat band's round ends, a decoration's band as wide as it is deep.
+    readonly property var barEndCaps: {
+        if (!inBar || !surfaceSpanned) return ({ start: 0, end: 0 })
+        if (skinSpansBar)
+            return ({ start: Number(activeThemeSlice.fixedStart || 0) * barSkinScale,
+                      end: Number(activeThemeSlice.fixedEnd || 0) * barSkinScale })
+        const end = surfaceLoader.decorationActive ? 2 * barWidgetRoom.start : surfaceBand
+        return ({ start: end, end: end })
+    }
+    // How light the panel drawn along a bar is where its widgets stand (0
+    // black to 1 white, -1 not measured yet), measured from what is drawn,
+    // whatever draws it: the bar gives its widgets light text on a dark
+    // panel and dark text on a light one.
+    property real surfaceLightness: -1
+    readonly property string surfaceToneKey: inBar && surfaceSpanned ? JSON.stringify([
+        resolvedRendererTier, themeId, panelDecoration, rendererStyle, surfaceBox.width, surfaceBox.height,
+        barWidgetRoom, surfaceLoader.skinnedReady, surfaceLoader.decorationReady]) : ""
+    onSurfaceToneKeyChanged: if (surfaceToneKey.length > 0) surfaceToneTimer.restart()
+    // A scene made inside a bar is measured too, not only one that moves in.
+    Component.onCompleted: if (surfaceToneKey.length > 0) surfaceToneTimer.restart()
+    Timer {
+        id: surfaceToneTimer
+        // Once the look has been drawn.
+        interval: 600
+        onTriggered: root.measureSurfaceTone()
+    }
+    function measureSurfaceTone() {
+        const item = surfaceLoader
+        if (!inBar || !surfaceSpanned || item.width <= 0 || item.height <= 0)
+            return
+        const room = barWidgetRoom
+        const along = verticalLayout ? item.height : item.width
+        const deep = verticalLayout ? item.width : item.height
+        const from = surfaceLineInset + Number(room.start || 0)
+        const to = along - surfaceLineInset - Number(room.end || 0)
+        const near = (deep - surfaceSpanThickness) / 2 + Number(room.sideStart || 0)
+        const far = (deep + surfaceSpanThickness) / 2 - Number(room.sideEnd || 0)
+        if (to - from < 2 || far - near < 2)
+            return
+        const scale = Math.min(1, 256 / Math.max(item.width, item.height))
+        const area = verticalLayout
+            ? Qt.rect(near * scale, from * scale, (far - near) * scale, (to - from) * scale)
+            : Qt.rect(from * scale, near * scale, (to - from) * scale, (far - near) * scale)
+        item.grabToImage(function(result) { surfaceToneProbe.measure(result, area) },
+                         Qt.size(Math.max(1, Math.round(item.width * scale)),
+                                 Math.max(1, Math.round(item.height * scale))))
+    }
+    Canvas {
+        id: surfaceToneProbe
+        // The grab being measured, kept until its picture is read.
+        property var grab: null
+        property rect area
+        visible: false
+        width: 32
+        height: 8
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
+        function measure(result, rect) {
+            grab = result
+            area = rect
+            if (!isImageLoaded(result.url))
+                loadImage(result.url)
+            // A grabbed picture is already in the engine's cache, so it
+            // loads at once and no loaded signal follows (IconScene's solid
+            // is read the same way).
+            if (isImageLoaded(result.url))
+                requestPaint()
+        }
+        onImageLoaded: if (grab && isImageLoaded(grab.url)) requestPaint()
+        onPaint: {
+            if (!grab || !isImageLoaded(grab.url))
+                return
+            const url = grab.url
+            const context = getContext("2d")
+            context.clearRect(0, 0, width, height)
+            context.drawImage(url, area.x, area.y, area.width, area.height, 0, 0, width, height)
+            const pixels = context.getImageData(0, 0, width, height).data
+            let sum = 0
+            let weight = 0
+            for (let index = 0; index < pixels.length; index += 4) {
+                const alpha = pixels[index + 3] / 255
+                if (alpha < 0.3)
+                    continue
+                sum += alpha * (0.2126 * pixels[index] + 0.7152 * pixels[index + 1]
+                                + 0.0722 * pixels[index + 2]) / 255
+                weight += alpha
+            }
+            unloadImage(url)
+            grab = null
+            if (weight > 0)
+                root.surfaceLightness = sum / weight
+        }
     }
     readonly property var spannedRendererGeometry: Object.assign({}, rendererGeometry, {
         width: surfaceBox.width, height: surfaceBox.height, bandWidth: surfaceBand

@@ -59,6 +59,30 @@ bool changeSetting(KConfigLoader *settings, const QString &name, const QString &
     return true;
 }
 
+// A widget moved to a bar from a Plasma panel keeps its settings: each one
+// written as Plasma kept it, then read again by the widget's own settings.
+void giveSettings(Plasma::Applet *applet, const QVariantMap &groups)
+{
+    if (groups.isEmpty())
+        return;
+    for (auto group = groups.cbegin(); group != groups.cend(); ++group)
+    {
+        KConfigGroup target = applet->config();
+        for (const QString &name : group.key().split(QLatin1Char('/'), Qt::SkipEmptyParts))
+            target = target.group(name);
+        const QVariantMap entries = group.value().toMap();
+        for (auto entry = entries.cbegin(); entry != entries.cend(); ++entry)
+        {
+            if (entry.value().typeId() == QMetaType::QVariantList)
+                target.writeEntry(entry.key(), entry.value().toStringList());
+            else
+                target.writeEntry(entry.key(), entry.value().toString());
+        }
+    }
+    if (KConfigLoader *settings = applet->configScheme())
+        settings->load();
+}
+
 // The dock widget learns which panel it draws from its own settings, the
 // same two the backend writes when it puts the dock in a Plasma panel.
 void configureDock(Plasma::Applet *applet, const BarRecord &record)
@@ -200,6 +224,7 @@ void BarCorona::followWidgets(Plasma::Containment *containment, Plasma::Applet *
             {
                 KConfigGroup settings = applet->config();
                 settings.writeEntry(WidgetKeyEntry, widget.key);
+                giveSettings(applet, widget.settings);
                 rememberWidget(applet, widget.key);
                 requireConfigSync();
             }

@@ -32,6 +32,8 @@ Window {
             dockSettings.studioTheme = String(themeId);
     }
     readonly property bool currentThemesPage: mainTabIndex === 6
+    // A bar's Plasma widgets are on its own Panels page, Widgets.
+    readonly property bool currentWidgetsPage: mainTabIndex === 1 && subTabIndex === 12
     palette.window: studioTheme.windowBottom
     palette.windowText: studioTheme.text
     palette.base: studioTheme.controlBase
@@ -208,6 +210,22 @@ Window {
         || (newPanelPreviewLoader.item as LivePanelPreview) || embeddedRendererPreview
 
     readonly property int panelRevision: panelRegistry.revision
+    readonly property bool barSelected: {
+        const revision = panelRevision;
+        return String(panelRegistry.panelValue(selectedPanelId, "edgeHost") || "") === "bar";
+    }
+    // The bar's widgets in their order along it, read while its page is shown.
+    readonly property var selectedBarWidgets: {
+        const revision = panelRevision;
+        return currentWidgetsPage && barSelected && !profileMode
+            ? Array.from(panelController.barWidgetList(selectedPanelId) || []) : [];
+    }
+    // Plasma's installed widgets, read again each time the list to add from opens.
+    property var installedBarWidgets: []
+    property string barWidgetsNotice: ""
+    function changeBarWidgets(done) {
+        barWidgetsNotice = done ? "" : qsTr("The bar's widgets could not be changed just now. Try again in a moment.");
+    }
     readonly property int placementRevision: panelController.nativePlacementRevision
     readonly property int nativeVisibilityRevision: panelController.nativeVisibilityRevision
     readonly property bool hasSettingsChanges: EditorModel.dirty(editorSession)
@@ -620,6 +638,10 @@ Window {
                 return panelAnimationRows().length > 0;
             if (subtabNumber === 11)
                 return fieldsForSection("panels-hologram").length > 0;
+            // A bar's own Plasma widgets; a profile's copy of a bar keeps the
+            // ones it was saved with.
+            if (subtabNumber === 12)
+                return barSelected && !profileMode;
             if (subtabNumber === 10)
                 return scene3DControlsAvailable || (!isNativePanel()
                     && EditorModel.platformTier(panelValue("rendererTier", "")
@@ -1868,9 +1890,9 @@ Window {
     }
 
     function rowsForCurrentPage() {
-        // A preset page is a browser, and UI Themes a page of its own, not
-        // settings forms.
-        if (currentPresetPage || currentThemesPage)
+        // A preset page is a browser, and UI Themes and a bar's Widgets
+        // pages of their own, not settings forms.
+        if (currentPresetPage || currentThemesPage || currentWidgetsPage)
             return [];
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : subTabIndex === 1 ? overviewIconRows()
@@ -3236,7 +3258,7 @@ Window {
                 id: studioForm
                 objectName: "studio-page-form"
                 visible: root.currentPresetPage === null && !root.currentProfilePage && !root.currentThemesPage
-                    && !root.newPanelPicked
+                    && !root.currentWidgetsPage && !root.newPanelPicked
                 enabled: !root.profilesService || !root.profilesService.active
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -3253,6 +3275,30 @@ Window {
                 Layout.fillHeight: true
                 currentThemeId: root.studioTheme.id
                 onThemeChosen: function(themeId) { root.chooseStudioTheme(themeId); }
+            }
+
+            StudioWidgetsPage {
+                objectName: "panel-studio-widgets-page"
+                visible: root.currentWidgetsPage && !root.newPanelPicked
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                theme: root.studioTheme
+                widgets: root.selectedBarWidgets
+                installed: root.installedBarWidgets
+                upright: ["left", "right"].includes(String(root.panelRevision >= 0
+                    ? panelRegistry.panelValue(root.selectedPanelId, "edge") || "" : ""))
+                actionsEnabled: !root.auditionBusy && (!root.profilesService || !root.profilesService.active)
+                notice: root.barWidgetsNotice
+                onInstalledListOpened: root.installedBarWidgets = Array.from(panelController.availableBarWidgets() || [])
+                onAddRequested: function(plugin) {
+                    root.changeBarWidgets(String(panelController.addBarWidget(root.selectedPanelId, plugin) || "").length > 0);
+                }
+                onRemoveRequested: function(key) {
+                    root.changeBarWidgets(panelController.removeBarWidget(root.selectedPanelId, key));
+                }
+                onMoveRequested: function(key, index) {
+                    root.changeBarWidgets(panelController.moveBarWidget(root.selectedPanelId, key, index));
+                }
             }
 
             ProfilePage {

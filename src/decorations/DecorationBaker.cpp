@@ -50,14 +50,15 @@ struct Request
     QPointer<DecorationBaker> baker;
 };
 
-void deliver(const Request &request, int index, int count, qreal loop, qreal halfWidth, const QVariant &launcher,
-             const QVariantList &lightSpots, const ArchDock::DecorationBake &bake)
+void deliver(const Request &request, int index, int count, qreal loop, qreal halfWidth, QPointF reach,
+             const QVariant &launcher, const QVariantList &lightSpots, const ArchDock::DecorationBake &bake)
 {
     QMetaObject::invokeMethod(
         QCoreApplication::instance(),
-        [request, index, count, loop, halfWidth, launcher, lightSpots, bake]() {
+        [request, index, count, loop, halfWidth, reach, launcher, lightSpots, bake]() {
             if (request.baker)
-                request.baker->acceptFrame(request.generation, index, count, loop, halfWidth, launcher, lightSpots, bake);
+                request.baker->acceptFrame(request.generation, index, count, loop, halfWidth, reach, launcher, lightSpots,
+                                           bake);
         },
         Qt::QueuedConnection);
 }
@@ -104,7 +105,7 @@ void makeSolid(const QJSValue &job, const Request &request, qreal halfWidth, con
     const auto fail = [&request](const QString &error) {
         ArchDock::DecorationBake failed;
         failed.error = error;
-        deliver(request, 0, 1, 0, 0, QVariant(), {}, failed);
+        deliver(request, 0, 1, 0, 0, QPointF(), QVariant(), {}, failed);
     };
     const QJSValue text = job.property(QStringLiteral("sceneText"))
                               .call({QJSValue(request.input), QJSValue(-1.0), QJSValue(halfWidth)});
@@ -161,7 +162,7 @@ void bake(ArchDock::DecorationScripts &scripts, const Request &request)
     const auto fail = [&request](const QString &error) {
         ArchDock::DecorationBake failed;
         failed.error = error;
-        deliver(request, 0, 1, 0, 0, QVariant(), {}, failed);
+        deliver(request, 0, 1, 0, 0, QPointF(), QVariant(), {}, failed);
     };
     QString error;
     const QJSValue job = scripts.module(request.directory + QStringLiteral("/DecorationJob.js"), &error);
@@ -173,6 +174,10 @@ void bake(ArchDock::DecorationScripts &scripts, const Request &request)
     const int frames = prepared.value(QLatin1String("frames")).toInt();
     const qreal loop = prepared.value(QLatin1String("loop")).toDouble();
     const qreal halfWidth = prepared.value(QLatin1String("halfWidth")).toDouble();
+    // How far the band reaches from its line towards the screen's edge and
+    // into the screen, as fitted to an edge panel (none on a free panel).
+    const QPointF reach(prepared.value(QLatin1String("reachIn")).toDouble(),
+                        prepared.value(QLatin1String("reachOut")).toDouble());
     if (request.relief) return makeSolid(job, request, halfWidth, cancelled);
     const int count = std::max(1, frames);
     QJsonValue sharedBounds;
@@ -205,7 +210,7 @@ void bake(ArchDock::DecorationScripts &scripts, const Request &request)
         const ArchDock::DecorationBake lit = ArchDock::bakeDecoration(
             scene, request.directory + QStringLiteral("/materials"), request.scale, frames ? framePixels : stillPixels, cancelled);
         if (lit.error == QLatin1String("cancelled")) return;
-        deliver(request, index, count, loop, halfWidth, launcher, spots, lit);
+        deliver(request, index, count, loop, halfWidth, reach, launcher, spots, lit);
     }
 }
 
@@ -361,6 +366,8 @@ void DecorationBaker::clearPictures(const QString &error)
     m_frameCount = 0;
     m_loop = 0;
     m_drawnHalfWidth = 0;
+    m_reachIn = 0;
+    m_reachOut = 0;
     m_launcher = QVariant();
     m_lightSpots.clear();
     m_surface.reset();
@@ -416,8 +423,9 @@ void DecorationBaker::start()
     ArchDock::DecorationWorker::post([request](ArchDock::DecorationScripts &scripts) { bake(scripts, request); });
 }
 
-void DecorationBaker::acceptFrame(int generation, int index, int count, qreal loop, qreal halfWidth, const QVariant &launcher,
-                                  const QVariantList &lightSpots, const ArchDock::DecorationBake &bake)
+void DecorationBaker::acceptFrame(int generation, int index, int count, qreal loop, qreal halfWidth, QPointF reach,
+                                  const QVariant &launcher, const QVariantList &lightSpots,
+                                  const ArchDock::DecorationBake &bake)
 {
     // Only the newest settings' pictures are kept.
     if (generation != m_generation) return;
@@ -439,6 +447,8 @@ void DecorationBaker::acceptFrame(int generation, int index, int count, qreal lo
         m_frameCount = count;
         m_loop = loop;
         m_drawnHalfWidth = halfWidth;
+        m_reachIn = reach.x();
+        m_reachOut = reach.y();
         m_launcher = launcher;
         m_lightSpots = lightSpots;
         m_error.clear();
@@ -489,6 +499,8 @@ void DecorationBaker::acceptSolid(int generation, qreal halfWidth, const QVarian
     m_frameCount = 1;
     m_loop = 0;
     m_drawnHalfWidth = halfWidth;
+    m_reachIn = 0;
+    m_reachOut = 0;
     m_launcher = launcher;
     m_lightSpots = lightSpots;
     m_error.clear();

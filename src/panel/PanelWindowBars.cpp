@@ -12,6 +12,8 @@
 #include <KPluginMetaData>
 
 #include <QCollator>
+#include <QDBusInterface>
+#include <QDBusReply>
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -150,9 +152,18 @@ QString PanelWindow::barHostRecordsJson() const
         const auto held = ArchDock::Bars::barWidgetsFromEntries(
             definition->content.barWidgets, definition->content.type != QLatin1String("empty"));
         for (const ArchDock::Bars::BarWidget &widget : held)
-            widgets.append(widget.dock()
-                ? QJsonObject{{QStringLiteral("key"), widget.key}}
-                : QJsonObject{{QStringLiteral("key"), widget.key}, {QStringLiteral("plugin"), widget.plugin}});
+        {
+            if (widget.dock())
+            {
+                widgets.append(QJsonObject{{QStringLiteral("key"), widget.key}});
+                continue;
+            }
+            QJsonObject listed{{QStringLiteral("key"), widget.key}, {QStringLiteral("plugin"), widget.plugin}};
+            const QVariantMap settings = definition->content.barWidgetSettings.value(widget.key).toMap();
+            if (!settings.isEmpty())
+                listed.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(settings));
+            widgets.append(listed);
+        }
         bars.append(QJsonObject{
             {QStringLiteral("id"), panelId},
             {QStringLiteral("type"), definition->content.type},
@@ -325,6 +336,113 @@ bool PanelWindow::moveBarWidget(const QString &panelId, const QString &key, int 
 bool PanelWindow::barWidgetRemoved(const QString &panelId, const QString &key)
 {
     return removeBarWidget(panelId, key);
+}
+
+bool PanelWindow::moveEdgePanelIntoBar(const QString &panelId)
+{
+    if (profileBusy() || !m_panelRegistry.panelIds().contains(panelId) || barHosted(panelId)
+        || !isNativeDockPanelEdge(m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
+        return false;
+    const int containmentId = nativePanelId(panelId);
+    if (containmentId < 0 || !nativePanelIsOwned(panelId, containmentId))
+        return false;
+
+    // What the Plasma panel holds, in its order, each widget with its
+    // settings as Plasma keeps them: by group under the widget's own settings
+    // ("" for the widget's own, "General", ...).
+    const QString script = QStringLiteral(R"(
+const read = function(widget, path) {
+    widget.currentConfigGroup = path;
+    const result = {};
+    const values = {};
+    for (const key of widget.configKeys) values[key] = widget.readConfig(key, "");
+    result[path.join("/")] = values;
+    for (const name of widget.configGroups) Object.assign(result, read(widget, path.concat([name])));
+    widget.currentConfigGroup = path;
+    return result;
+};
+const panel = panelById(%1);
+if (!panel) {
+    print("ARCHDOCK_JSON:null");
+} else {
+    panel.currentConfigGroup = ["General"];
+    const order = String(panel.readConfig("AppletOrder", "")).split(";").filter(function(id) { return id.length > 0; });
+    const widgets = panel.widgets().map(function(widget) {
+        return { id: String(widget.id), plugin: String(widget.type), settings: read(widget, []) };
+    });
+    print("ARCHDOCK_JSON:" + JSON.stringify({ order: order, widgets: widgets }));
+})").arg(containmentId);
+    QDBusInterface shell(QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+                         QStringLiteral("org.kde.PlasmaShell"), QDBusConnection::sessionBus());
+    if (!shell.isValid())
+        return false;
+    const QDBusReply<QString> reply = PanelWindowHelpers::callPlasmaScript(shell, script, false);
+    const qsizetype at = reply.isValid() ? reply.value().lastIndexOf(QStringLiteral("ARCHDOCK_JSON:")) : -1;
+    if (at < 0)
+    {
+        qWarning() << "The widgets of the Plasma panel of" << panelId << "could not be read";
+        return false;
+    }
+    const QJsonObject held = QJsonDocument::fromJson(
+        reply.value().mid(at + QStringLiteral("ARCHDOCK_JSON:").size()).trimmed().toUtf8()).object();
+    if (held.isEmpty())
+        return false;
+
+    // The panel's order first, then any widget its order does not name.
+    QHash<QString, QJsonObject> byId;
+    QStringList ids;
+    for (const QJsonValue &value : held.value(QStringLiteral("widgets")).toArray())
+        byId.insert(value.toObject().value(QStringLiteral("id")).toString(), value.toObject());
+    for (const QJsonValue &value : held.value(QStringLiteral("order")).toArray())
+        if (byId.contains(value.toString()) && !ids.contains(value.toString()))
+            ids.append(value.toString());
+    for (const QJsonValue &value : held.value(QStringLiteral("widgets")).toArray())
+        if (const QString id = value.toObject().value(QStringLiteral("id")).toString(); !ids.contains(id))
+            ids.append(id);
+
+    // Arch Dock's dock stays the dock; its other parts in the panel (an old
+    // control widget) do not come along.
+    const QString dockApplet = QString::number(nativeDockAppletId(panelId));
+    QList<ArchDock::Bars::BarWidget> widgets;
+    QVariantMap settings;
+    for (const QString &id : std::as_const(ids))
+    {
+        const QJsonObject widget = byId.value(id);
+        const QString plugin = widget.value(QStringLiteral("plugin")).toString();
+        if (id == dockApplet || plugin == QLatin1String("org.archdock.dock"))
+        {
+            if (std::none_of(widgets.cbegin(), widgets.cend(),
+                             [](const ArchDock::Bars::BarWidget &held) { return held.dock(); }))
+                widgets.append({ArchDock::Bars::BarWidget::dockKey(), {}});
+            continue;
+        }
+        if (plugin.startsWith(QLatin1String("org.archdock.")) || !ArchDock::Bars::validWidgetPlugin(plugin))
+            continue;
+        const QString key = ArchDock::Bars::newWidgetKey(widgets);
+        widgets.append({key, plugin});
+        // The system tray keeps its choices in a containment of its own,
+        // which the bar's tray makes anew; what Plasma reads back for it is
+        // that containment's bookkeeping, not its settings.
+        const QVariantMap kept = plugin == QLatin1String("org.kde.plasma.systemtray")
+            ? QVariantMap{} : widget.value(QStringLiteral("settings")).toObject().toVariantMap();
+        if (!kept.isEmpty())
+            settings.insert(key, kept);
+    }
+    const bool holdsDock = m_panelRegistry.panelValue(panelId, QStringLiteral("type")).toString() != QLatin1String("empty");
+    const QStringList entries = ArchDock::Bars::barWidgetEntries(ArchDock::Bars::normalizedBarWidgets(widgets, holdsDock));
+
+    // The Plasma panel goes first: a bar has none to remove.
+    if (!removeNativeKdePanel(panelId))
+        return false;
+    if (!m_panelRegistry.updatePanelChecked(panelId, {{QStringLiteral("edgeHost"), QStringLiteral("bar")},
+                                                      {QStringLiteral("barWidgets"), entries},
+                                                      {QStringLiteral("barWidgetSettings"), settings},
+                                                      {QStringLiteral("kdeWidgets"), QStringList{}}}))
+    {
+        qWarning() << "The Plasma panel of" << panelId << "was removed but the bar could not be made";
+        return false;
+    }
+    return setPanelVisible(panelId, true);
 }
 
 QString PanelWindow::barHostWindowsJson() const

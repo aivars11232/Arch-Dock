@@ -20,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMenu>
 #include <QScreen>
 #include <QSet>
 #include <QWindow>
@@ -350,12 +351,15 @@ void BarHost::layoutBars()
         QList<BarRequest> requests;
         for (const BarRecord *record : edge.bars)
         {
-            int length = record->fixedLength;
+            // A bar set to a length is at least as long as what it holds, so
+            // nothing in it is squeezed or cut off.
+            const auto *window = m_bars.value(record->id);
+            const int wanted = window ? window->wantedLength() : 0;
+            int length = std::max(record->fixedLength, std::min(wanted, edgeLength));
             if (record->lengthMode == QStringLiteral("fill"))
                 length = edgeLength;
             else if (record->lengthMode == QStringLiteral("fit"))
-                length = std::clamp(m_bars.value(record->id)->wantedLength(),
-                                    record->minimumLength, record->maximumLength);
+                length = std::clamp(wanted, record->minimumLength, record->maximumLength);
             requests.append({record->id, record->alignment, record->order, length, record->offset});
         }
 
@@ -447,6 +451,26 @@ bool BarHost::eventFilter(QObject *watched, QEvent *event)
 {
     if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
         m_evaluateTimer.start();
+    // A bar's containment puts its own copy of Plasma's edit mode into a
+    // widget's menu as the menu opens. The bar host has no edit mode: Panel
+    // Studio adds, orders and removes a bar's widgets. The copy is known by
+    // being a bar's and by the edit mode's icon, which stays the same in
+    // every language.
+    if (event->type() == QEvent::Show)
+    {
+        if (auto *menu = qobject_cast<QMenu *>(watched))
+        {
+            const QAction *editMode = m_corona->action(QStringLiteral("edit mode"));
+            const QList<QAction *> actions = menu->actions();
+            for (QAction *action : actions)
+            {
+                const auto *bar = qobject_cast<Plasma::Containment *>(action->parent());
+                if (bar && editMode && !BarCorona::barId(bar).isEmpty()
+                    && action->icon().name() == editMode->icon().name())
+                    action->setVisible(false);
+            }
+        }
+    }
     return QObject::eventFilter(watched, event);
 }
 }

@@ -435,6 +435,9 @@ const QVector<Descriptor> &schemaFields()
         // through the bar widget operations.
         panel("barWidgets", Access::Internal, Type::StringList,
               Normalization::StringList, QStringList{}, "content.barWidgets"),
+        // The settings of the widgets a bar was given from a Plasma panel.
+        panel("barWidgetSettings", Access::Internal, Type::Map,
+              Normalization::Map, QVariantMap{}, "content.barWidgetSettings"),
         panel("segments", Access::Editor, Type::List, Normalization::None,
               QVariantList{QVariantMap{{QStringLiteral("id"), QStringLiteral("main")}}},
               "segments", {}, {}, {}, false, true,

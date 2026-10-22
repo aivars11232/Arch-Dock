@@ -116,6 +116,26 @@ private slots:
         QCOMPARE(records.at(2).widgets.size(), 1);
         QCOMPARE(records.at(2).widgets.first().key, QStringLiteral("w1"));
     }
+
+    // A widget moved from a Plasma panel brings its settings, by group, to
+    // the widget the bar host makes for it.
+    void movedWidgetsBringTheirSettings()
+    {
+        const QList<BarRecord> records = parseBarRecords(R"([
+            {"id": "panel-1", "edge": "bottom", "widgets": [
+                {"key": "w1", "plugin": "org.kde.plasma.kickoff",
+                 "settings": {"General": {"icon": "/home/me/start.svg", "favorites": ["a.desktop", "b.desktop"]},
+                              "": {"popupWidth": "400"}}},
+                {"key": "dock"}]}
+        ])");
+        QCOMPARE(records.size(), 1);
+        const QVariantMap settings = records.first().widgets.first().settings;
+        QCOMPARE(settings.value("General").toMap().value("icon").toString(), QStringLiteral("/home/me/start.svg"));
+        QCOMPARE(settings.value("General").toMap().value("favorites").toStringList(),
+                 (QStringList{QStringLiteral("a.desktop"), QStringLiteral("b.desktop")}));
+        QCOMPARE(settings.value("").toMap().value("popupWidth").toString(), QStringLiteral("400"));
+        QVERIFY(records.first().widgets.at(1).settings.isEmpty());
+    }
 };
 
 QTEST_GUILESS_MAIN(BarRecordTest)

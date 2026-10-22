@@ -484,3 +484,90 @@ Pictures: `/mnt/F/archdock-audit-2026-10-08/evidence/piece9-bars-step4/`
 - At this checkpoint 19 related tests passed (the bar tests, panel model,
   registry, profiles, the scene, skin, parity, icon and decoration tests and
   the template check). The complete suite has not been run on it.
+
+## Step 4: Plasma widgets in bars — Report 1 (2026-10-22)
+
+Step 4 is finished: Plasma's widgets stand in Arch Dock's bars, inside the
+one panel the bar's look draws along its whole length, Panel Studio edits
+them, and an edge panel Plasma holds for Arch Dock can be made such a bar,
+its widgets and their settings with it. The before-and-after sheet is
+`evidence/piece9-bars-step4/looks-before-after.png` in the audit folder; the
+private-desktop runs are `bars-step4-looks-1` to `-11` and
+`bars-step4-move-1` to `-4`.
+
+### The owner's rulings today, and what answers them
+
+- "there's no need for those corners if ends are rounded" — the round ends
+  have no grey corners (the stroke passes traced the capsule's outline once
+  its path was lost on restore); the owner: "Good".
+- "Once again, clock is not within the panel" and "If the clock is on
+  vertical panel, it should be adjusted properly" — the dock reports the
+  inside of the panel it draws (room at each end and each side) and the bar
+  keeps its Plasma widgets in it: clear of the glass band's round ends and
+  inside its sides, inside a skin's content region, inside what a decoration
+  draws, which may lean to one side of its line (the decoration baker now
+  says how far it reaches each way).
+- "what's with that mega box?" — that picture came from a test that set the
+  side bar's thickness (its width) to 700 instead of its length; nothing in
+  Arch Dock made it.
+- "Why the panel is asymmetrical?", "Do it like this", "Perfect" (the
+  chassis artwork) — a skin along a bar is drawn whole, its end pieces and
+  rims as deep as the bar and its middle stretched; before, it was drawn at
+  the icons' size and the bar showed a magnified strip of it. Icons larger
+  than the skin's content region are drawn smaller to stand in it.
+- "If they are opened apps, they should be more to the left, right next to
+  app launcher/menu" — a bar's dock icons start one icon gap after what
+  stands before them, as Plasma's task manager starts after its menu.
+- "those ends should be them", "This one too", "that should be thing for
+  every side panel, no matter the theme", "I always tend to change the Icon
+  to custom one, that should stay" — in every look, the panel's start end is
+  the bar's application menu (Plasma's Application Launcher, Menu or
+  Dashboard, its own icon kept) and its far end the system tray's button for
+  its hidden icons (Plasma's own button, moved there); pressing them opens
+  the menu and "Status and Notifications".
+- The clock's text and the tray's symbols on a dark look (the chassis) were
+  dark on dark: the dock measures how light the panel it draws is where the
+  widgets stand, from the drawing itself, and the bar gives them the colour
+  scheme's light or dark text accordingly.
+- "Well if step 4 finishing includes the fact that I can use all the panels,
+  with plasma widgets and Arch Dock themes and edits, than it's good" —
+  Panel Studio has a Widgets page for a bar (the widgets in order, move
+  along, remove, "Add widget…" with a search of Plasma's installed widgets);
+  an edge panel Plasma holds for Arch Dock has "Make it an Arch Dock bar" in
+  its right-click menu: its Plasma widgets come along in their order with
+  their settings (the menu's custom icon among them; the system tray's own
+  choices stay with Plasma, its new one starts from Plasma's defaults) and
+  the Plasma panel goes. A bar set to a length is at least as long as what it
+  holds, so nothing in it is squeezed or cut off.
+
+### Known limits
+
+- On a narrow decoration (the starship console on a 76 px side bar) the
+  clock reaches the console's dark side edge by 2-3 px: Plasma's clock does
+  not draw its text smaller than its smallest font.
+- A saved profile still holds an edge panel as Plasma held it; after making
+  panels bars, "Save Current to Profile" keeps them as bars.
+- The system tray moved into a bar starts from Plasma's defaults for which
+  icons it shows and hides.
+
+### Tests
+
+- The complete serial suite (133 tests, `-j1`, 2528 s): 132 passed. The
+  capability test crashed once inside `studioMotionAndDirectionRows`, in Qt's
+  lookup of a QML singleton (`QQmlEnginePrivate::singletonInstance`), the
+  same Qt garbage-collection flake step 3's recheck met in another Panel
+  Studio test; run alone it passed twice (496 s, 501 s), every test function
+  with it. The log is `evidence/piece9-bars-step4/suite-2026-10-22.log` in
+  the audit folder.
+- New: `tst_PanelScene.qml` (the glass band's inside, ends and measured
+  lightness, dark and light; a skin drawn whole as deep as the bar, its
+  content region, end pieces and fitted icons),
+  `tst_StudioWidgetsPage.qml` (move, remove, the search, adding, a refused
+  change), `PanelWindowCapabilityTest::studioWidgetsPageEditsTheBar` (the page
+  on a bar, none on a free panel, changes through the backend), and
+  `BarRecordTest::movedWidgetsBringTheirSettings`.
+- On a private Plasma desktop: the looks (`bars-looks-steps.sh`, runs
+  `bars-step4-looks-1` to `-11`) and an edge panel Plasma held made a bar
+  with the application menu's custom icon kept (`bars-move-steps.sh`, runs
+  `bars-step4-move-1` to `-4`: the Plasma panel gone, the bar 800 px long
+  for what it holds).

@@ -597,6 +597,78 @@ TestCase {
         compare(scene.visualPanel.reducedMotion, false)
     }
 
+    // The panel drawn along an Arch Dock bar keeps the bar's widgets inside
+    // it: clear of the flat band's round ends and inside its sides. How
+    // light it is drawn is measured from the drawing, for the widgets' text.
+    function test_barBandKeepsWidgetsInsideAndMeasuresItsLightness() {
+        const bar = { surfaceSpanBefore: 120, surfaceSpanAfter: 200, surfaceSpanThickness: 76 }
+        const dark = createScene(Object.assign({
+            panelDefinition: definition({ color: "#0b1016", opacity: 1 })
+        }, bar))
+        verify(dark.surfaceSpanned)
+        verify(waitForRendering(dark))
+        compare(dark.barWidgetRoom.start, 34)
+        compare(dark.barWidgetRoom.end, 34)
+        compare(dark.barWidgetRoom.sideStart, 4)
+        compare(dark.barWidgetRoom.sideEnd, 4)
+        // The dock's own padding keeps its icons clear of a round end.
+        compare(dark.barDockRoom.start, 0)
+        compare(dark.barDockRoom.end, 0)
+        // The round ends are the bar's menu and hidden-icons buttons.
+        compare(dark.barEndCaps.start, 68)
+        compare(dark.barEndCaps.end, 68)
+        tryVerify(function() { return dark.surfaceLightness >= 0 }, 5000)
+        verify(dark.surfaceLightness < 0.42, "a dark band measured " + dark.surfaceLightness)
+        const light = createScene(Object.assign({
+            panelDefinition: definition({ color: "#eef3f6", opacity: 1 })
+        }, bar))
+        tryVerify(function() { return light.surfaceLightness >= 0 }, 5000)
+        verify(light.surfaceLightness >= 0.42, "a light band measured " + light.surfaceLightness)
+        // Off a bar nothing is kept clear and nothing is measured.
+        const free = createScene({ panelDefinition: definition({ color: "#0b1016", opacity: 1 }) })
+        compare(free.barWidgetRoom.sideStart, 0)
+        compare(free.barEndCaps.start, 0)
+        wait(800)
+        compare(free.surfaceLightness, -1)
+    }
+
+    // A skin along a bar is drawn whole, as deep as the bar: its ends and
+    // rims keep the bar's widgets in its content region, a dock at the bar's
+    // end keeps clear of its ends, and the icons are drawn small enough to
+    // stand in its content region.
+    function test_barSkinIsDrawnWholeAsDeepAsTheBar() {
+        const scene = createScene({
+            panelDefinition: definition({ rendererTier: "skinned2d", panelThemeId: "sci-fi-chassis-dark",
+                iconSize: 52, layoutPadding: 18 }),
+            hostCapabilities: { available: true, renderer: { effectiveTier: "skinned2d", fallbackApplied: false } },
+            themeDefinition: chassisThemeDefinition(),
+            surfaceSpanBefore: 100, surfaceSpanAfter: 400, surfaceSpanThickness: 76
+        })
+        tryVerify(function() { return scene.effectiveRendererTier === "skinned2d" }, 3000)
+        verify(waitForRendering(scene))
+        verify(scene.skinSpansBar)
+        const scale = 76 / 160
+        compare(scene.surfaceBox.height, 76)
+        fuzzyCompare(scene.barWidgetRoom.start, 168 * scale, 0.001)
+        fuzzyCompare(scene.barWidgetRoom.end, 168 * scale, 0.001)
+        fuzzyCompare(scene.barWidgetRoom.sideStart, 36 * scale, 0.001)
+        fuzzyCompare(scene.barWidgetRoom.sideEnd, 36 * scale, 0.001)
+        // Its ends are the bar's application menu and hidden-icons button.
+        fuzzyCompare(scene.barEndCaps.start, 152 * scale, 0.001)
+        fuzzyCompare(scene.barEndCaps.end, 152 * scale, 0.001)
+        fuzzyCompare(scene.barDockRoom.start, 168 * scale - 18, 0.001)
+        verify(scene.layoutGeometry.iconSize <= 88 * scale - 4 + 0.001,
+               "an icon " + scene.layoutGeometry.iconSize + " px high in a content region "
+               + 88 * scale + " px high")
+        tryVerify(function() { return scene.visualPanel && scene.visualPanel.rendererReady }, 3000)
+        compare(scene.visualPanel.height, 76)
+        // The skin's ends are drawn whole, scaled with its depth.
+        fuzzyCompare(scene.visualPanel.fixedStartPixels, 152 * scale, 0.001)
+        fuzzyCompare(scene.visualPanel.fixedEndPixels, 152 * scale, 0.001)
+        tryVerify(function() { return scene.surfaceLightness >= 0 }, 5000)
+        verify(scene.surfaceLightness < 0.42, "the chassis measured " + scene.surfaceLightness)
+    }
+
     function test_true3DFallbackKeepsSkinContentGeometry() {
         const theme = chassisThemeDefinition();
         theme.capabilities = {rendererTiers: ["true3d", "skinned2d", "procedural2d"],

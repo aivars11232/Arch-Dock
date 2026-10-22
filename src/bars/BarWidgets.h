@@ -4,6 +4,7 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 
 namespace ArchDock::Bars
 {
@@ -14,6 +15,10 @@ struct BarWidget
 {
     QString key;
     QString plugin;
+    // Settings a widget moved from a Plasma panel brings with it, by group
+    // ("General", "" for the widget's own) and name, as Plasma keeps them;
+    // the bar host gives them to the widget it makes.
+    QVariantMap settings = {};
 
     [[nodiscard]] bool dock() const { return key == dockKey(); }
     static QString dockKey() { return QStringLiteral("dock"); }

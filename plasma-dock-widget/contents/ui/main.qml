@@ -50,6 +50,38 @@ PlasmoidItem {
     property real barSurfaceAfter: 0
     property real barSurfaceThickness: 0
     readonly property bool drawsBarSurface: barSurfaceThickness > 0
+    // Read by the bar: where its widgets stand inside the panel drawn along
+    // it, and the room this dock keeps where it stands at the bar's end.
+    readonly property Item barScene: drawsBarSurface && activeDockRepresentation
+        ? activeDockRepresentation.scene || null : null
+    readonly property var barWidgetRoom: barScene ? barScene.barWidgetRoom
+        : ({ start: 0, end: 0, sideStart: 0, sideEnd: 0 })
+    readonly property var barDockRoom: barScene ? barScene.barDockRoom : ({ start: 0, end: 0 })
+    readonly property var barEndCaps: barScene ? barScene.barEndCaps : ({ start: 0, end: 0 })
+    readonly property real barSurfaceLightness: barScene ? barScene.surfaceLightness : -1
+    // Set by the bar: something stands before this dock along it (a widget,
+    // or the application menu the bar's look makes of its start). The icons
+    // then start one icon gap after it, as Plasma's task manager starts
+    // right after the application menu.
+    property bool barWidgetBefore: false
+    // How far the scene moves from the middle of its place in a bar: to the
+    // start of it, and on to one icon gap after what stands before it.
+    function barSceneShift(room, own, lead, gap) {
+        const shift = -Math.max(0, room - own) / 2
+        return barWidgetBefore ? shift - Math.max(0, lead - gap) : shift
+    }
+    // Where the scene's icons start along it: its icon nearest the scene's
+    // start, which need not be its first entry (an icon off its path has no
+    // place).
+    function sceneLead(rects, vertical, fallback) {
+        let lead = Infinity
+        for (const rect of rects || []) {
+            const at = Number(vertical ? rect.y : rect.x)
+            if (at > -1000 && at < lead)
+                lead = at
+        }
+        return Number.isFinite(lead) ? lead : fallback
+    }
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property bool bootstrapPending: panelId.length === 0
         && Boolean(Plasmoid.configuration.bootstrapFreeDock)
@@ -871,11 +903,25 @@ PlasmoidItem {
         onTriggered: root.callDock("showNewPanelPage", [])
     }
 
+    // An edge panel Plasma holds for Arch Dock becomes a bar of Arch Dock's
+    // own, its Plasma widgets and their settings with it: Arch Dock's looks
+    // then reach the whole panel.
+    PlasmaCore.Action {
+        id: moveIntoBarAction
+        text: qsTr("Make it an Arch Dock bar")
+        icon.name: "transform-move"
+        visible: !root.freeSurface && !root.drawsBarSurface && root.panelId.length > 0
+        onTriggered: root.callDock("moveEdgePanelIntoBar", [root.panelId])
+    }
+
     Component {
         id: dockRepresentation
 
         Item {
             id: representation
+
+            // The scene this dock draws, read where the bar asks for it.
+            readonly property Item scene: panelScene
 
             // Where this free panel is drawn on the screen, and the room its
             // folder's smallest opening needs there, for the other free
@@ -1402,9 +1448,19 @@ PlasmoidItem {
                     }
 
                     anchors.centerIn: parent
-                    // An edge panel's decoration may reach farther at one end.
-                    anchors.horizontalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetX || 0)
-                    anchors.verticalCenterOffset: root.freeSurface ? 0 : Number(decorationAlongRoom.offsetY || 0)
+                    // An edge panel's decoration may reach farther at one end;
+                    // in a bar it spans the whole bar already, and the bar's
+                    // reach is measured from where the scene stands. In a bar
+                    // the icons start right after the widget before them, as
+                    // Plasma's task manager starts after the application menu.
+                    anchors.horizontalCenterOffset: root.freeSurface ? 0
+                        : root.drawsBarSurface ? (root.vertical ? 0 : root.barSceneShift(parent.width, width,
+                            root.sceneLead(entryRects, false, layoutPadding), Number(layoutGeometry.spacing || 0)))
+                        : Number(decorationAlongRoom.offsetX || 0)
+                    anchors.verticalCenterOffset: root.freeSurface ? 0
+                        : root.drawsBarSurface ? (root.vertical ? root.barSceneShift(parent.height, height,
+                            root.sceneLead(entryRects, true, layoutPadding), Number(layoutGeometry.spacing || 0)) : 0)
+                        : Number(decorationAlongRoom.offsetY || 0)
                     // Along a bar holding other widgets, from where the bar
                     // starts to where it ends (not from the window the dock
                     // overflows into, which is no bar).
@@ -1700,7 +1756,7 @@ PlasmoidItem {
         }
     }
 
-    Plasmoid.contextualActions: [addPanelAction]
+    Plasmoid.contextualActions: [addPanelAction, moveIntoBarAction]
 
     Component.onCompleted: {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);
