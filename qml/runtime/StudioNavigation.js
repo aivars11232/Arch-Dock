@@ -26,7 +26,7 @@ var sections = [
         // its Hologram tab: the panel's, the icons', the stands'.
         label: "Icons",
         subtabs: ["Appearance", "Behavior", "Indicators", "Notifications",
-            "Built-in Icon Presets", "My Icon Presets", "Hologram"]
+            "Built-in Icon Presets", "My Icon Presets", "Hologram", "3D"]
     },
     {
         label: "Icon Tiles",
@@ -36,7 +36,7 @@ var sections = [
         // The stands under the icons: shape, size, lift, material and
         // motion, on flat and 3D panels; and the stands as a hologram.
         label: "Pedestals",
-        subtabs: ["Appearance", "Hologram"]
+        subtabs: ["Appearance", "Hologram", "3D"]
     },
     {
         label: "Profiles",

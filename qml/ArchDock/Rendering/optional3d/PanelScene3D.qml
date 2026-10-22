@@ -387,10 +387,15 @@ Item {
     // size (0 keeps the flat picture), and how far the solid turns about
     // its upright axis, so its depth shows (the icon still faces the user,
     // turned that much).
-    // A hologram icon is always a solid, so it shows as it turns.
-    readonly property real iconDepth: iconHologram.on ? Math.max(0.3, bounded("iconDepth", 0.3, 0, 1))
+    // Only icons set to be 3D (Icons > 3D) are solids: a 3D panel alone
+    // keeps them flat pictures. A hologram icon is drawn on a solid, so it
+    // shows as it turns; kept flat, its solid is as thin as a card and does
+    // not turn to show a depth it has not got.
+    readonly property bool iconSolid: (sceneDefinition || ({})).iconSolid === true
+    readonly property real iconDepth: !iconSolid ? (iconHologram.on ? 0.02 : 0)
+        : iconHologram.on ? Math.max(0.3, bounded("iconDepth", 0.3, 0, 1))
         : bounded("iconDepth", 0.3, 0, 1)
-    readonly property real iconTurn: bounded("iconTurn", 15, -60, 60)
+    readonly property real iconTurn: iconSolid ? bounded("iconTurn", 15, -60, 60) : 0
     // How much the light models the icons' volumes (Icon lighting): 0 keeps
     // the picture's own brightness, 1 lets the light alone shape them.
     readonly property real iconLighting: bounded("iconLighting", 0.5, 0, 1)
@@ -2113,6 +2118,43 @@ Item {
         cache: true
     }
 
+    // The material and its relief map as a generated band wears them: a
+    // photograph's two ends do not match, and where the band closes they
+    // would meet as a line across it (a hologram's inline draws it bright).
+    // Each is faded at its ends into itself (shaders/seamless.frag).
+    ShaderEffect {
+        id: seamlessMaterialEffect
+        width: Math.max(1, materialImage.implicitWidth)
+        height: Math.max(1, materialImage.implicitHeight)
+        property variant source: materialImage
+        property real blend: 0.25
+        fragmentShader: "../shaders/seamless.frag.qsb"
+    }
+    ShaderEffectSource {
+        id: seamlessMaterial
+        visible: false
+        sourceItem: seamlessMaterialEffect
+        hideSource: true
+        width: seamlessMaterialEffect.width
+        height: seamlessMaterialEffect.height
+    }
+    ShaderEffect {
+        id: seamlessNormalEffect
+        width: Math.max(1, materialNormalImage.implicitWidth)
+        height: Math.max(1, materialNormalImage.implicitHeight)
+        property variant source: materialNormalImage
+        property real blend: 0.25
+        fragmentShader: "../shaders/seamless.frag.qsb"
+    }
+    ShaderEffectSource {
+        id: seamlessNormal
+        visible: false
+        sourceItem: seamlessNormalEffect
+        hideSource: true
+        width: seamlessNormalEffect.width
+        height: seamlessNormalEffect.height
+    }
+
     Image {
         id: pedestalImage
         visible: false
@@ -2402,7 +2444,8 @@ Item {
             sourceItem: !root.Window.window ? null
                 : root.clearLooks.includes(root.textureMaterial)
                     ? (panelLightningTexture.Window.window === root.Window.window ? panelLightningTexture : null)
-                : materialImage.Window.window === root.Window.window ? materialImage : null
+                : materialImage.Window.window !== root.Window.window ? null
+                : root.generatedPlatform ? seamlessMaterial : materialImage
             generateMipmaps: true
             mipFilter: Texture.Linear
             // A generated platform wraps the texture round its band, as
@@ -2440,8 +2483,8 @@ Item {
         }
         Texture {
             id: selectedMaterialNormal
-            sourceItem: root.Window.window && materialNormalImage.Window.window === root.Window.window
-                ? materialNormalImage : null
+            sourceItem: !root.Window.window || materialNormalImage.Window.window !== root.Window.window ? null
+                : root.generatedPlatform ? seamlessNormal : materialNormalImage
             generateMipmaps: true
             mipFilter: Texture.Linear
             scaleU: selectedMaterialTexture.scaleU

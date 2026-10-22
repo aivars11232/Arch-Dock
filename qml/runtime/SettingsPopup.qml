@@ -654,10 +654,16 @@ Window {
                 return fieldsForSection("icons-notifications").length > 0;
             if (subtabNumber === 6)
                 return fieldsForSection("icons-hologram").length > 0;
+            // The icons' own 3D, on a panel drawn in 3D.
+            if (subtabNumber === 7)
+                return fieldsForSection("icons-3d").length > 0;
         }
         // The stands' hologram where stands are drawn.
         if (sectionNumber === 4 && subtabNumber === 1)
             return fieldsForSection("pedestals-hologram").length > 0;
+        // The stands' own 3D, on a panel drawn in 3D.
+        if (sectionNumber === 4 && subtabNumber === 2)
+            return fieldsForSection("pedestals-3d").length > 0;
         return true;
     }
 
@@ -1796,6 +1802,24 @@ Window {
         return rows;
     }
 
+    // The icons' own 3D on a 3D panel: each icon's picture as a solid, or a
+    // flat picture as on a flat panel; with it on, how deep the solid is, how
+    // far it turns to show its depth, how its parts are shaped and lit.
+    function icon3DRows() {
+        const rows = [section(qsTr("3D icons"),
+            qsTr("Each icon's own picture as a solid on a panel drawn in 3D. Off, the icons stay flat pictures facing you, whatever the panel."), true)];
+        const byKey = ({});
+        for (const field of fieldsForSection("icons-3d"))
+            byKey[field.key] = field;
+        if (byKey["scene3DIconSolid"])
+            rows.push(Object.assign({}, byKey["scene3DIconSolid"]));
+        if (Boolean(panelValue("scene3DIconSolid", false)))
+            for (const key of ["scene3DIconDepth", "scene3DIconTurn", "scene3DIconRelief", "scene3DIconLighting"])
+                if (byKey[key])
+                    rows.push(Object.assign({}, byKey[key]));
+        return rows;
+    }
+
     function iconTileRows() {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
@@ -1943,12 +1967,17 @@ Window {
             }
             if (subTabIndex === 6)
                 return hologramRows("icons-hologram");
+            if (subTabIndex === 7)
+                return icon3DRows();
             return [];
         }
         if (mainTabIndex === 3)
             return iconTileRows();
         if (mainTabIndex === 4)
-            return subTabIndex === 1 ? hologramRows("pedestals-hologram") : pedestalRows();
+            return subTabIndex === 1 ? hologramRows("pedestals-hologram")
+                : subTabIndex === 2 ? schemaSectionRows("pedestals-3d", qsTr("3D stands"),
+                    qsTr("The stands on a panel drawn in 3D: how high each icon stands above the platform."))
+                : pedestalRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
     }
 

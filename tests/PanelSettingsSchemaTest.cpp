@@ -313,9 +313,18 @@ void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
 
     for (const QString &key : {QStringLiteral("scene3DQuality"), QStringLiteral("scene3DCameraPitch"),
              QStringLiteral("scene3DCameraYaw"), QStringLiteral("scene3DThickness"),
-             QStringLiteral("scene3DIconElevation"), QStringLiteral("scene3DTransitions"),
-             QStringLiteral("scene3DFloat")})
+             QStringLiteral("scene3DTransitions"), QStringLiteral("scene3DFloat")})
         QCOMPARE(PanelSettingsSchema::panelDescriptor(key)->editor.section, QStringLiteral("panels-3d"));
+    // A 3D panel, 3D icons and 3D stands are each their own choice: the
+    // icons' 3D is on Icons > 3D, off until chosen, and the stands' on
+    // Pedestals > 3D.
+    for (const QString &key : {QStringLiteral("scene3DIconSolid"), QStringLiteral("scene3DIconDepth"),
+             QStringLiteral("scene3DIconTurn"), QStringLiteral("scene3DIconRelief"),
+             QStringLiteral("scene3DIconLighting")})
+        QCOMPARE(PanelSettingsSchema::panelDescriptor(key)->editor.section, QStringLiteral("icons-3d"));
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("scene3DIconSolid"))->defaultValue.toBool(), false);
+    QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("scene3DIconElevation"))->editor.section,
+             QStringLiteral("pedestals-3d"));
 }
 
 void PanelSettingsSchemaTest::descriptorsAreUniqueAndComplete()

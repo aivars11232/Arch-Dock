@@ -240,7 +240,7 @@ add_custom_target(
 # shader packs with qsb at build time, for every graphics backend Qt Quick
 # draws with.
 find_package(Qt6 REQUIRED COMPONENTS ShaderTools)
-set(ARCHDOCK_RENDERING_SHADERS hologram hologram-beam hologram-opening)
+set(ARCHDOCK_RENDERING_SHADERS hologram hologram-beam hologram-opening seamless)
 set(ARCHDOCK_RENDERING_SHADER_PACKS)
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}/shaders")
 foreach(shader IN LISTS ARCHDOCK_RENDERING_SHADERS)
