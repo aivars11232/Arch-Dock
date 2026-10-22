@@ -119,6 +119,9 @@ enum class EditorCapability
     // Holographic icons: each icon drawn as light over a projector's
     // opening, on flat and 3D panels alike.
     Hologram,
+    // Real 3D icons: each icon's own picture as a solid, on flat and 3D
+    // panels alike, wherever Qt Quick 3D is installed.
+    IconSolid,
     Count
 };
 

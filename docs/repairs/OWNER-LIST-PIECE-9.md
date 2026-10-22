@@ -582,3 +582,55 @@ page, the Widgets page, Panel Studio's navigation). Of 953 committed files
 one differs from the workspace: `PKGBUILD`, raised to `0.1.1-25` after the
 commit for the package. The logs are in
 `build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-4/` (40 to 44).
+
+## Owner test fixes — 3D icons on every panel (2026-10-22, evening)
+
+The owner, testing 0.1.1-27: Icons had no 3D tab on a flat panel ("I put
+icons on panel, and yet i can't enable 3D for icons"); "3D icons can work
+on 2D panels too, not only free panels but also side panels".
+
+What was wrong:
+
+- The 3D icons switch (`scene3DIconSolid`) was missing from the panel
+  record's save and load lists (`PanelDefinition::fromLegacyMap` /
+  `toLegacyMap`), so every change of it was dropped: 3D icons could not be
+  turned on on any panel, 3D panels included, since the 3D-per-part change
+  (a6f141c).
+- Icons > 3D needed the whole panel drawn in 3D (`scene3d-quality`).
+
+What changed:
+
+- The switch is saved and loaded with the other 3D values; the capability
+  test checks it survives a save and a reload.
+- A new capability, `icon-solid`, offers Icons > 3D on every panel (free,
+  edge, bar; flat or 3D) wherever Qt Quick 3D is installed. The truth
+  matrix no longer forbids the icon depth, turn, relief and lighting on
+  flat and edge panels (stand height stays a 3D-panel setting).
+- On a flat panel each icon draws the solid a 3D panel builds for it
+  (`IconSolid.js`) in a small 3D view of its own in its picture's place
+  (`optional3d/IconSolidView.qml`), lit by the 3D panel's own lights, seen a
+  little from above (24°) as a 3D panel's near side is, turned by Icon turn
+  and by the icon's turning motion, with its glow round the solid. Seen
+  straight on, the depth hid behind the front: the owner's first look at
+  the pictures was "They are identical".
+- The solid wears a still copy of the icon's picture, taken anew with the
+  solid. Qt Quick 3D refreshes a live copy every frame, even after the
+  picture it was taken from is gone, and the truth-matrix test crashed in
+  that refresh twice (once more after a window guard); with the still copy
+  it passes.
+- A hologram icon on a flat panel stays light: drawing the solid inside
+  the hologram's picture crashed Plasma in the replica, so it was taken
+  back.
+- The values reach the desktop's icons (`DockEntry`) and Panel Studio's
+  live preview, not only the scene's own icons.
+
+Pictures (private replica, test apps only, owner files untouched), in
+`build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/`: `50` and `51`
+(the Circle drawn flat and a side panel, before and after), `52` and `53`
+(the same turned halfway, Icon turn 45°, which the owner asked to see).
+
+The first replica runs showed nothing: the 3D icons switch was dropped
+(above), and the desktop's icons (`DockEntry`) were not given the new
+values.
+
+Still open: the light band along a material ring's edges.

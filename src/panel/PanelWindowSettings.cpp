@@ -1335,6 +1335,19 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             }
             break;
         }
+        case ArchDock::EditorCapability::IconSolid:
+        {
+            // 3D icons on every panel, flat or 3D, free, edge or bar: offered
+            // wherever Qt Quick 3D is installed, so wherever the true 3D
+            // renderer is, even where this panel cannot use it whole.
+            available = std::any_of(resolution.rendererChoices.cbegin(),
+                resolution.rendererChoices.cend(), [](const auto &choice) {
+                    return choice.tier == ArchDock::RendererTier::True3D
+                        && (choice.available
+                            || choice.reason == ArchDock::CapabilityReasonCode::RendererHostUnsupported);
+                });
+            break;
+        }
         case ArchDock::EditorCapability::Hologram:
         {
             // Holograms on every Arch Dock panel, flat or 3D, each on its

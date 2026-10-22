@@ -1881,7 +1881,7 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
             {{"scene3DCameraPitch", -35.0}, {"scene3DCameraYaw", -20.0},
              {"scene3DThickness", 1.6}, {"scene3DIconElevation", 0.5}, {"scene3DIconDepth", 0.45},
              {"scene3DIconTurn", 20.0}, {"scene3DIconRelief", "block"},
-             {"scene3DIconLighting", 0.8}}).value("success").toBool());
+             {"scene3DIconLighting", 0.8}, {"scene3DIconSolid", true}}).value("success").toBool());
         QCOMPARE(backend.panelRendererConfiguration(panel).value("scene3DCameraPitch").toDouble(), -35.0);
         const auto parameters = registry->panelDefinition(panel)->surface.parameters3D;
         QCOMPARE(parameters.value("cameraYaw").toDouble(), -20.0);
@@ -1891,6 +1891,9 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
         QCOMPARE(parameters.value("iconTurn").toDouble(), 20.0);
         QCOMPARE(parameters.value("iconRelief").toString(), QStringLiteral("block"));
         QCOMPARE(parameters.value("iconLighting").toDouble(), 0.8);
+        // The 3D icons switch is kept with the panel and comes back with it.
+        QVERIFY(parameters.value("iconSolid").toBool());
+        QVERIFY(registry->panelDefinition(panel)->toLegacyMap().value("scene3DIconSolid").toBool());
     }
     const auto nativeBefore = registry->panelDefinition("bottom")->toPersistedMap();
     QVERIFY(!backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,
@@ -1898,6 +1901,8 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     QCOMPARE(registry->panelDefinition("bottom")->toPersistedMap(), nativeBefore);
     PanelRegistry reloaded;
     QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
+    if (available)
+        QVERIFY(reloaded.panelDefinition(panel)->surface.parameters3D.value("iconSolid").toBool());
 }
 
 // AD3D-TASK-002: desktop 3D editing starts only for a free panel drawn in 3D,

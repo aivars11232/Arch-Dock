@@ -175,6 +175,7 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/RendererImportProbe.qml
     optional3d/PanelScene3D.qml
     optional3d/IconStyle3D.qml
+    optional3d/IconSolidView.qml
     optional3d/PictureRelief.qml
     optional3d/picture-relief.vert
     optional3d/picture-relief.frag

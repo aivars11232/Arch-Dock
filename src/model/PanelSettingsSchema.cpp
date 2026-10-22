@@ -798,22 +798,23 @@ const QVector<Descriptor> &schemaFields()
               0.3, "surface.parameters3D.iconElevation", 0.0, 2.0, {}, true, true,
               editor("pedestals-3d", "Pedestal height", "slider", {"studio"}, "scene3d-quality",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
-        // Real 3D icons on a 3D panel (Icons > 3D): each icon's own picture
-        // as a solid. Off, a 3D panel keeps its icons flat pictures: a 3D
-        // panel, 3D icons and 3D stands are each their own choice.
+        // Real 3D icons on any panel, flat or 3D (Icons > 3D): each icon's
+        // own picture as a solid. Off, icons stay flat pictures, on a 3D
+        // panel too: a 3D panel, 3D icons and 3D stands are each their own
+        // choice.
         panel("scene3DIconSolid", Access::Editor, Type::Boolean, Normalization::Boolean,
               false, "surface.parameters3D.iconSolid", {}, {}, {}, true, true,
-              editor("icons-3d", "3D icons", "switch", {"studio"}, "scene3d-quality")),
+              editor("icons-3d", "3D icons", "switch", {"studio"}, "icon-solid")),
         // How deep each icon's own picture stands as a solid, as a share of
         // its size (0 keeps it a flat picture), and how far the solid turns
         // about its upright axis so its depth shows.
         panel("scene3DIconDepth", Access::Editor, Type::Real, Normalization::RealRange,
               0.3, "surface.parameters3D.iconDepth", 0.0, 1.0, {}, true, true,
-              editor("icons-3d", "Icon depth", "slider", {"studio"}, "scene3d-quality",
+              editor("icons-3d", "Icon depth", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         panel("scene3DIconTurn", Access::Editor, Type::Real, Normalization::RealRange,
               15.0, "surface.parameters3D.iconTurn", -60.0, 60.0, {}, true, true,
-              editor("icons-3d", "Icon turn", "slider", {"studio"}, "scene3d-quality",
+              editor("icons-3d", "Icon turn", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 1.0}, {QStringLiteral("decimals"), 0}})),
         // Auto: a plate-shaped picture a block, any other its parts rounded;
         // rounded: the picture's parts inflated into rounded volumes; block:
@@ -821,12 +822,12 @@ const QVector<Descriptor> &schemaFields()
         panel("scene3DIconRelief", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("auto"), "surface.parameters3D.iconRelief", {}, {},
               {"auto", "rounded", "block"}, true, true,
-              editor("icons-3d", "Icon relief", "combo", {"studio"}, "scene3d-quality")),
+              editor("icons-3d", "Icon relief", "combo", {"studio"}, "icon-solid")),
         // How much the light models the icon's volume: 0 keeps the picture's
         // own brightness, 1 lets the light alone shape it.
         panel("scene3DIconLighting", Access::Editor, Type::Real, Normalization::RealRange,
               0.5, "surface.parameters3D.iconLighting", 0.0, 1.0, {}, true, true,
-              editor("icons-3d", "Icon lighting", "slider", {"studio"}, "scene3d-quality",
+              editor("icons-3d", "Icon lighting", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         // A generated platform's own shape (ADFIX-TASK-002): how wide its flat
         // top is, as half its width in the platform's radius, and how far its
@@ -1799,6 +1800,7 @@ QString editorCapabilityName(EditorCapability capability)
     case EditorCapability::Decoration: return QStringLiteral("decoration");
     case EditorCapability::DecorationColours: return QStringLiteral("decoration-colours");
     case EditorCapability::Hologram: return QStringLiteral("hologram");
+    case EditorCapability::IconSolid: return QStringLiteral("icon-solid");
     case EditorCapability::Count: break;
     }
     return QString{};

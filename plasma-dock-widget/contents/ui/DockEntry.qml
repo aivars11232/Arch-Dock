@@ -49,6 +49,10 @@ Item {
     // How deep, and in what shape, the 3D scene makes the icon's solid.
     property real solidDepth: 0
     property string solidRelief: "auto"
+    // 3D icons on a flat panel: the solid drawn in the icon's own 3D view.
+    property bool solidOnFlat: false
+    property real solidTurn: 15
+    property real solidLighting: 0.5
     property string motionContextKey: ""
     readonly property var meshVisualItem: visual
     property real motionSpeed: 1
@@ -408,6 +412,9 @@ Item {
                 meshVisualActive: root.meshVisualActive
                 solidDepth: root.solidDepth
                 solidRelief: root.solidRelief
+                solidOnFlat: root.solidOnFlat
+                solidTurn: root.solidTurn
+                solidLighting: root.solidLighting
                 glyphMotion: root.glyphMotion
                 tileMotion: root.tileMotion
                 indicatorMotion: root.indicatorMotion

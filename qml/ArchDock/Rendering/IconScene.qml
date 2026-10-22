@@ -383,7 +383,18 @@ Item {
     // bubble.
     readonly property bool bubbleTile: String((tileSettings || ({})).iconTileForm || "flat") === "bubble"
     onBubbleTileChanged: if (solidWanted) refreshSolid()
-    readonly property bool solidWanted: meshVisualActive && solidDepth > 0
+    // The same solid on a flat panel (Icons > 3D): drawn in a small 3D view
+    // of its own in the picture's place, turned by Icon turn and lit as
+    // Icon lighting says. A hologram icon stays light; without Qt Quick 3D
+    // the flat picture stays.
+    property bool solidOnFlat: false
+    property real solidTurn: 15
+    property real solidLighting: 0.5
+    readonly property bool flatSolidWanted: solidOnFlat && !meshVisualActive && !hologramDrawn && solidDepth > 0
+    readonly property bool flatSolidShown: flatSolidWanted && solidMesh !== null
+        && flatSolidLoader.status === Loader.Ready
+    onFlatSolidShownChanged: if (flatSolidShown) glyphTexture.scheduleUpdate()
+    readonly property bool solidWanted: (meshVisualActive || flatSolidWanted) && solidDepth > 0
     property var solidMesh: null
     function refreshSolid() {
         if (!solidWanted) {
@@ -434,6 +445,7 @@ Item {
             const data = context.getImageData(0, 0, width, height)
             const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief, { globe: !root.bubbleTile })
             root.solidMesh = mesh.indexes.length ? mesh : null
+            if (root.flatSolidShown) glyphTexture.scheduleUpdate()
             unloadImage(pending)
             pending = ""
         }
@@ -441,8 +453,12 @@ Item {
 
     ShaderEffectSource {
         id: glyphTexture
-        sourceItem: root.meshVisualActive ? glyphLayer : null
-        hideSource: root.meshVisualActive
+        readonly property bool taken: root.meshVisualActive || root.flatSolidShown
+        sourceItem: taken ? glyphLayer : null
+        hideSource: taken
+        // A flat panel's solid wears a still copy, taken anew with the solid:
+        // Qt Quick 3D refreshes a live copy every frame, even after the
+        // picture it was taken from is gone.
         live: root.meshVisualActive
         visible: false
         // Four times the icon's size: a glyph seen large on the near side
@@ -1171,8 +1187,9 @@ Item {
             objectName: "icon-layer-glyph"
             anchors.fill: parent
             // The icon's glow: light round its picture (Icons > Glow). A 3D
-            // panel draws its own round the picture it shows.
-            layer.enabled: root.iconGlowActive
+            // panel draws its own round the picture it shows; a solid on a
+            // flat panel wears it round the solid.
+            layer.enabled: root.iconGlowActive && !root.flatSolidShown
             layer.effect: GlowEffect {
                 glowColor: root.iconGlowColour
                 intensity: root.iconGlow
@@ -1290,7 +1307,8 @@ Item {
 
                 objectName: "icon-layer-glyph-highlight"
                 anchors.fill: parent
-                visible: root.glyphTurnActive
+                // A solid turns in its own light.
+                visible: root.glyphTurnActive && !root.flatSolidShown
                 opacity: Math.min(0.42, Math.abs(
                     root.resolvedGlyphMotion.highlight) * 0.42)
 
@@ -1309,6 +1327,52 @@ Item {
                         GradientStop { position: 1.0; color: "transparent" }
                     }
                 }
+            }
+        }
+
+        // The icon as a solid on a flat panel (Icons > 3D), in its picture's
+        // place and moving with it; it turns as a solid, in 3D, not as a
+        // card.
+        Item {
+            id: solidLayer
+
+            objectName: "icon-layer-solid"
+            anchors.fill: parent
+            visible: root.flatSolidShown
+            layer.enabled: root.iconGlowActive && root.flatSolidShown
+            layer.effect: GlowEffect {
+                glowColor: root.iconGlowColour
+                intensity: root.iconGlow
+                reach: root.iconGlowReach
+            }
+            opacity: root.resolvedGlyphMotion.opacity
+            transform: [
+                Scale {
+                    origin.x: solidLayer.width / 2
+                    origin.y: solidLayer.height / 2
+                    xScale: root.resolvedGlyphMotion.scale
+                        * root.resolvedGlyphMotion.scaleX
+                    yScale: root.resolvedGlyphMotion.scale
+                        * root.resolvedGlyphMotion.scaleY
+                },
+                Rotation {
+                    origin.x: solidLayer.width / 2
+                    origin.y: solidLayer.height / 2
+                    angle: root.resolvedGlyphMotion.rotateZ
+                },
+                Translate {
+                    x: root.resolvedGlyphMotion.x
+                    y: root.resolvedGlyphMotion.y
+                }
+            ]
+
+            Loader {
+                id: flatSolidLoader
+
+                anchors.fill: parent
+                active: root.flatSolidWanted
+                source: Qt.resolvedUrl("optional3d/IconSolidView.qml")
+                onLoaded: item.icon = root
             }
         }
 
