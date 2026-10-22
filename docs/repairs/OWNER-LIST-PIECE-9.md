@@ -634,3 +634,46 @@ The first replica runs showed nothing: the 3D icons switch was dropped
 values.
 
 Still open: the light band along a material ring's edges.
+
+## Owner test fixes — the 3D tabs on every panel (2026-10-23)
+
+The owner, after installing 0.1.1-28: no 3D section for icons or stands;
+"icons must have their own 3D section and pedestals too, even if there's no
+panels made yet"; "fix only what I just asked".
+
+What was wrong:
+
+- Panel Studio itself hid every setting named `scene3D…` unless the panel
+  was drawn in 3D (`fieldsForSection`), so the icons' 3D settings
+  (`scene3DIcon…`) never showed on a flat panel, whatever the backend
+  offered. The replica pictures of 0.1.1-28 set the switch directly and
+  never went through the Studio.
+- The `icon-solid` capability was offered only where the true 3D renderer
+  was known to be there; it is now offered unless Qt Quick 3D is known to
+  be missing (not installed, switched off, or without its scene).
+- Pedestals > 3D held only the Auto column's height on a 3D panel.
+
+What changed:
+
+- Icons > 3D shows on every panel, flat or 3D.
+- Pedestals > 3D ("3D stands") shows on every panel: the stands' shape,
+  and once a stand is chosen its thickness, float height and view angle
+  (moved there from Appearance) and, on a panel drawn in 3D, the Auto
+  column's height. The shape is on both Pedestals tabs on purpose; the
+  test that each setting shows once allows that one repeat.
+- Breakage this caused, fixed: with the tabs offered on more panels the
+  truth-matrix test reached the flat solid's picture once more while Qt
+  Quick 3D refreshed it from a live layer, and crashed in that refresh. A
+  flat panel's solid now wears a saved copy of its icon's picture (one
+  file per picture in the session's runtime folder, written over, gone at
+  logout), loaded as an ordinary picture: no live layer is left for Qt
+  Quick 3D to refresh. The test passes (465 s), and the replica shows the
+  same upright 3D icons.
+- The capability test checks both 3D tabs are offered on a free panel and
+  on the bottom panel with no stand chosen. With no panel selected the
+  Studio offers no part tabs at all, Hologram included; the 3D tabs follow
+  the same rule.
+
+Pictures (Studio on a flat ring panel, no stand chosen):
+`build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/studio-3d-tabs/icons-3d.png`
+and `pedestals-3d.png`.

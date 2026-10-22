@@ -3025,6 +3025,10 @@ void PanelWindowCapabilityTest::studioShowsEachSettingOnce()
             return QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, result),
                        Q_ARG(QVariant, section), Q_ARG(QVariant, subtab)) && result.toBool();
         };
+        // Icons and stands each have their own 3D tab on every panel, flat
+        // or 3D, edge or free, before a stand is chosen.
+        QVERIFY2(offered(2, 7), qPrintable(panel));
+        QVERIFY2(offered(4, 2), qPrintable(panel));
         QHash<QString, QString> pages;
         for (int section = 1; section <= 4; ++section)
         {
@@ -3047,6 +3051,11 @@ void PanelWindowCapabilityTest::studioShowsEachSettingOnce()
                     const QString id = row.value("scope").toString() + ":" + key;
                     if (here.contains(id)) continue;
                     here.insert(id);
+                    // Pedestals > 3D repeats the stands' shape on purpose: it is
+                    // the one stand setting there before a stand is chosen, so
+                    // the 3D tab is there on every panel and before any panel.
+                    if (id == QStringLiteral("panel:pedestalShape") && page == QStringLiteral("4:2"))
+                        continue;
                     QVERIFY2(!pages.contains(id), qPrintable(QStringLiteral("%1 on %2 and %3 (%4)")
                         .arg(id, pages.value(id), page, panel)));
                     pages.insert(id, page);
@@ -5847,8 +5856,8 @@ void PanelWindowCapabilityTest::studioPagePictures()
     struct Page { int section; int page; const char *name; };
     for (const Page &page : {Page{1, 0, "panels-general"}, Page{1, 2, "panels-appearance"},
                              Page{1, 4, "panels-layout"}, Page{1, 6, "panels-presets"},
-                             Page{2, 0, "icons-appearance"}, Page{3, 0, "icon-tiles"},
-                             Page{4, 0, "pedestals"}}) {
+                             Page{2, 0, "icons-appearance"}, Page{2, 7, "icons-3d"}, Page{3, 0, "icon-tiles"},
+                             Page{4, 0, "pedestals"}, Page{4, 2, "pedestals-3d"}}) {
         std::unique_ptr<QObject> studio(component.createWithInitialProperties({
             {"selectedPanelId", panel}, {"mainTabIndex", page.section}, {"subTabIndex", page.page}}));
         auto *window = qobject_cast<QQuickWindow *>(studio.get());

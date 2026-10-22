@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick3D
 import QtQuick3D.Helpers
 
@@ -51,19 +50,11 @@ View3D {
         color: "#78c8ff"
     }
 
-    // A texture taken from an item's layer keeps refreshing that layer until
-    // the texture lets go, even after the layer was freed: it lets go as
-    // soon as the icon leaves this view's window or stops showing its solid
-    // (the icon's own destruction takes its children out of the window
-    // first), and again when this view goes.
+    // The icon's picture as a saved copy (IconScene), not a live layer.
     Texture {
         id: picture
-        readonly property Item candidateSource: root.icon ? root.icon.glyphTextureItem : null
-        sourceItem: candidateSource && root.Window.window
-            && candidateSource.Window.window === root.Window.window
-            && root.icon.flatSolidShown ? candidateSource : null
+        source: root.icon ? root.icon.solidPictureUrl : ""
     }
-    Component.onDestruction: picture.sourceItem = null
 
     // Seen a little from above, as the near side of a 3D panel is, so the
     // solid's top and sides show; seen straight on, its depth hid behind

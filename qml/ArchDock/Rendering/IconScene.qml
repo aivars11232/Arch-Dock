@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtCore
 import org.kde.kirigami as Kirigami
 import "MotionChannels.js" as MotionChannels
 import "IconSolid.js" as IconSolid
@@ -391,9 +392,35 @@ Item {
     property real solidTurn: 15
     property real solidLighting: 0.5
     readonly property bool flatSolidWanted: solidOnFlat && !meshVisualActive && !hologramDrawn && solidDepth > 0
-    readonly property bool flatSolidShown: flatSolidWanted && solidMesh !== null
+    readonly property bool flatSolidShown: flatSolidWanted && solidMesh !== null && solidPictureUrl.length > 0
         && flatSolidLoader.status === Loader.Ready
-    onFlatSolidShownChanged: if (flatSolidShown) glyphTexture.scheduleUpdate()
+    // The picture a flat panel's solid wears: a copy of the icon's picture
+    // saved among the session's passing files (one per picture, written
+    // over) and loaded by the 3D view as an ordinary picture. Qt Quick 3D
+    // refreshes a picture taken from a live layer every frame, even after
+    // the layer's item is gone, and crashed doing so.
+    property string solidPictureUrl: ""
+    function solidPictureName(text) {
+        let hash = 2166136261
+        for (let index = 0; index < text.length; ++index) {
+            hash ^= text.charCodeAt(index)
+            hash = Math.imul(hash, 16777619) >>> 0
+        }
+        return "archdock-icon-solid-" + hash.toString(16) + ".png"
+    }
+    function refreshSolidPicture() {
+        if (!flatSolidWanted) {
+            solidPictureUrl = ""
+            return
+        }
+        const pixels = Math.max(64, Math.min(512, Math.ceil(logicalSize * Math.max(1, Screen.devicePixelRatio) * 2)))
+        const folder = String(StandardPaths.writableLocation(StandardPaths.RuntimeLocation)).replace(/^file:\/\//, "")
+        const path = folder + "/" + solidPictureName([resolvedIconSource, pixels, glyphTint, glyphIsMask].join("|"))
+        glyphLayer.grabToImage(function(result) {
+            if (result.saveToFile(path))
+                root.solidPictureUrl = "file://" + path
+        }, Qt.size(pixels, pixels))
+    }
     readonly property bool solidWanted: (meshVisualActive || flatSolidWanted) && solidDepth > 0
     property var solidMesh: null
     function refreshSolid() {
@@ -403,6 +430,7 @@ Item {
         }
         glyphLayer.grabToImage(function(result) { solidCanvas.take(result.url) },
                                Qt.size(solidCanvas.width, solidCanvas.height))
+        refreshSolidPicture()
     }
     onSolidWantedChanged: refreshSolid()
     onResolvedIconSourceChanged: if (solidWanted) refreshSolid()
@@ -445,7 +473,6 @@ Item {
             const data = context.getImageData(0, 0, width, height)
             const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief, { globe: !root.bubbleTile })
             root.solidMesh = mesh.indexes.length ? mesh : null
-            if (root.flatSolidShown) glyphTexture.scheduleUpdate()
             unloadImage(pending)
             pending = ""
         }
@@ -456,9 +483,8 @@ Item {
         readonly property bool taken: root.meshVisualActive || root.flatSolidShown
         sourceItem: taken ? glyphLayer : null
         hideSource: taken
-        // A flat panel's solid wears a still copy, taken anew with the solid:
-        // Qt Quick 3D refreshes a live copy every frame, even after the
-        // picture it was taken from is gone.
+        // Only a 3D panel draws from it; on a flat panel it only hides the
+        // flat picture while the solid is shown.
         live: root.meshVisualActive
         visible: false
         // Four times the icon's size: a glyph seen large on the near side

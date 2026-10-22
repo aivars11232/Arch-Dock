@@ -661,9 +661,9 @@ Window {
         // The stands' hologram where stands are drawn.
         if (sectionNumber === 4 && subtabNumber === 1)
             return fieldsForSection("pedestals-hologram").length > 0;
-        // The stands' own 3D, on a panel drawn in 3D.
+        // The stands' own 3D, on every panel: its shape is always there.
         if (sectionNumber === 4 && subtabNumber === 2)
-            return fieldsForSection("pedestals-3d").length > 0;
+            return pedestal3DRows().length > 1;
         return true;
     }
 
@@ -1100,7 +1100,10 @@ Window {
                     continue;
                 if (lookPairedKeys.includes(String(source[index].key)))
                     continue;
-                if (String(source[index].key).indexOf("scene3D") === 0 && !scene3DQualityVisible)
+                // The panel's own 3D settings show while it is drawn in 3D;
+                // the icons' 3D is their own, on every panel.
+                if (String(source[index].key).indexOf("scene3D") === 0 && !scene3DQualityVisible
+                        && String(source[index].section) !== "icons-3d")
                     continue;
                 if (String(source[index].key) === "bakedTilt"
                         && embeddedRendererPreview.panelSceneItem.effectiveRendererTier !== "baked2.5d")
@@ -1706,13 +1709,33 @@ Window {
         return rows;
     }
 
+    // The stands' 3D, on every panel (Pedestals > 3D): their shape, then,
+    // once one is chosen, how thick each stand is, how high its icon
+    // floats above it and how far from above it is seen, and on a panel
+    // drawn in 3D how high its Auto column stands.
+    readonly property var pedestal3DKeys: ["pedestalThickness", "pedestalLift", "pedestalViewAngle"]
+    function pedestal3DRows() {
+        const rows = [section(qsTr("3D stands"),
+            qsTr("Each stand's depth: how thick it is, how high its icon floats above it and how far from above it is seen; on a panel drawn in 3D, how high its Auto column stands."), true)];
+        const fields = fieldsForSection("pedestals");
+        for (const key of ["pedestalShape"].concat(pedestal3DKeys)) {
+            const row = fields.find(function(field) { return field.key === key; });
+            if (row)
+                rows.push(row);
+        }
+        for (const row of fieldsForSection("pedestals-3d"))
+            rows.push(row);
+        return rows;
+    }
+
     function pedestalRows() {
         const rows = schemaSectionRows("pedestals", qsTr("Icon stands"),
-            qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, thickness, material, texture, colour, opacity, motion, and its glow: light round the stand, how strong and how far it reaches."));
-        const shape = String(panelValue("pedestalShape", "none"));
-        const autoHeight = fieldsForSection("panels-3d").find(function(row) { return row.key === "scene3DIconElevation"; });
-        if (shape === "auto" && autoHeight)
-            rows.push(autoHeight);
+            qsTr("A stand under each icon, on flat and 3D panels: a horizontal stand seen a little from above, the icon centred over it and floating its float height above it. Its shape, size, material, texture, colour, opacity, motion, and its glow (its depth is on the 3D tab): light round the stand, how strong and how far it reaches."));
+        // Their depth is on the 3D tab.
+        for (let index = rows.length - 1; index >= 0; --index) {
+            if (pedestal3DKeys.includes(rows[index].key))
+                rows.splice(index, 1);
+        }
         rows.push.apply(rows, glowRows("pedestals-glow",
             qsTr("Light round each stand: how strong, how far it reaches, and its colour (the stand's when empty).")));
         rows.push(section(qsTr("Folder item stands"),
@@ -1815,7 +1838,7 @@ Window {
     // far it turns to show its depth, how its parts are shaped and lit.
     function icon3DRows() {
         const rows = [section(qsTr("3D icons"),
-            qsTr("Each icon's own picture as a solid on a panel drawn in 3D. Off, the icons stay flat pictures facing you, whatever the panel."), true)];
+            qsTr("Each icon's own picture as a solid, on every panel, flat or 3D. Off, the icons stay flat pictures facing you."), true)];
         const byKey = ({});
         for (const field of fieldsForSection("icons-3d"))
             byKey[field.key] = field;
@@ -1983,8 +2006,7 @@ Window {
             return iconTileRows();
         if (mainTabIndex === 4)
             return subTabIndex === 1 ? hologramRows("pedestals-hologram")
-                : subTabIndex === 2 ? schemaSectionRows("pedestals-3d", qsTr("3D stands"),
-                    qsTr("The stands on a panel drawn in 3D: how high each icon stands above the platform."))
+                : subTabIndex === 2 ? pedestal3DRows()
                 : pedestalRows();
         return unavailablePage(currentSubtabs.length > 0 ? currentSubtabs[subTabIndex] : qsTr("Profiles"), qsTr("Reusable profiles are outside the current settings contract."));
     }

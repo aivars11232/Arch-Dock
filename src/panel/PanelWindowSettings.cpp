@@ -1337,15 +1337,18 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         case ArchDock::EditorCapability::IconSolid:
         {
-            // 3D icons on every panel, flat or 3D, free, edge or bar: offered
-            // wherever Qt Quick 3D is installed, so wherever the true 3D
-            // renderer is, even where this panel cannot use it whole.
-            available = std::any_of(resolution.rendererChoices.cbegin(),
+            // 3D icons on every panel, flat or 3D, free, edge or bar, and
+            // before any panel is made: offered unless Qt Quick 3D is known
+            // to be missing (not installed, switched off or without its
+            // scene), even where this panel cannot use the 3D renderer whole.
+            const auto renderer = std::find_if(resolution.rendererChoices.cbegin(),
                 resolution.rendererChoices.cend(), [](const auto &choice) {
-                    return choice.tier == ArchDock::RendererTier::True3D
-                        && (choice.available
-                            || choice.reason == ArchDock::CapabilityReasonCode::RendererHostUnsupported);
+                    return choice.tier == ArchDock::RendererTier::True3D;
                 });
+            available = renderer == resolution.rendererChoices.cend() || renderer->available
+                || (renderer->reason != ArchDock::CapabilityReasonCode::RendererNotInstalled
+                    && renderer->reason != ArchDock::CapabilityReasonCode::RendererDisabled
+                    && renderer->reason != ArchDock::CapabilityReasonCode::RendererSceneUnavailable);
             break;
         }
         case ArchDock::EditorCapability::Hologram:
