@@ -1657,11 +1657,8 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     const QVariantMap freeFolder = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
         .value("panelFields").toList(), QStringLiteral("folderLayout"));
     QCOMPARE(freeFolder.value("choices").toStringList(),
-             QStringList({QStringLiteral("track"), QStringLiteral("fan"), QStringLiteral("grid"),
-                          QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring"),
+             QStringList({QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring"),
                           QStringLiteral("mobius")}));
-    QCOMPARE(freeFolder.value("options").toList().constFirst().toMap().value("label").toString(),
-             QStringLiteral("Along the dock"));
     const auto nativeFields = fieldKeys(backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList());
     QVERIFY(nativeFields.contains("presentationMode"));
     QVERIFY(!nativeFields.contains("x") && !nativeFields.contains("y"));
@@ -3826,8 +3823,7 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
         QVERIFY(nativeKeys.contains(key));
     QCOMPARE(fieldByKey(nativeFields, QStringLiteral("folderLayout"))
                  .value(QStringLiteral("choices")).toStringList(),
-             QStringList({QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("stack"),
-                          QStringLiteral("arc"), QStringLiteral("ring")}));
+             QStringList({QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring")}));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layout")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutAngle")));
     QVERIFY(!nativeKeys.contains(QStringLiteral("layoutRadius")));

@@ -311,7 +311,7 @@
     "visible": {"probe": "conceal"},
     "visibilityMode": {"probe": "visibility"},
     "acceptDrops": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode"]]},
-    "folderLayout": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "savedFolderLayout: String(root.configuration.folderLayout || \"fan\")"]]},
+    "folderLayout": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "? \"fan\" : String(root.configuration.folderLayout || \"fan\")"]]},
     "folderFanOpening": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "fanOpening: Number(root.configuration.folderFanOpening || 90)"]]},
     "folderStackLength": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "stackLength: Number(root.configuration.folderStackLength || 5)"]]},
     "folderRingSize": {"probe": "runtime", "consumers": [["plasma-dock-widget/contents/ui/main.qml", "ringSize: String(root.configuration.folderRingSize || \"small\")"]]},

@@ -1071,7 +1071,11 @@ PlasmoidItem {
             // Along the dock kept from a curved shape opens as a fan once the
             // panel's shape has no curve (a straight row), never as a popup
             // that cannot draw it.
-            readonly property string savedFolderLayout: String(root.configuration.folderLayout || "fan")
+            // A folder opens as a fan, a grid, a ring or a Möbius band; one
+            // saved as an arc, a stack or along the dock opens as a fan.
+            readonly property string savedFolderLayout: ["arc", "stack", "track"]
+                .includes(String(root.configuration.folderLayout || "fan"))
+                ? "fan" : String(root.configuration.folderLayout || "fan")
             readonly property string folderLayout: savedFolderLayout === "track" && root.freeSurface
                 && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
             // A grid lies on a 3D panel's plane too; elsewhere it is a popup.

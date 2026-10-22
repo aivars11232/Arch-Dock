@@ -1471,15 +1471,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         QStringList choices = field.value(QStringLiteral("choices")).toStringList();
         if (key == QStringLiteral("folderLayout"))
         {
-            choices = {QStringLiteral("fan"), QStringLiteral("grid"),
-                       QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring")};
-            // A curved free panel can open its folders along its own curve,
-            // and any free panel as a Möbius band; an edge panel's popup
-            // draws no band.
-            if (freeHost && curvedLayout(candidate.layout.pathType))
-            {
-                choices.prepend(QStringLiteral("track"));
-            }
+            // A folder opens as a fan, a grid or a ring, and on a free panel
+            // as a Möbius band too; an edge panel's popup draws no band. One
+            // saved as an arc, a stack or along the dock opens as a fan.
+            choices = {QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring")};
             if (freeHost || candidate.content.folderLayout == QStringLiteral("mobius"))
             {
                 choices.append(QStringLiteral("mobius"));
