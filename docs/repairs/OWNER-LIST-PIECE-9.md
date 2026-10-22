@@ -571,3 +571,14 @@ private-desktop runs are `bars-step4-looks-1` to `-11` and
   with the application menu's custom icon kept (`bars-move-steps.sh`, runs
   `bars-step4-move-1` to `-4`: the Plasma panel gone, the bar 800 px long
   for what it holds).
+
+## Step 4 — Report 2 (recheck, 2026-10-22)
+
+A fresh clone of `origin/main` at `ac095da`, configured and built with one
+job (1708 s), ran step 4's tests serially: 14 of 14 passed (bar host smoke,
+autostart, layout, record, widgets, profile store, settings schema, panel
+registry, the capability test, decoration scene, panel scene, the Profiles
+page, the Widgets page, Panel Studio's navigation). Of 953 committed files
+one differs from the workspace: `PKGBUILD`, raised to `0.1.1-25` after the
+commit for the package. The logs are in
+`build-codex-adrep/evidence/OWNER-LIST-PIECE-9-STEP-4/` (40 to 44).
