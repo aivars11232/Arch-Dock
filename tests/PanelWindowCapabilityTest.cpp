@@ -693,10 +693,11 @@ void PanelWindowCapabilityTest::hologramSettingsFollowEachPart()
     const QStringList panelKeys = part(QStringLiteral("hologramPanel"));
     const QStringList stands = part(QStringLiteral("hologramPedestal"));
 
-    // A new panel: the icons' and the panel's switches; no stands to switch.
+    // A new panel: every part's switch, the stands' too (turned on, Panel
+    // Studio gives the stands a shape); their settings wait for them.
     QVERIFY(shown("hologramIcons"));
     QVERIFY(shown("hologramPanel"));
-    QVERIFY(!shown("hologramPedestals"));
+    QVERIFY(shown("hologramPedestals"));
     for (const QString &key : icons + light + panelKeys + stands + QStringList{QStringLiteral("hologramIconTurning")})
         QVERIFY2(!shown(key), qPrintable(key));
 
@@ -747,10 +748,10 @@ void PanelWindowCapabilityTest::hologramSettingsFollowEachPart()
     QVERIFY(apply({{"hologramIcons", false}}));
     QVERIFY(!shown("hologramIconTurning"));
 
-    // Stands taken away take their hologram's settings with them; the
-    // choice is kept for when they are back.
+    // Stands taken away take their hologram's settings with them, the
+    // switch staying; the choice is kept for when they are back.
     QVERIFY(apply({{"pedestalShape", "none"}}));
-    QVERIFY(!shown("hologramPedestals"));
+    QVERIFY(shown("hologramPedestals"));
     for (const QString &key : stands)
         QVERIFY2(!shown(key), qPrintable(key));
     QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("hologramPedestals").toBool(), true);
@@ -811,15 +812,16 @@ void PanelWindowCapabilityTest::studioHologramTabs()
         return result;
     };
 
-    // Off: the Panels and Icons tabs hold their switch alone; with no stands
-    // there is no Pedestals tab.
+    // Off: the Panels, Icons and Pedestals tabs hold their switch alone;
+    // with no stands too, as turning it on gives the stands a shape.
     Page panels = page(1, 11);
     Page icons = page(2, 6);
     QVERIFY(panels.offered);
     QVERIFY(icons.offered);
     QCOMPARE(keys(panels), QStringList{QStringLiteral("hologramPanel")});
     QCOMPARE(keys(icons), QStringList{QStringLiteral("hologramIcons")});
-    QVERIFY(!page(4, 1).offered);
+    QVERIFY(page(4, 1).offered);
+    QCOMPARE(keys(page(4, 1)), QStringList{QStringLiteral("hologramPedestals")});
 
     // On, in Original colours: every part keeps its own colours, the light
     // its icon's.
@@ -2909,7 +2911,9 @@ void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()
     QVERIFY(place("top"));
     QVERIFY(!place("top")->isEnabled());
     QVERIFY(place("top")->property("checked").toBool());
-    QVERIFY(!place("free")->property("checked").toBool());
+    // The places it cannot be moved to are not shown.
+    QVERIFY(!place("free"));
+    QVERIFY(!place("bottom"));
     QVERIFY(!visibleItem(studio, QStringLiteral("studio-add-new-panel")));
     // The preview of the panel itself is on Overview; an edge panel with
     // nothing on it is drawn bare there.

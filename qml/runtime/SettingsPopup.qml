@@ -815,6 +815,14 @@ Window {
     }
 
     function setFieldValue(field, value) {
+        // Holographic stands asked for while the stands have no shape: they
+        // get the projector, the stand a hologram rises from.
+        if (String(field.key) === "hologramPedestals" && value === true
+                && String(panelValue("pedestalShape", "none")) === "none") {
+            const shape = fieldDescriptor("pedestalShape", "panel");
+            if (shape)
+                setFieldValue(shape, "projector");
+        }
         if (field.paletteIndex !== undefined) {
             // One colour of a palette: the palette with it changed.
             const colours = paletteColours(field);
@@ -2910,10 +2918,12 @@ Window {
                 spacing: 6
 
                 // Where the panel is: picked when a new panel is added (its
-                // bare preview is below, and the button adds it), then
-                // locked, showing the place of the panel the window edits.
+                // bare preview is below, and the button adds it); for the
+                // panel the window edits, only its own place is shown, since
+                // another cannot be picked there.
                 Repeater {
-                    model: root.mainTabIndex === 1 ? root.newPanelKinds : []
+                    model: root.mainTabIndex !== 1 ? []
+                        : root.newPanelPicked ? root.newPanelKinds : [root.selectedPanelKind]
                     delegate: Button {
                         required property string modelData
 

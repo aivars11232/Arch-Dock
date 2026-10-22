@@ -1357,10 +1357,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 return (key == prefix + QStringLiteral("GlowReach") || key == prefix + QStringLiteral("GlowColor"))
                     && values.value(prefix + QStringLiteral("Glow"), 1.0).toDouble() <= 0.0;
             };
-            if (key == QStringLiteral("hologramIcons") || key == QStringLiteral("hologramPanel"))
+            // Each part's hologram switch is always offered: turned on while
+            // the stands have no shape, Panel Studio gives them one.
+            if (key == QStringLiteral("hologramIcons") || key == QStringLiteral("hologramPanel")
+                || key == QStringLiteral("hologramPedestals"))
                 inactive = false;
-            else if (key == QStringLiteral("hologramPedestals"))
-                inactive = !standsDrawn;
             else if (key.startsWith(QStringLiteral("hologramPedestal")))
                 inactive = !standsDrawn || !flag("hologramPedestals", false)
                     || glowOff(QStringLiteral("hologramPedestal"));

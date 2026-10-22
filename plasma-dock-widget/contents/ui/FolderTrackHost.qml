@@ -405,7 +405,12 @@ PlasmaCore.Dialog {
             // On a 3D panel the shape lies on the panel's own plane round the
             // folder, tilted as the panel is; one that cannot be seen whole
             // there is built flat on the screen instead.
-            const plane = typeof folderPlane === "function" ? folderPlane() : null
+            // A fan, an arc and a stack open as on a flat panel, from the
+            // platform's edge beside the folder, as if the folder opened a
+            // panel of that shape that is not drawn; a ring and a grid lie on
+            // the 3D panel's plane.
+            const flatShape = ["fan", "arc", "stack"].includes(folderLayout)
+            const plane = !flatShape && typeof folderPlane === "function" ? folderPlane() : null
             shape = plane ? planeShape(plane, others, toScreen, area, keep, avoid) : null
             if (shape) {
                 samples = shape.samples
