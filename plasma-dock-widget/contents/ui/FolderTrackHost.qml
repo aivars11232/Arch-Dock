@@ -330,13 +330,17 @@ PlasmaCore.Dialog {
             // Whether a child at `place` stays on the screen and keeps clear
             // of the dock: on a 3D panel of the panel as drawn - no child
             // covers or touches it - elsewhere of the dock's other icons.
+            function onScreen(place) {
+                const scale = Math.max(0.35, Number(place.scale) || 1)
+                const left = place.x - content.cellWidth * scale / 2, top = place.y - iconSize * scale / 2
+                return left >= area.x && left + content.cellWidth * scale <= area.x + area.width
+                    && top >= area.y && top + content.cellHeight * scale <= area.y + area.height
+            }
             function clear(place) {
                 const scale = Math.max(0.35, Number(place.scale) || 1)
                 const reach = iconSize / 2 + 4
                 const left = place.x - content.cellWidth * scale / 2, top = place.y - iconSize * scale / 2
-                const onScreen = left >= area.x && left + content.cellWidth * scale <= area.x + area.width
-                    && top >= area.y && top + content.cellHeight * scale <= area.y + area.height
-                if (!onScreen) return false
+                if (!onScreen(place)) return false
                 if (overOther({ x: left, y: top, width: content.cellWidth * scale,
                                 height: content.cellHeight * scale })) return false
                 if (keep) return !LayoutEngine.rectTouchesKeepOut({ x: left, y: top,
@@ -357,10 +361,12 @@ PlasmaCore.Dialog {
             // a quarter of the way at first on a 3D panel, a third on a flat
             // or baked one, then further, up to three quarters; the rest
             // scroll in with the wheel. A curve every child keeps clear of the
-            // icons on is preferred; the fullest attempt is used when none
-            // does.
+            // icons on is preferred. When none does, the nearest and shortest
+            // that keeps every child on the screen is used, and failing that
+            // the first: never the furthest, which spread the children far
+            // from a steeply tilted dock across the screen.
             const reach = keep ? 6 * iconSize : 64, stride = keep ? Math.max(4, iconSize / 4) : 8
-            let layout = null, chosen = null, cleared = null
+            let layout = null, chosen = null, cleared = null, nearest = null, first = null
             spans: for (let span = keep ? Math.PI / 2 : 2 * Math.PI / 3; span <= 3 * Math.PI / 2 + 1e-9;
                         span += Math.PI / 6) {
                 for (let extra = 0; extra <= reach + 1e-9; extra += stride) {
@@ -375,13 +381,15 @@ PlasmaCore.Dialog {
                         return placed.visibility > 0
                     })
                     chosen = { samples: samples, layout: layout }
+                    if (!first) first = chosen
+                    if (!nearest && places.every(onScreen)) nearest = chosen
                     if (!places.every(clear)) continue
                     cleared = chosen
                     if (!layout.windowed) break spans
                     break
                 }
             }
-            chosen = cleared || chosen
+            chosen = cleared || nearest || first || chosen
             samples = chosen.samples
             layout = chosen.layout
             for (const placed of layout.entries.concat(layout.ends || [])) {
