@@ -462,6 +462,18 @@ QString PanelWindow::barHostWindowsJson() const
             {QStringLiteral("fullScreen"), window.fullScreen},
         });
     }
+    // Plasma's own panels and side windows (its widget explorer): a bar keeps
+    // out of their way instead of dodging them.
+    for (const QRect &side : m_windowWatcher.shownNativePanels())
+    {
+        windows.append(QJsonObject{
+            {QStringLiteral("x"), side.x()},
+            {QStringLiteral("y"), side.y()},
+            {QStringLiteral("width"), side.width()},
+            {QStringLiteral("height"), side.height()},
+            {QStringLiteral("plasmaSide"), true},
+        });
+    }
     return QString::fromUtf8(QJsonDocument(windows).toJson(QJsonDocument::Compact));
 }
 

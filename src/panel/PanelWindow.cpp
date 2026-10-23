@@ -203,6 +203,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, &PanelWindow::updateContentDemand);
     connect(&m_windowWatcher, &WindowWatcher::nativePanelsChanged,
             this, &PanelWindow::notifyNativeVisibilityRevision);
+    connect(&m_windowWatcher, &WindowWatcher::nativePanelsChanged,
+            this, &PanelWindow::scheduleBarWindowsUpdate);
     updateContentDemand();
 
     // Settings, registry and model changes become the revisions consumers

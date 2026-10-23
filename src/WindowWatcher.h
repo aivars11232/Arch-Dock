@@ -60,6 +60,10 @@ public slots:
                        bool minimized,
                        const QString &stateJson);
 
+    // Plasma's own dock windows shown now (its panels, its widget explorer),
+    // in screen coordinates.
+    [[nodiscard]] QList<QRect> shownNativePanels() const;
+
 signals:
     void availableChanged();
     void nativePanelsChanged();

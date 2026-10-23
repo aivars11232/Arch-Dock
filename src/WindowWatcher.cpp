@@ -253,6 +253,15 @@ QList<QRectF> WindowWatcher::dockWindowBounds() const
     return bounds;
 }
 
+QList<QRect> WindowWatcher::shownNativePanels() const
+{
+    QList<QRect> shown;
+    for (const QVariantMap &observation : m_nativePanels)
+        if (!observation.value(QStringLiteral("hidden")).toBool())
+            shown.append(observation.value(QStringLiteral("bounds")).toRectF().toAlignedRect());
+    return shown;
+}
+
 void WindowWatcher::observeNativePanel(const QString &internalId, const QJsonObject &state)
 {
     if (!state.value(QStringLiteral("dock")).toBool()

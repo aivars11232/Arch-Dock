@@ -275,6 +275,7 @@ void BarHost::applyWindows(const QByteArray &json)
     // bars are counted on the same screens.
     const QList<QScreen *> screens = QGuiApplication::screens();
     m_windows.clear();
+    QList<QRect> sides;
     const QJsonArray list = QJsonDocument::fromJson(json).array();
     for (const QJsonValue &value : list)
     {
@@ -283,6 +284,11 @@ void BarHost::applyWindows(const QByteArray &json)
         window.frameGeometry = QRect(object.value(QLatin1String("x")).toInt(), object.value(QLatin1String("y")).toInt(),
                                      object.value(QLatin1String("width")).toInt(),
                                      object.value(QLatin1String("height")).toInt());
+        if (object.value(QLatin1String("plasmaSide")).toBool())
+        {
+            sides.append(window.frameGeometry);
+            continue;
+        }
         window.active = object.value(QLatin1String("active")).toBool();
         window.maximized = object.value(QLatin1String("maximized")).toBool();
         window.fullScreen = object.value(QLatin1String("fullScreen")).toBool();
@@ -298,6 +304,11 @@ void BarHost::applyWindows(const QByteArray &json)
             }
         }
         m_windows.append(window);
+    }
+    if (sides != m_plasmaSides)
+    {
+        m_plasmaSides = sides;
+        scheduleLayout();
     }
     m_evaluateTimer.start();
 }
@@ -416,7 +427,26 @@ void BarHost::layoutBars()
     {
         const QRect area = edge.screen->geometry();
         const bool vertical = edge.edge == QStringLiteral("left") || edge.edge == QStringLiteral("right");
-        const int edgeLength = vertical ? area.height() : area.width();
+        // Plasma's widget explorer, or any Plasma window standing tall at a
+        // side of the screen: a bar along the top or bottom keeps to the part
+        // of its edge beside it, shorter if it must be, and a bar on its side
+        // stands beside it, as Plasma's own panels do.
+        int freeStart = 0, freeEnd = vertical ? area.height() : area.width(), beside = 0;
+        for (const QRect &side : std::as_const(m_plasmaSides))
+        {
+            const QRect shared = side.intersected(area);
+            if (shared.isEmpty() || shared.height() < area.height() * 3 / 5)
+                continue;
+            const bool atLeft = shared.left() <= area.left() + 2;
+            const bool atRight = shared.right() >= area.right() - 2;
+            if (!vertical && atLeft)
+                freeStart = std::max(freeStart, shared.right() + 1 - area.left());
+            else if (!vertical && atRight)
+                freeEnd = std::min(freeEnd, shared.left() - area.left());
+            else if ((edge.edge == QStringLiteral("left") && atLeft) || (edge.edge == QStringLiteral("right") && atRight))
+                beside = std::max(beside, shared.width());
+        }
+        const int edgeLength = std::max(0, freeEnd - freeStart);
         QList<BarRequest> requests;
         for (const BarRecord *record : edge.bars)
         {
@@ -441,8 +471,8 @@ void BarHost::layoutBars()
             if (record == edge.bars.cend())
                 continue;
             BarWindow *bar = m_bars.value(placement.id);
-            bar->place(edge.screen, edge.edge, placement.start, placement.length, (*record)->thickness,
-                       (*record)->floatingMargin);
+            bar->place(edge.screen, edge.edge, freeStart + placement.start, placement.length, (*record)->thickness,
+                       (*record)->floatingMargin + beside);
             bar->setHides(ArchDock::panelVisibilityModeFromString((*record)->visibilityMode)
                               != ArchDock::PanelVisibilityMode::AlwaysVisible,
                           m_edges);

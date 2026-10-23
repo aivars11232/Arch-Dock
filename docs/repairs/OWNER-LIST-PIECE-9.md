@@ -783,6 +783,13 @@ What changed:
   explorer shows a line where it will land between the bar's widgets
   (the application menu stays first), and dropping it adds it to the bar's
   record there (`addBarWidget` then `moveBarWidget`), which the bar draws.
+- With Plasma's widget explorer open, a bar keeps out of its way as
+  Plasma's own panels do (the owner: "the panel it self get sized and
+  pushed from that menu window, so I can actually see all of panel"): a
+  bar along the top or bottom keeps to the part of its edge beside any
+  tall Plasma side window, shorter if it must be, and a bar on that side
+  stands beside it. Arch Dock passes Plasma's shown dock windows to the
+  bar host marked as such, so they are not windows to dodge.
 - `tests/eis-pointer.py` can drag (`drag X1 Y1 X2 Y2 [STEPS]`).
 
 Checked in a private Plasma session: the clock's menu on a bar shows
@@ -792,4 +799,6 @@ dragged from the widget explorer onto the bar landed between the dock and
 the digital clock (the record: dock, analog clock, digital clock). The bar
 tests pass. Pictures:
 `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/70-bar-menu-enter-edit-mode.png`,
-`71-bar-in-edit-mode.png` and `72-widget-dropped-on-bar.png`.
+`71-bar-in-edit-mode.png`, `72-widget-dropped-on-bar.png` and
+`73-bar-beside-widget-explorer.png` (the explorer 498 px wide at the
+left: the 1100 px bar moved from x 410 to 659, whole beside it).

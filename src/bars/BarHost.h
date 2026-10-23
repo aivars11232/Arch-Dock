@@ -85,6 +85,9 @@ private:
     QDBusServiceWatcher *m_backendWatcher = nullptr;
     ScreenEdgeManager *m_edges = nullptr;
     QList<ArchDock::WindowOcclusion> m_windows;
+    // Plasma's own panels and side windows shown now: a bar keeps out of the
+    // way of a tall one (the widget explorer), as Plasma's panels do.
+    QList<QRect> m_plasmaSides;
     bool m_fetching = false;
     bool m_fetchAgain = false;
     bool m_fetchingWindows = false;
