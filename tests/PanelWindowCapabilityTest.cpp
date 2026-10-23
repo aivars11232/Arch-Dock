@@ -1657,8 +1657,11 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     const QVariantMap freeFolder = fieldByKey(backend.panelSettingsEditorSnapshot(panel, "studio")
         .value("panelFields").toList(), QStringLiteral("folderLayout"));
     QCOMPARE(freeFolder.value("choices").toStringList(),
-             QStringList({QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring"),
-                          QStringLiteral("mobius")}));
+             QStringList({QStringLiteral("fan"), QStringLiteral("track"), QStringLiteral("grid"),
+                          QStringLiteral("ring"), QStringLiteral("mobius")}));
+    // Along the dock and an arc are one opening, under one name.
+    QCOMPARE(freeFolder.value("options").toList().at(1).toMap().value("label").toString(),
+             QStringLiteral("Along the dock"));
     const auto nativeFields = fieldKeys(backend.panelSettingsEditorSnapshot("bottom", "studio").value("panelFields").toList());
     QVERIFY(nativeFields.contains("presentationMode"));
     QVERIFY(!nativeFields.contains("x") && !nativeFields.contains("y"));
@@ -6482,8 +6485,8 @@ void PanelWindowCapabilityTest::studioFolderShapeRows()
         }
         return QStringList{};
     };
-    const QStringList shapeKeys{"folderFanOpening", "folderStackLength", "folderRingSize"};
-    const QList<QPair<QString, QString>> cases{{"track", ""}, {"fan", "folderFanOpening"},
+    const QStringList shapeKeys{"folderFanOpening", "folderStackLength", "folderRingSize", "folderTrackReach"};
+    const QList<QPair<QString, QString>> cases{{"track", "folderTrackReach"}, {"fan", "folderFanOpening"},
         {"grid", ""}, {"stack", "folderStackLength"}, {"arc", ""}, {"ring", "folderRingSize"}};
     for (const auto &[layout, setting] : cases) {
         QVERIFY(set({{"folderLayout", layout}}));

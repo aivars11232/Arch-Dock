@@ -462,6 +462,8 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
         QStringLiteral("folderStackLength"), definition.content.folderStackLength).toInt();
     definition.content.folderRingSize = normalized(
         QStringLiteral("folderRingSize"), definition.content.folderRingSize).toString();
+    definition.content.folderTrackReach = normalized(
+        QStringLiteral("folderTrackReach"), definition.content.folderTrackReach).toString();
     definition.content.folderSpeed = normalized(
         QStringLiteral("folderSpeed"), definition.content.folderSpeed).toInt();
     definition.content.folderEasing = normalized(
@@ -1263,6 +1265,7 @@ QVariantMap PanelDefinition::toLegacyMap() const
     record.insert(QStringLiteral("folderFanOpening"), content.folderFanOpening);
     record.insert(QStringLiteral("folderStackLength"), content.folderStackLength);
     record.insert(QStringLiteral("folderRingSize"), content.folderRingSize);
+    record.insert(QStringLiteral("folderTrackReach"), content.folderTrackReach);
     record.insert(QStringLiteral("folderSpeed"), content.folderSpeed);
     record.insert(QStringLiteral("folderEasing"), content.folderEasing);
     record.insert(QStringLiteral("folderExpandOnClick"), content.folderExpandOnClick);

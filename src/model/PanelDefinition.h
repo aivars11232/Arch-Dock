@@ -135,6 +135,8 @@ struct PanelContent
     int folderFanOpening = 90;
     int folderStackLength = 3;
     QString folderRingSize = QStringLiteral("small");
+    // How far round the dock a folder opens along it.
+    QString folderTrackReach = QStringLiteral("auto");
     int folderSpeed = 260;
     QString folderEasing = QStringLiteral("outBack");
     bool folderExpandOnClick = true;

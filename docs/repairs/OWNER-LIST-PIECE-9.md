@@ -677,3 +677,37 @@ What changed:
 Pictures (Studio on a flat ring panel, no stand chosen):
 `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/studio-3d-tabs/icons-3d.png`
 and `pedestals-3d.png`.
+
+## Owner test fixes — look cards, Along the dock and its reach (2026-10-23)
+
+The owner: the built-in look cards "all are the same", each showing the
+owner's own panel; "Around the dock/ark is missing" from Folder layout
+("I called it around the Dock, because I forgot how it was called"); and
+a size for the openings: "for along the Dock I should be able to make it
+either all the way around the Dock, or semi circle, or even less than
+that".
+
+- The look cards drew each look on a copy of the selected panel that kept
+  the panel's own decoration (the owner's Circle wears Alien Green
+  gauges), which takes a look's place: every card showed the gauges. The
+  card copy leaves the decoration out, and loading a look takes the
+  decoration off the draft, so the panel wears the look it shows.
+- Along the dock is offered again on a curved free panel (it had gone out
+  with Stack); a panel saved with an Arc opens along the dock, the owner's
+  "practically same as Ark"; Stack still opens as a fan.
+- Along the dock reach (`folderTrackReach`): as far as needed (as before),
+  a quarter, a third, half or three quarters round, or all the way round
+  (stopping just short of closing). The children spread from one end of
+  the chosen reach to the other; more than fit keep their spacing and
+  scroll in with the wheel. Fan opening and Ring size already set the
+  fan's and the ring's size.
+
+Tests: settings schema, profile store, panel registry, truth matrix (465
+s, with the new setting), Studio navigation, themes and preview contract
+pass; the capability test passes function by function (the whole run hit
+the known Qt engine crash in `studioMotionAndDirectionRows`, in Qt's own
+garbage collector; that function passes alone).
+
+Pictures (replica, a test folder of ten empty files):
+`build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/60-along-the-dock-all-the-way-round.png`
+and `61-along-the-dock-quarter-half.png`.

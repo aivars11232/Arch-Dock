@@ -475,6 +475,13 @@ const QVector<Descriptor> &schemaFields()
               Normalization::ChoiceLower, QStringLiteral("small"), "content.folderRingSize",
               {}, {}, {"small", "panel"}, false, true,
               editor("panels-behavior", "Ring size", "combo", {"studio"}, "folder-content")),
+        // How far round the dock a folder opens along it: as far as its
+        // items need, or a quarter, a third, half, three quarters or all the
+        // way round; items that do not fit scroll in with the wheel.
+        panel("folderTrackReach", Access::Editor, Type::String,
+              Normalization::ChoiceLower, QStringLiteral("auto"), "content.folderTrackReach",
+              {}, {}, {"auto", "quarter", "third", "half", "three-quarters", "full"}, false, true,
+              editor("panels-behavior", "Along the dock reach", "combo", {"studio"}, "folder-content")),
         panel("folderSpeed", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 260, "content.folderSpeed", 80, 1200, {}, false, true,
               editor("panels-behavior", "Folder animation duration (ms)", "spin", {"studio", "native"},

@@ -299,6 +299,9 @@ function stageThemeLook(session, candidate) {
         values = copyValue(candidate.themeValues || values);
         values.previousFlatLook = {};
     }
+    // A loaded look is the panel's look: a decoration would cover it.
+    if (String(panelValue(session, "panelDecoration", "")).length > 0 && !hasOwn(values, "panelDecoration"))
+        values.panelDecoration = "";
     return stageLookValues(result, values);
 }
 
@@ -384,7 +387,10 @@ function rendererThemeCandidate(session, theme) {
         "scene3DScale", "scene3DScaleX", "scene3DScaleY", "scene3DFieldOfView", "scene3DKeyLight",
         "scene3DFillLight",
         "scene3DTransitions", "scene3DFloat", "scene3DBand", "scene3DBend", "scene3DFold",
-        "scene3DColor", "scene3DMaterial", "scene3DTexture", "sparkleIntensity"
+        "scene3DColor", "scene3DMaterial", "scene3DTexture", "sparkleIntensity",
+        // The panel's own decoration takes the look's place: without it the
+        // card shows the look, not the panel.
+        "panelDecoration"
     ];
     for (let index = 0; index < ownDefaults.length; ++index)
         delete result[ownDefaults[index]];

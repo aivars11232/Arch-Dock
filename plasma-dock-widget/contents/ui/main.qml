@@ -1071,11 +1071,17 @@ PlasmoidItem {
             // Along the dock kept from a curved shape opens as a fan once the
             // panel's shape has no curve (a straight row), never as a popup
             // that cannot draw it.
-            // A folder opens as a fan, a grid, a ring or a Möbius band; one
-            // saved as an arc, a stack or along the dock opens as a fan.
-            readonly property string savedFolderLayout: ["arc", "stack", "track"]
-                .includes(String(root.configuration.folderLayout || "fan"))
-                ? "fan" : String(root.configuration.folderLayout || "fan")
+            // A folder opens as a fan, a grid, a ring or a Möbius band, and
+            // on a free panel along the dock, which one saved as an arc does
+            // too; one saved as a stack opens as a fan.
+            readonly property string savedFolderLayout: {
+                const saved = String(root.configuration.folderLayout || "fan")
+                if (saved === "stack")
+                    return "fan"
+                if (saved === "arc" || saved === "track")
+                    return root.freeSurface ? "track" : "fan"
+                return saved
+            }
             readonly property string folderLayout: savedFolderLayout === "track" && root.freeSurface
                 && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
             // A grid lies on a 3D panel's plane too; elsewhere it is a popup.
@@ -1192,6 +1198,7 @@ PlasmoidItem {
                 fanOpening: Number(root.configuration.folderFanOpening || 90)
                 stackLength: Number(root.configuration.folderStackLength || 3)
                 ringSize: String(root.configuration.folderRingSize || "small")
+                trackReach: String(root.configuration.folderTrackReach || "auto")
                 appearance: panelScene.appearance
                 customColor: panelScene.customColor
                 panelOpacity: panelScene.panelOpacity

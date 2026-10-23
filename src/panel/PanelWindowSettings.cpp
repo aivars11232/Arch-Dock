@@ -804,6 +804,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 {QStringLiteral("folderFanOpening"), QStringLiteral("fan")},
                 {QStringLiteral("folderStackLength"), QStringLiteral("stack")},
                 {QStringLiteral("folderRingSize"), QStringLiteral("ring")},
+                {QStringLiteral("folderTrackReach"), QStringLiteral("track")},
             };
             if (available && shapeSettings.contains(key))
             {
@@ -1487,10 +1488,15 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         QStringList choices = field.value(QStringLiteral("choices")).toStringList();
         if (key == QStringLiteral("folderLayout"))
         {
-            // A folder opens as a fan, a grid or a ring, and on a free panel
-            // as a Möbius band too; an edge panel's popup draws no band. One
-            // saved as an arc, a stack or along the dock opens as a fan.
+            // A folder opens as a fan, a grid or a ring, on a curved free
+            // panel along the dock too (an arc is the same opening), and on
+            // a free panel as a Möbius band; an edge panel's popup draws no
+            // band. One saved as a stack opens as a fan.
             choices = {QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring")};
+            if (freeHost && curvedLayout(candidate.layout.pathType))
+            {
+                choices.insert(1, QStringLiteral("track"));
+            }
             if (freeHost || candidate.content.folderLayout == QStringLiteral("mobius"))
             {
                 choices.append(QStringLiteral("mobius"));
@@ -1650,6 +1656,13 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 {QStringLiteral("folderRingSize"),
                  {{QStringLiteral("small"), QT_TR_NOOP("Small")},
                   {QStringLiteral("panel"), QT_TR_NOOP("Same as panel")}}},
+                {QStringLiteral("folderTrackReach"),
+                 {{QStringLiteral("auto"), QT_TR_NOOP("As far as needed")},
+                  {QStringLiteral("quarter"), QT_TR_NOOP("A quarter round")},
+                  {QStringLiteral("third"), QT_TR_NOOP("A third round")},
+                  {QStringLiteral("half"), QT_TR_NOOP("Half round")},
+                  {QStringLiteral("three-quarters"), QT_TR_NOOP("Three quarters round")},
+                  {QStringLiteral("full"), QT_TR_NOOP("All the way round")}}},
                 {QStringLiteral("panelRotationMode"),
                  {{QStringLiteral("none"), QT_TR_NOOP("Off")},
                   {QStringLiteral("clockwise"), QT_TR_NOOP("Clockwise")},

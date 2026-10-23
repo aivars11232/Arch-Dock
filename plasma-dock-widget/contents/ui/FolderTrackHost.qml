@@ -30,6 +30,11 @@ PlasmaCore.Dialog {
     property int fanOpening: 90
     property int stackLength: 3
     property string ringSize: "small"
+    // How far round the dock it opens along the dock (Along the dock reach).
+    property string trackReach: "auto"
+    // The spacing that spreads the children over a chosen reach; 0 keeps
+    // the dock's own.
+    property real trackPitch: 0
     // A function returning the dock's centre in the icon's parent's
     // coordinates, for a ring the size of the panel; null where the dock has
     // no radius.
@@ -365,22 +370,37 @@ PlasmaCore.Dialog {
             // that keeps every child on the screen is used, and failing that
             // the first: never the furthest, which spread the children far
             // from a steeply tilted dock across the screen.
+            // A reach chosen in the Studio is the curve's own span; all the
+            // way round stops short of closing, so the two ends keep apart.
             const reach = keep ? 6 * iconSize : 64, stride = keep ? Math.max(4, iconSize / 4) : 8
+            const chosenSpan = ({ quarter: Math.PI / 2, third: 2 * Math.PI / 3, half: Math.PI,
+                                  "three-quarters": 3 * Math.PI / 2, full: 1.9 * Math.PI })[trackReach]
+            const firstSpan = chosenSpan || (keep ? Math.PI / 2 : 2 * Math.PI / 3)
+            const lastSpan = chosenSpan || 3 * Math.PI / 2
             let layout = null, chosen = null, cleared = null, nearest = null, first = null
-            spans: for (let span = keep ? Math.PI / 2 : 2 * Math.PI / 3; span <= 3 * Math.PI / 2 + 1e-9;
-                        span += Math.PI / 6) {
+            spans: for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
                 for (let extra = 0; extra <= reach + 1e-9; extra += stride) {
                     samples = trackSamples(extra, span).map(function(sample) {
                         const point = toScreen(sample.x, sample.y)
                         return { x: point.x, y: point.y, scale: sample.scale }
                     })
                     if (samples.length < 2) return false
-                    layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0)
-                    const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, content.pitch, 0.5)
+                    // With a reach chosen the children spread from one end of
+                    // it to the other; more than fit keep their spacing and
+                    // the rest scroll in.
+                    let pitch = content.pitch
+                    if (chosenSpan && content.entries.length > 1) {
+                        let length = 0
+                        for (let index = 1; index < samples.length; ++index)
+                            length += LayoutEngine.trackRun(samples[index - 1], samples[index], false)
+                        pitch = Math.max(content.pitch, length / (content.entries.length - 1))
+                    }
+                    layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0)
+                    const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0.5)
                     const places = layout.entries.concat(half.entries).filter(function(placed) {
                         return placed.visibility > 0
                     })
-                    chosen = { samples: samples, layout: layout }
+                    chosen = { samples: samples, layout: layout, pitch: chosenSpan ? pitch : 0 }
                     if (!first) first = chosen
                     if (!nearest && places.every(onScreen)) nearest = chosen
                     if (!places.every(clear)) continue
@@ -391,6 +411,7 @@ PlasmaCore.Dialog {
             }
             chosen = cleared || nearest || first || chosen
             samples = chosen.samples
+            trackPitch = chosen.pitch || 0
             layout = chosen.layout
             for (const placed of layout.entries.concat(layout.ends || [])) {
                 const scale = Math.max(0.35, Number(placed.scale) || 1)
@@ -399,6 +420,7 @@ PlasmaCore.Dialog {
                                   width: content.cellWidth * scale, height: content.cellHeight * scale })
             }
         } else {
+            trackPitch = 0
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {
                 return toScreen(point.x, point.y)
             }) : []
@@ -581,7 +603,7 @@ PlasmaCore.Dialog {
         closedPath: root.screenShape !== null && root.screenShape.closed === true
         startAtFolder: root.screenShape !== null && root.screenShape.start === "start"
         pathCapacity: root.screenShape !== null ? Number(root.screenShape.capacity || 0) : 0
-        pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : 0
+        pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : root.trackPitch
         measureAsDrawn: root.screenShape !== null && root.screenShape.projected === true
         ringLimits: root.screenShape !== null && root.screenShape.ringCapacities ? root.screenShape.ringCapacities : []
         lobedPath: root.screenShape !== null && root.screenShape.lobes === true
