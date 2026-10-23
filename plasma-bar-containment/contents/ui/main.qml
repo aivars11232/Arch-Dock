@@ -263,9 +263,10 @@ ContainmentItem {
                 width: 18
                 height: 18
                 radius: 9
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.rightMargin: 22
+                // In the widget's strip, below its remove button (beside it
+                // on a side bar).
+                x: root.vertical ? parent.width / 2 + 2 : parent.width + 2
+                y: root.vertical ? parent.height + 2 : parent.height / 2 + 2
                 color: Kirigami.Theme.highlightColor
                 Kirigami.Icon {
                     anchors.fill: parent
@@ -286,8 +287,10 @@ ContainmentItem {
                 width: 18
                 height: 18
                 radius: 9
-                anchors.top: parent.top
-                anchors.right: parent.right
+                // In the widget's strip, above its settings button (before it
+                // on a side bar).
+                x: root.vertical ? parent.width / 2 - 20 : parent.width + 2
+                y: root.vertical ? parent.height + 2 : parent.height / 2 - 20
                 color: Kirigami.Theme.negativeTextColor
                 Kirigami.Icon {
                     anchors.fill: parent
@@ -360,9 +363,12 @@ ContainmentItem {
             readonly property real roomSideStart: dock ? 0 : Number(room.sideStart || 0)
             readonly property real roomSideEnd: dock ? 0 : Number(room.sideEnd || 0)
             Layout.leftMargin: root.vertical ? roomSideStart : roomBefore
-            Layout.rightMargin: root.vertical ? roomSideEnd : roomAfter
+            // Edit mode: a strip beside each widget (after it along the
+            // bar) holds its buttons, so they never cover the widget.
+            readonly property real editRoom: root.editing && !dock ? 22 : 0
+            Layout.rightMargin: root.vertical ? roomSideEnd : roomAfter + editRoom
             Layout.topMargin: root.vertical ? roomBefore : roomSideStart
-            Layout.bottomMargin: root.vertical ? roomAfter : roomSideEnd
+            Layout.bottomMargin: root.vertical ? roomAfter + editRoom : roomSideEnd
             readonly property var hints: applet ? applet.Layout : null
             readonly property real minimumAlong: !hints || dock ? 0
                 : Math.max(0, root.vertical ? hints.minimumHeight : hints.minimumWidth)

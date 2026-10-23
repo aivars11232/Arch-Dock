@@ -889,3 +889,9 @@ x for removal". In edit mode each widget but the dock has a round settings
 button beside its remove button, opening the widget's own settings as its
 menu would. Checked: the clock's button opened Digital Clock Settings and
 the bar stayed in edit mode 12 s later (`78-widget-settings-button.png`).
+
+The owner: the buttons "shouldn't [be] where ... [they] overlay" the widget.
+In edit mode each widget but the dock gets a strip of its own after it
+along the bar (22 px), holding its remove and settings buttons: stacked on
+a top or bottom bar, side by side on a side bar
+(`79-edit-buttons-in-their-strip.png`).
