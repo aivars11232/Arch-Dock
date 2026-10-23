@@ -734,3 +734,22 @@ test still checks that). `intentional-stop-test` checks the judgement.
 The fix acts from the next update on: the Arch Dock running during this
 update is the old one, so this time Arch Dock is started from the
 application menu after the update (that also clears the stop).
+
+## Owner test fixes — Retry starts a stopped Arch Dock (2026-10-23)
+
+The owner, after installing 0.1.1-31: "nothin got fixed", the panel said
+"Arch Dock service is unavailable" with Retry. The session still held the
+stop the old 0.1.1-30 recorded when the update's `pkill` reached it; the
+fix in fbdbec8 keeps an update from recording one, but an existing stop
+still refused every activation, and Retry only asked again.
+
+`arch-dock --resume` ends a stop without starting Arch Dock in its own
+process, and the panel's Retry runs it when Arch Dock does not answer, then
+asks again: the session bus starts Arch Dock as usual, outside Plasma. The
+widget runs it with Plasma's executable data engine (`plasma5support`, now
+listed in the package's dependencies). The session start-up test checks
+that `--resume` ends a Quit's stop.
+
+Open: the truth-matrix test crashed once in five runs today inside Qt Quick
+3D refreshing a live icon layer (`QSGRhiLayer::grab`), the 3D panel's own
+icon textures; the flat panels' 3D icons no longer use a live layer.

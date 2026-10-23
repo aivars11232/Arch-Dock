@@ -8,6 +8,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
+import org.kde.plasma.plasma5support as P5Support
 import "FreeEntryPolicy.js" as FreeEntryPolicy
 import "SceneDefinition.js" as SceneDefinition
 
@@ -21,6 +22,19 @@ PlasmoidItem {
     id: root
 
     DropBackend { id: dropBackend }
+
+    // Retry on an Arch Dock that does not answer: a stop asked for earlier
+    // (Quit, or an older Arch Dock stopped for its update) ends with the
+    // click, and the panel asks again; the session bus then starts Arch
+    // Dock as usual, outside Plasma.
+    P5Support.DataSource {
+        id: resumeCommand
+        engine: "executable"
+        onNewData: function(source) {
+            disconnectSource(source)
+            root.refresh()
+        }
+    }
 
     // Plasma tells a widget when its owner removes it, or the Plasma panel it
     // sits in, and again if the removal is undone. Arch Dock removes the
@@ -1556,7 +1570,8 @@ PlasmoidItem {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: qsTr("Retry")
                         visible: !dockService.registered || root.requestFailed
-                        onClicked: root.refresh()
+                        onClicked: dockService.registered ? root.refresh()
+                            : resumeCommand.connectSource("arch-dock --resume")
                     }
                 }
 

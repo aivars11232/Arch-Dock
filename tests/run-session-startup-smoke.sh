@@ -427,6 +427,16 @@ run_intentional_quit_smoke() {
         printf 'Quit or crash recovery produced a runtime error.\n' >&2; return 1
     fi
     log_session_phase 'ADFIX-TASK-001 intentional Quit versus crash PASS'
+    # A panel's Retry: --resume ends a Quit without starting Arch Dock.
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >>"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
+        cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
+    }
+    wait_for_no_arch_dock_owner 'the Quit before Resume'
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
+    [[ -e "$stop_file" ]] || { printf 'Quit left no stop to resume.\n' >&2; return 1; }
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" --resume || { printf 'Resume failed.\n' >&2; return 1; }
+    [[ ! -e "$stop_file" ]] || { printf 'Resume did not end the stop.\n' >&2; return 1; }
+    log_session_phase 'A panel Retry resumes a stopped Arch Dock PASS'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

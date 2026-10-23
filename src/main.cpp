@@ -107,6 +107,7 @@ int main(int argc, char *argv[])
 {
     bool recoveryCommand = false;
     bool quitCommand = false;
+    bool resumeCommand = false;
     bool activated = false;
     for (int i = 1; i < argc; ++i)
     {
@@ -116,7 +117,22 @@ int main(int argc, char *argv[])
             argument == QStringLiteral("--restore-config-backup") ||
             argument.startsWith(QStringLiteral("--restore-config-backup="));
         quitCommand = quitCommand || argument == QStringLiteral("--quit");
+        resumeCommand = resumeCommand || argument == QStringLiteral("--resume");
         activated = activated || argument == QStringLiteral("--dbus-activated");
+    }
+    // `arch-dock --resume`, a panel's Retry: ends a stop asked for earlier
+    // without starting Arch Dock in this process; the panel then asks the
+    // session bus again, which starts Arch Dock as on any other day.
+    if (resumeCommand)
+    {
+        QCoreApplication resume(argc, argv);
+        QString error;
+        if (!ArchDock::IntentionalStop::clear(&error))
+        {
+            qWarning().noquote() << error;
+            return EXIT_FAILURE;
+        }
+        return EXIT_SUCCESS;
     }
     // The session bus starts this process on demand. After the user quit,
     // leave the name unowned and stop the KWin watcher from asking again.
