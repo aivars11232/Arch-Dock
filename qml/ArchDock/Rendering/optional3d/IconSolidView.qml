@@ -57,37 +57,44 @@ View3D {
     }
 
     // Seen a little from above, as the near side of a 3D panel is, so the
-    // solid's top and sides show; seen straight on, its depth hid behind
-    // its own front.
-    Node {
-        eulerRotation: Qt.vector3d(24, 0, 0)
-        Model {
-            objectName: "flat-icon-solid"
-            visible: root.mesh !== null && root.depth > 0
-            position: Qt.vector3d(0, 0, (root.mesh ? root.mesh.depth : 50) * root.depth)
-            eulerRotation: Qt.vector3d(0, root.icon ? Number(root.icon.solidTurn) + Number(root.icon.glyphTurnAngle) : 0, 0)
-            scale: Qt.vector3d(1, 1, root.depth)
-            geometry: ProceduralMesh {
-                positions: root.mesh ? root.toVectors(root.mesh.positions, 3) : []
-                normals: root.mesh ? root.toVectors(root.mesh.normals, 3) : []
-                uv0s: root.mesh ? root.toVectors(root.mesh.uv0s, 2) : []
-                indexes: root.mesh ? root.mesh.indexes : []
-                primitiveMode: ProceduralMesh.Triangles
-            }
-            // As on a 3D panel: the light models the parts as far as Icon
-            // lighting says; the rest is the picture's own brightness.
-            materials: PrincipledMaterial {
-                lighting: PrincipledMaterial.FragmentLighting
-                baseColorMap: picture
-                emissiveMap: picture
-                emissiveFactor: Qt.vector3d(0.5 * (1 - root.lighting), 0.5 * (1 - root.lighting),
-                                            0.5 * (1 - root.lighting))
-                alphaMode: PrincipledMaterial.Mask
-                alphaCutoff: 0.25
-                roughness: 0.7 - 0.5 * root.lighting
-                metalness: 0
-                cullMode: Material.BackFaceCulling
-            }
+    // solid's top and sides show (seen straight on, its depth hid behind its
+    // own front), and turned about its upright axis: one rotation on the
+    // solid itself. A parent node holding the tilt made Qt Quick 3D look up
+    // the parent's place in its list while views were being made, past the
+    // list's end, and Plasma stopped.
+    readonly property real tilt: 24 * Math.PI / 180
+    readonly property real turnAngle: (icon ? Number(icon.solidTurn) + Number(icon.glyphTurnAngle) : 0) * Math.PI / 180
+    Model {
+        objectName: "flat-icon-solid"
+        visible: root.mesh !== null && root.depth > 0
+        readonly property real lift: (root.mesh ? root.mesh.depth : 50) * root.depth
+        position: Qt.vector3d(0, -lift * Math.sin(root.tilt), lift * Math.cos(root.tilt))
+        rotation: Qt.quaternion(Math.cos(root.tilt / 2) * Math.cos(root.turnAngle / 2),
+                                Math.sin(root.tilt / 2) * Math.cos(root.turnAngle / 2),
+                                Math.cos(root.tilt / 2) * Math.sin(root.turnAngle / 2),
+                                Math.sin(root.tilt / 2) * Math.sin(root.turnAngle / 2))
+        scale: Qt.vector3d(1, 1, root.depth)
+        geometry: ProceduralMesh {
+            positions: root.mesh ? root.toVectors(root.mesh.positions, 3) : []
+            normals: root.mesh ? root.toVectors(root.mesh.normals, 3) : []
+            uv0s: root.mesh ? root.toVectors(root.mesh.uv0s, 2) : []
+            indexes: root.mesh ? root.mesh.indexes : []
+            primitiveMode: ProceduralMesh.Triangles
         }
+        // As on a 3D panel: the light models the parts as far as Icon
+        // lighting says; the rest is the picture's own brightness.
+        materials: PrincipledMaterial {
+            lighting: PrincipledMaterial.FragmentLighting
+            baseColorMap: picture
+            emissiveMap: picture
+            emissiveFactor: Qt.vector3d(0.5 * (1 - root.lighting), 0.5 * (1 - root.lighting),
+                                        0.5 * (1 - root.lighting))
+            alphaMode: PrincipledMaterial.Mask
+            alphaCutoff: 0.25
+            roughness: 0.7 - 0.5 * root.lighting
+            metalness: 0
+            cullMode: Material.BackFaceCulling
+        }
+    }
     }
 }

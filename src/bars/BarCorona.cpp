@@ -252,6 +252,29 @@ void BarCorona::dropWidget(QObject *containment, const QString &plugin, int inde
         Q_EMIT widgetDropped(bar, plugin.trimmed(), std::max(0, index));
 }
 
+void BarCorona::moveWidget(QObject *containment, QObject *applet, int index)
+{
+    const QString bar = barId(qobject_cast<Plasma::Containment *>(containment));
+    auto *widget = qobject_cast<Plasma::Applet *>(applet);
+    if (bar.isEmpty() || !widget)
+        return;
+    const QString key = widget->pluginName() == QLatin1String(DockPlugin) ? QStringLiteral("dock")
+                                                                          : m_widgetKeys.value(widget);
+    if (!key.isEmpty())
+        Q_EMIT widgetMoved(bar, key, std::max(0, index));
+}
+
+void BarCorona::removeWidget(QObject *containment, QObject *applet)
+{
+    const QString bar = barId(qobject_cast<Plasma::Containment *>(containment));
+    auto *widget = qobject_cast<Plasma::Applet *>(applet);
+    if (bar.isEmpty() || !widget || widget->pluginName() == QLatin1String(DockPlugin))
+        return;
+    const QString key = m_widgetKeys.value(widget);
+    if (!key.isEmpty())
+        Q_EMIT widgetRemoveRequested(bar, key);
+}
+
 void BarCorona::trimMenus(Plasma::Applet *applet)
 {
     // A bar's widgets are its record's: what Plasma's menus offer that the

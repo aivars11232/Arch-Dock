@@ -48,6 +48,10 @@ public:
     // A Plasma widget dropped on a bar (from Plasma's widget explorer) at a
     // place along it, counted in the bar's widgets before the drop.
     Q_INVOKABLE void dropWidget(QObject *containment, const QString &plugin, int index);
+    // A bar's widget dragged to another place along it in edit mode.
+    Q_INVOKABLE void moveWidget(QObject *containment, QObject *applet, int index);
+    // A bar's widget taken out with its remove button in edit mode.
+    Q_INVOKABLE void removeWidget(QObject *containment, QObject *applet);
 
 Q_SIGNALS:
     // A widget was removed from a bar through its own menu, not because the
@@ -55,6 +59,10 @@ Q_SIGNALS:
     void widgetRemovedByUser(const QString &barId, const QString &key);
     // A widget dropped on a bar, for Arch Dock to add to the bar's record.
     void widgetDropped(const QString &barId, const QString &plugin, int index);
+    // A bar's widget moved along it, for Arch Dock to move in the record.
+    void widgetMoved(const QString &barId, const QString &key, int index);
+    // A bar's widget to take out of the record.
+    void widgetRemoveRequested(const QString &barId, const QString &key);
 
 private:
     void followRecord(Plasma::Containment *containment, const BarRecord &record);

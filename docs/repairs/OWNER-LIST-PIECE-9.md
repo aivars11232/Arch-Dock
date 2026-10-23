@@ -806,3 +806,36 @@ left: the 1100 px bar moved from x 410 to 659, whole beside it) and
 bottom panel at the same time": all three stay in view in edit mode with
 the explorer open, the top and bottom bars beside it, the explorer under
 the top bar).
+
+## Owner test fixes — Plasma crash, widgets moved and removed in edit mode (2026-10-23)
+
+The owner after 0.1.1-33: Plasma crashed after the update; in edit mode a
+widget on a bar could be dropped but not moved or removed, "because as
+soon as i rightclick on widget, it exits edit mode"; and on the second
+account the update made a second, identical bottom panel (not traced yet:
+that account's processes are not visible from here).
+
+- The crash (16:29, one second after Plasma started, the Circle with 3D
+  icons on): Qt Quick 3D's bounds check on its list of node transforms
+  (`std::vector<QMatrix4x4>::operator[]`, journal) inside
+  `QSSGRenderRoot::reindex` while a 3D icon's view was set up. Qt 6.12
+  reads a node's parent's place in that list without checking it is
+  current; the flat 3D icon held its tilt in a parent node. The solid now
+  carries tilt and turn as one rotation (`R_x(24°)·R_y(turn)`, its lift
+  turned with it), so it has no parent node. Stand-alone stress tests
+  (twelve views coming and going, meshes changing, layers, zoom) did not
+  reproduce the crash; the parent lookup is the path the journal shows.
+- Plasma leaves edit mode when focus leaves its own windows, which a bar's
+  menu takes: a bar now stays in edit mode while one of its windows has
+  focus and leaves it when focus goes elsewhere. The menu's entry reads
+  Exit Edit Mode while in it.
+- In edit mode a widget is dragged along the bar to another place (the
+  line shows where), and a round remove button on each widget takes it out
+  of the bar (the dock stays). Places count in the bar's record, whose
+  order is not the drawn one: the application menu is drawn on the start
+  cap wherever it stands.
+
+Checked in a private session: the clock dragged to the front of the bar
+moved there (record: digital clock, dock, launcher, tray), the tray's
+remove button took it out; right-clicking a widget kept edit mode.
+Picture: `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/75-bar-widget-moved-and-removed.png`.

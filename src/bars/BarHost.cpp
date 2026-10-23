@@ -9,6 +9,7 @@
 
 #include <Plasma/Containment>
 
+#include <QAction>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
@@ -123,6 +124,26 @@ void BarHost::start()
     connect(&m_editModeTimer, &QTimer::timeout, this, &BarHost::readPlasmaEditMode);
     m_editModeTimer.start(1000);
     connect(m_corona, &BarCorona::widgetDropped, this, &BarHost::addDroppedWidget);
+    connect(m_corona, &BarCorona::widgetRemoveRequested, this, [](const QString &barId, const QString &key)
+    {
+        QDBusMessage remove = QDBusMessage::createMethodCall(BackendService, BackendPath, BackendInterface,
+                                                             QStringLiteral("removeBarWidget"));
+        remove << barId << key;
+        QDBusConnection::sessionBus().asyncCall(remove);
+    });
+    // The menus' edit mode entry says which way it goes, as Plasma's does.
+    connect(m_corona, &Plasma::Corona::editModeChanged, this, [this](bool editing)
+    {
+        if (QAction *action = m_corona->action(QStringLiteral("edit mode")))
+            action->setText(editing ? tr("Exit Edit Mode") : tr("Enter Edit Mode"));
+    });
+    connect(m_corona, &BarCorona::widgetMoved, this, [](const QString &barId, const QString &key, int index)
+    {
+        QDBusMessage move = QDBusMessage::createMethodCall(BackendService, BackendPath, BackendInterface,
+                                                           QStringLiteral("moveBarWidget"));
+        move << barId << key << index;
+        QDBusConnection::sessionBus().asyncCall(move);
+    });
 }
 
 void BarHost::tellPlasmaEditMode(bool editing)
@@ -153,6 +174,12 @@ void BarHost::readPlasmaEditMode()
             return;
         const bool editing = reply.value().variant().toBool();
         if (editing == m_corona->isEditMode())
+            return;
+        // Plasma leaves edit mode as soon as focus leaves its own windows, as
+        // it does for a bar's menu: a bar stays in edit mode while one of its
+        // windows has focus (to remove or move a widget), and leaves it once
+        // focus goes elsewhere.
+        if (!editing && QGuiApplication::focusWindow())
             return;
         m_followingPlasma = true;
         m_corona->setEditMode(editing);

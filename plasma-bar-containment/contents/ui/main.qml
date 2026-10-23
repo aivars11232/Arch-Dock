@@ -192,6 +192,51 @@ ContainmentItem {
             // it: it is told how far the bar reaches before and after it, and
             // how deep the bar is, and lies under the other widgets.
             z: dock ? -1 : 0
+            // Edit mode: a widget is dragged along the bar to another place,
+            // where the line shows; its own menu (the right button) stays.
+            MouseArea {
+                anchors.fill: parent
+                z: 1000
+                enabled: root.editing && !slot.dock
+                acceptedButtons: Qt.LeftButton
+                cursorShape: enabled ? Qt.SizeAllCursor : Qt.ArrowCursor
+                function placeAt(mouse) { return root.dropPlace(mapToItem(root, mouse.x, mouse.y), slot) }
+                onPressed: function(mouse) { root.movingSlot = slot; root.moveLineAt = placeAt(mouse).at }
+                onPositionChanged: function(mouse) { if (root.movingSlot === slot) root.moveLineAt = placeAt(mouse).at }
+                onReleased: function(mouse) {
+                    if (root.movingSlot !== slot)
+                        return
+                    root.movingSlot = null
+                    if (Plasmoid.corona && typeof Plasmoid.corona.moveWidget === "function")
+                        Plasmoid.corona.moveWidget(Plasmoid, slot.plasmaApplet, placeAt(mouse).index)
+                }
+                onCanceled: root.movingSlot = null
+            }
+            // Edit mode: takes the widget out of the bar.
+            Rectangle {
+                z: 1001
+                visible: root.editing && !slot.dock
+                width: 18
+                height: 18
+                radius: 9
+                anchors.top: parent.top
+                anchors.right: parent.right
+                color: Kirigami.Theme.negativeTextColor
+                Kirigami.Icon {
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    source: "window-close"
+                    isMask: true
+                    color: "white"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (Plasmoid.corona && typeof Plasmoid.corona.removeWidget === "function")
+                            Plasmoid.corona.removeWidget(Plasmoid, slot.plasmaApplet)
+                    }
+                }
+            }
             Binding {
                 when: slot.dock && slot.applet !== null
                 target: slot.applet
@@ -322,21 +367,23 @@ ContainmentItem {
     readonly property bool editing: Plasmoid.corona ? Plasmoid.corona.editMode : false
     // Where a widget dropped at `point` goes: how many of the bar's widgets
     // stand before it, and where along the bar the line between them is.
-    function dropPlace(point) {
+    property Item movingSlot: null
+    property real moveLineAt: 0
+    function dropPlace(point, moving) {
         const along = root.vertical ? point.y : point.x
         const spans = []
         for (const child of row.children) {
-            if (!child.plasmaApplet)
+            if (!child.plasmaApplet || child === moving)
                 continue
             if (child === root.launcherSlot) {
-                spans.push({ start: -Infinity, end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
+                spans.push({ slot: child, start: -Infinity, end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
                 continue
             }
             if (!child.visible)
                 continue
             const corner = child.mapToItem(root, 0, 0)
             const start = root.vertical ? corner.y : corner.x
-            spans.push({ start: start, end: start + (root.vertical ? child.height : child.width) })
+            spans.push({ slot: child, start: start, end: start + (root.vertical ? child.height : child.width) })
         }
         spans.sort((a, b) => a.start - b.start)
         let index = 0
@@ -344,7 +391,14 @@ ContainmentItem {
             ++index
         const before = index > 0 ? spans[index - 1].end : 0
         const after = index < spans.length ? spans[index].start : (root.vertical ? root.height : root.width)
-        return { index: index, at: index === 0 && spans.length > 0 && isFinite(spans[0].start)
+        // The place in the bar's record: the record's order is not the
+        // drawn one (the application menu is drawn on the start cap
+        // wherever it stands), so it is the record's place of the widget
+        // drawn next, or the record's end.
+        const order = root.appletOrder.filter(id => !moving || String(id) !== String(moving.plasmaApplet.id))
+        const next = index < spans.length ? order.indexOf(String(spans[index].slot.plasmaApplet.id)) : -1
+        return { index: next >= 0 ? next : order.length,
+                 at: index === 0 && spans.length > 0 && isFinite(spans[0].start)
                      ? spans[0].start : index === spans.length ? before : (before + after) / 2 }
     }
     Rectangle {
@@ -359,13 +413,14 @@ ContainmentItem {
     }
     Rectangle {
         z: 1001
-        visible: widgetDrop.containsDrag
+        visible: widgetDrop.containsDrag || root.movingSlot !== null
         enabled: false
         color: Kirigami.Theme.highlightColor
+        readonly property real at: root.movingSlot !== null ? root.moveLineAt : widgetDrop.lineAt
         width: root.vertical ? root.width - 8 : 3
         height: root.vertical ? 3 : root.height - 8
-        x: root.vertical ? 4 : widgetDrop.lineAt - width / 2
-        y: root.vertical ? widgetDrop.lineAt - height / 2 : 4
+        x: root.vertical ? 4 : at - width / 2
+        y: root.vertical ? at - height / 2 : 4
     }
     DropArea {
         id: widgetDrop
