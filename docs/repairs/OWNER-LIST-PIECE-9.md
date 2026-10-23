@@ -860,3 +860,12 @@ can be lost as Arch Dock exits, and a new Arch Dock found a bar host
 running and left it, so the bars kept the old program. Arch Dock now asks
 a bar host whose program file was replaced while it ran ("(deleted)") to
 quit, and starts the new one when it has gone.
+
+The owner after 0.1.1-36: a bar's "Enter Edit Mode" opened the bar's
+settings window (the bar containment's configure action, which Plasma names
+Enter Edit Mode on panels and turns into its edit mode; the bars' own host
+showed a settings window), and edit mode still ended on a right-click (the
+bars never take keyboard focus, so the check for a focused bar window never
+held). The bar's configure action now enters and leaves edit mode, its text
+following; a bar stays in edit mode while one of its menus or windows is
+open, or for five seconds after a press on it.

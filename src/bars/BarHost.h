@@ -78,6 +78,9 @@ private:
     // from. Just after the bars told Plasma, its old answer is not followed.
     QTimer m_editModeTimer;
     QElapsedTimer m_toldPlasma;
+    // The last press on a bar: Plasma's edit mode ending just then is the
+    // owner working on the bar, which stays in edit mode.
+    QElapsedTimer m_lastPress;
     bool m_followingPlasma = false;
     QString m_recordsFile;
     QString m_windowsFile;

@@ -131,11 +131,15 @@ void BarHost::start()
         remove << barId << key;
         QDBusConnection::sessionBus().asyncCall(remove);
     });
-    // The menus' edit mode entry says which way it goes, as Plasma's does.
+    // The menus' edit mode entries say which way they go, as Plasma's do.
     connect(m_corona, &Plasma::Corona::editModeChanged, this, [this](bool editing)
     {
+        const QString text = editing ? tr("Exit Edit Mode") : tr("Enter Edit Mode");
         if (QAction *action = m_corona->action(QStringLiteral("edit mode")))
-            action->setText(editing ? tr("Exit Edit Mode") : tr("Enter Edit Mode"));
+            action->setText(text);
+        for (Plasma::Containment *bar : m_corona->barContainments())
+            if (QAction *configure = bar->internalAction(QStringLiteral("configure")))
+                configure->setText(text);
     });
     connect(m_corona, &BarCorona::widgetMoved, this, [](const QString &barId, const QString &key, int index)
     {
@@ -179,7 +183,19 @@ void BarHost::readPlasmaEditMode()
         // it does for a bar's menu: a bar stays in edit mode while one of its
         // windows has focus (to remove or move a widget), and leaves it once
         // focus goes elsewhere.
-        if (!editing && QGuiApplication::focusWindow())
+        const auto working = [this]
+        {
+            if (QGuiApplication::focusWindow() || (m_lastPress.isValid() && m_lastPress.elapsed() < 5000))
+                return true;
+            // A menu or a widget's settings window open on a bar.
+            const QList<QWindow *> windows = QGuiApplication::topLevelWindows();
+            return std::any_of(windows.cbegin(), windows.cend(), [](const QWindow *window)
+            {
+                return window->isVisible() && (window->type() == Qt::Popup || window->type() == Qt::Dialog
+                                               || window->transientParent() != nullptr);
+            });
+        };
+        if (!editing && working())
             return;
         m_followingPlasma = true;
         m_corona->setEditMode(editing);
@@ -577,6 +593,8 @@ bool BarHost::eventFilter(QObject *watched, QEvent *event)
 {
     if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
         m_evaluateTimer.start();
+    if (event->type() == QEvent::MouseButtonPress && watched->isWindowType())
+        m_lastPress.start();
     return QObject::eventFilter(watched, event);
 }
 }

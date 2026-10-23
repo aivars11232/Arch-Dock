@@ -296,6 +296,14 @@ void BarCorona::trimMenus(Plasma::Applet *applet)
     if (m_trimmed.contains(applet))
         return;
     m_trimmed.insert(applet);
+    // A bar's "Enter Edit Mode" is its own configure action, as on Plasma's
+    // panels: it enters edit mode (and leaves it), never a settings window.
+    if (auto *bar = qobject_cast<Plasma::Containment *>(applet))
+        if (QAction *configure = bar->internalAction(QStringLiteral("configure")))
+        {
+            QObject::disconnect(configure, &QAction::triggered, nullptr, nullptr);
+            connect(configure, &QAction::triggered, &m_widgetWatch, [this] { setEditMode(!isEditMode()); });
+        }
     if (auto *bar = qobject_cast<Plasma::Containment *>(applet))
         connect(bar, &Plasma::Containment::showAddWidgetsInterface, &m_widgetWatch, []
         {
