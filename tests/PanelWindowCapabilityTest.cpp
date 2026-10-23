@@ -351,6 +351,7 @@ private slots:
     void wholePanelRotationFieldsAreGatedByTheResolver();
     void studioMotionAndDirectionRows();
     void studioPagePictures();
+    void settingsAudit();
     void studioDecorationPictures();
     void studioIconAppearanceOptionsAreTransactional();
     void studioTileParametersAreTransactional();
@@ -5839,6 +5840,155 @@ void PanelWindowCapabilityTest::studioDecorationPictures()
 // Not a check: pictures of Panel Studio's real pages for design reviews
 // (the owner, 2026-10-13: "show me the design"), saved only when
 // ARCHDOCK_STUDIO_SNAPSHOT_DIR names a folder.
+namespace
+{
+// Whether a setting read back after a reload is the one written.
+bool sameSetting(const QVariant &written, const QVariant &read)
+{
+    if (written.typeId() == QMetaType::Bool || read.typeId() == QMetaType::Bool)
+        return written.toBool() == read.toBool();
+    bool writtenNumber = false, readNumber = false;
+    const double x = written.toDouble(&writtenNumber), y = read.toDouble(&readNumber);
+    if (writtenNumber && readNumber && written.typeId() != QMetaType::QString)
+        return std::abs(x - y) <= 1e-6 * std::max(1.0, std::abs(x));
+    return written.toString().compare(read.toString(), Qt::CaseInsensitive) == 0;
+}
+
+// The other values a setting can take: every other choice, the other state
+// of a switch, a number halfway to the far end of its range, a colour.
+QVariantList otherSettingValues(const QVariantMap &field, const QVariant &current)
+{
+    const QStringList choices = field.value("choices").toStringList();
+    QVariantList values;
+    if (!choices.isEmpty())
+    {
+        for (const QString &choice : choices)
+            if (choice.compare(current.toString(), Qt::CaseInsensitive) != 0)
+                values.append(choice);
+        return values;
+    }
+    const QString type = field.value("type").toString();
+    if (type == QStringLiteral("boolean"))
+        return {!current.toBool()};
+    if ((type == QStringLiteral("integer") || type == QStringLiteral("real"))
+        && field.value("minimumValue").isValid() && field.value("maximumValue").isValid())
+    {
+        const double low = field.value("minimumValue").toDouble(), high = field.value("maximumValue").toDouble();
+        const double now = current.isValid() ? current.toDouble() : field.value("defaultValue").toDouble();
+        double pick = now < (low + high) / 2 ? (now + high) / 2 : (now + low) / 2;
+        if (type == QStringLiteral("integer"))
+            pick = std::round(pick);
+        if (std::abs(pick - now) < 1e-9)
+            pick = std::abs(now - high) < 1e-9 ? low : high;
+        return {type == QStringLiteral("integer") ? QVariant(qint64(pick)) : QVariant(pick)};
+    }
+    if (field.value("control").toString() == QStringLiteral("color"))
+        return {QStringLiteral("#3366cc")};
+    return {};
+}
+}
+
+// An audit on request (ARCHDOCK_SETTINGS_AUDIT_FILE): every setting Panel
+// Studio offers on a flat free panel, a 3D free panel and the bottom panel
+// is given each of its other values; the report says which are refused,
+// which do not come back after a reload, which no Studio page shows and
+// which choices have no plain name. It reports; it does not fail.
+void PanelWindowCapabilityTest::settingsAudit()
+{
+    const QString output = qEnvironmentVariable("ARCHDOCK_SETTINGS_AUDIT_FILE");
+    if (output.isEmpty())
+        QSKIP("Settings audit only on request");
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const auto apply = [&](const QString &panel, const QVariantMap &values) {
+        return backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision, values);
+    };
+    const QString flat = registry->addFreePanel();
+    QVERIFY(apply(flat, {{"type", "launcher"}, {"layout", "ring"}}).value("success").toBool());
+    const QString solid = registry->addFreePanel();
+    QVERIFY(apply(solid, {{"type", "launcher"}, {"layout", "ring"}, {"rendererTier", "true3d"}}).value("success").toBool());
+    registry->setPanelValue("bottom", "visible", true);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    QJsonArray findings;
+    int tried = 0;
+    const auto note = [&](const QString &panel, const QString &kind, const QString &key, const QVariant &value,
+                          const QString &detail) {
+        findings.append(QJsonObject{{"panel", panel}, {"kind", kind}, {"key", key},
+                                    {"value", QJsonValue::fromVariant(value)}, {"detail", detail}});
+    };
+    for (const QString &panel : {flat, solid, QStringLiteral("bottom")})
+    {
+        const QVariantList fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+        // What the Studio's pages show for this panel.
+        QSet<QString> shown;
+        {
+            std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+            QVERIFY(popup);
+            for (int section = 0; section <= 4; ++section)
+            {
+                popup->setProperty("mainTabIndex", section);
+                const int count = qMax(1, int(popup->property("currentSubtabs").value<QJSValue>().property("length").toInt()));
+                for (int subtab = 0; subtab < count; ++subtab)
+                {
+                    QVariant offered;
+                    QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, offered),
+                        Q_ARG(QVariant, section), Q_ARG(QVariant, subtab));
+                    if (!offered.toBool()) continue;
+                    popup->setProperty("subTabIndex", subtab);
+                    QVariant rows;
+                    QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows));
+                    for (const QVariant &row : rows.value<QJSValue>().toVariant().toList())
+                        shown.insert(row.toMap().value("key").toString());
+                }
+            }
+        }
+        for (const QVariant &value : fields)
+        {
+            const QVariantMap field = value.toMap();
+            const QString key = field.value("key").toString();
+            if (field.value("inactive").toBool())
+                continue;
+            if (!shown.contains(key))
+                note(panel, "not-on-any-page", key, {}, field.value("section").toString());
+            for (const QVariant &option : field.value("options").toList())
+            {
+                const QVariantMap map = option.toMap();
+                const QString label = map.value("label").toString().trimmed();
+                if (label.isEmpty() || label == map.value("value").toString())
+                    note(panel, "choice-without-plain-name", key, map.value("value"), label);
+            }
+            const QVariant current = registry->panelValue(panel, key);
+            const QVariantList others = otherSettingValues(field, current);
+            if (others.isEmpty())
+                note(panel, "not-tried", key, current, field.value("type").toString() + "/" + field.value("control").toString());
+            for (const QVariant &other : others)
+            {
+                ++tried;
+                const QVariantMap result = apply(panel, {{key, other}});
+                if (!result.value("success").toBool())
+                {
+                    note(panel, "refused", key, other, result.value("errorCode").toString());
+                    continue;
+                }
+                PanelRegistry reloaded;
+                const QVariant back = reloaded.panelValue(panel, key);
+                if (!sameSetting(other, back))
+                    note(panel, "not-kept-after-reload", key, other, back.toString());
+                apply(panel, {{key, current}});
+            }
+        }
+    }
+    QFile file(output);
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(QJsonDocument(QJsonObject{{"tried", tried}, {"findings", findings}}).toJson());
+    qInfo("Settings audit: %d values tried, %d findings", tried, int(findings.size()));
+}
+
 void PanelWindowCapabilityTest::studioPagePictures()
 {
     const QString folder = qEnvironmentVariable("ARCHDOCK_STUDIO_SNAPSHOT_DIR");
