@@ -975,3 +975,19 @@ and navigation tests passed.
   (the widget window shows on the screen Qt puts it on).
 - Plasma's widget window could be opened from Plasma itself too: it then
   lists no spacers and puts Plasma's desktop in edit mode, as before.
+
+## Owner test fixes — Remove Panel in the right-click menu (2026-10-23, night)
+
+The owner could not remove Arch Dock panels at all. Plasma 6.8 deletes a
+panel with Delete Panel (icon `delete`, `PanelConfiguration.qml`), without
+asking, and offers Undo. Every Arch Dock panel's right-click menu now has
+**Remove Panel** (the dock widget's own entry, so bars, edge panels and free
+panels all have it). It calls Arch Dock's `removePanel`: a bar leaves the
+bar host with its record, an edge panel leaves Plasma, a free panel leaves
+the desktop, and a built-in panel is hidden. Arch Dock has no Undo; a saved
+profile that holds the panel keeps its copy.
+
+Checked in a private KWin and Plasma session: right-click on a bar showed
+Remove Panel first in its menu; clicking it took the bar off the screen and
+its record out of Arch Dock's settings (`84-bar-remove-panel.png`). Edge and
+free panels were not tried.

@@ -1776,9 +1776,20 @@ PlasmoidItem {
         }
     }
 
+    // Takes this panel off the desktop, as Plasma's Delete Panel does: a bar,
+    // an edge panel or a free panel, with what it holds (a built-in panel is
+    // hidden). A profile that holds the panel keeps its copy.
+    PlasmaCore.Action {
+        id: removePanelAction
+        text: qsTr("Remove Panel")
+        icon.name: "delete"
+        visible: root.panelId.length > 0
+        onTriggered: root.callDock("removePanel", [root.panelId])
+    }
+
     // New panels come from Panel Studio's own page for them, not from a
     // panel that is already there.
-    Plasmoid.contextualActions: [moveIntoBarAction]
+    Plasmoid.contextualActions: [moveIntoBarAction, removePanelAction]
 
     Component.onCompleted: {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);
