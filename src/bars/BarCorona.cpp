@@ -7,12 +7,10 @@
 #include <Plasma/Containment>
 
 #include <QAction>
-#include <QDBusConnection>
-#include <QDBusMessage>
-#include <QDBusPendingCall>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QStandardPaths>
 
 #include <algorithm>
 
@@ -108,6 +106,18 @@ BarCorona::BarCorona(QObject *parent)
     };
     connect(qGuiApp, &QGuiApplication::screenAdded, this, screensChanged);
     connect(qGuiApp, &QGuiApplication::screenRemoved, this, screensChanged);
+
+    m_toggle.setSingleShot(true);
+    m_toggle.setInterval(0);
+    connect(&m_toggle, &QTimer::timeout, &m_widgetWatch, [this]
+    {
+        if (!m_toggling)
+            return;
+        const bool entering = !isEditMode();
+        setEditMode(entering);
+        if (entering)
+            Q_EMIT studioRequested(barId(m_toggling));
+    });
 }
 
 uint BarCorona::numScreens() const
@@ -175,7 +185,11 @@ void BarCorona::followRecord(Plasma::Containment *containment, const BarRecord &
     Plasma::Applet *dock = dockApplet(containment);
     const bool wantsDock = record.type != QStringLiteral("empty");
     if (wantsDock && !dock)
+    {
+        m_creating = true;
         dock = containment->createApplet(QLatin1String(DockPlugin));
+        m_creating = false;
+    }
     else if (!wantsDock && dock)
     {
         dock->destroy();
@@ -191,7 +205,7 @@ void BarCorona::followRecord(Plasma::Containment *containment, const BarRecord &
 
 void BarCorona::followWidgets(Plasma::Containment *containment, Plasma::Applet *dock, const BarRecord &record)
 {
-    watchRemovals(containment);
+    watchWidgets(containment);
     // Each widget made for the bar carries the key its record knows it by;
     // one the record no longer lists, or one with no key, goes.
     QHash<QString, Plasma::Applet *> byKey;
@@ -222,7 +236,9 @@ void BarCorona::followWidgets(Plasma::Containment *containment, Plasma::Applet *
         Plasma::Applet *applet = widget.dock() ? dock : byKey.value(widget.key);
         if (!applet && !widget.dock())
         {
+            m_creating = true;
             applet = containment->createApplet(widget.plugin);
+            m_creating = false;
             if (applet)
             {
                 KConfigGroup settings = applet->config();
@@ -275,6 +291,26 @@ void BarCorona::removeWidget(QObject *containment, QObject *applet)
         Q_EMIT widgetRemoveRequested(bar, key);
 }
 
+QUrl BarCorona::widgetExplorerUrl() const
+{
+    return QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::GenericDataLocation,
+        QStringLiteral("plasma/shells/org.kde.plasma.desktop/contents/explorer/WidgetExplorer.qml")));
+}
+
+void BarCorona::setWidgetWindow(const QRect &area)
+{
+    // Plasma's widget explorer page, as it closes, asks the bar it was
+    // opened for to show its settings, as a panel's would; a bar's would
+    // leave edit mode. That ask comes just before the window closes, and
+    // is dropped.
+    if (area.isEmpty())
+        m_toggle.stop();
+    if (m_widgetWindow == area)
+        return;
+    m_widgetWindow = area;
+    Q_EMIT widgetWindowChanged(area);
+}
+
 void BarCorona::trimMenus(Plasma::Applet *applet)
 {
     // A bar's widgets are its record's: what Plasma's menus offer that the
@@ -282,9 +318,10 @@ void BarCorona::trimMenus(Plasma::Applet *applet)
     // analog clock for the digital one, a widget the bar's record does not
     // hold, which the bar host would take out again), and Remove on the
     // dock, which goes with its bar. Edit mode stays, as on Plasma's own
-    // panels, and Add Widgets opens Plasma's own widget explorer, to drag
-    // widgets onto the bar. Plasma makes these actions after a widget starts
-    // and may show them again, so they are hidden as each menu opens.
+    // panels, and Add Widgets opens the bar's widget window (the bar's own
+    // page does), to drag widgets onto the bar. Plasma makes these actions
+    // after a widget starts and may show them again, so they are hidden as
+    // each menu opens.
     const auto trim = [applet]
     {
         if (!applet->isContainment())
@@ -302,15 +339,12 @@ void BarCorona::trimMenus(Plasma::Applet *applet)
         if (QAction *configure = bar->internalAction(QStringLiteral("configure")))
         {
             QObject::disconnect(configure, &QAction::triggered, nullptr, nullptr);
-            connect(configure, &QAction::triggered, &m_widgetWatch, [this] { setEditMode(!isEditMode()); });
+            connect(configure, &QAction::triggered, &m_widgetWatch, [this, bar]
+            {
+                m_toggling = bar;
+                m_toggle.start();
+            });
         }
-    if (auto *bar = qobject_cast<Plasma::Containment *>(applet))
-        connect(bar, &Plasma::Containment::showAddWidgetsInterface, &m_widgetWatch, []
-        {
-            QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(
-                QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
-                QStringLiteral("org.kde.PlasmaShell"), QStringLiteral("toggleWidgetExplorer")));
-        });
     connect(applet, &Plasma::Applet::contextualActionsAboutToShow, &m_widgetWatch, trim);
     connect(applet, &QObject::destroyed, &m_widgetWatch, [this, applet] { m_trimmed.remove(applet); });
 }
@@ -330,11 +364,24 @@ void BarCorona::rememberWidget(Plasma::Applet *applet, const QString &key)
     m_widgetKeys.insert(applet, key);
 }
 
-void BarCorona::watchRemovals(Plasma::Containment *containment)
+void BarCorona::watchWidgets(Plasma::Containment *containment)
 {
     if (m_watched.contains(containment))
         return;
     m_watched.insert(containment);
+    // A bar's widget window adds a widget straight into the bar (a double
+    // click, or Enter): Arch Dock takes it out and adds it to the bar's
+    // record instead, at the bar's end, from where the bar then holds it.
+    connect(containment, &Plasma::Containment::appletAdded, &m_widgetWatch, [this, containment](Plasma::Applet *applet)
+    {
+        if (m_widgetWindow.isEmpty() || m_creating || m_widgetKeys.contains(applet)
+            || applet->pluginName() == QLatin1String(DockPlugin))
+            return;
+        const QString plugin = applet->pluginName();
+        m_removing.insert(applet);
+        QTimer::singleShot(0, applet, [applet] { applet->destroy(); });
+        Q_EMIT widgetDropped(barId(containment), plugin, int(containment->applets().size()));
+    });
     connect(containment, &QObject::destroyed, &m_widgetWatch, [this, containment] { m_watched.remove(containment); });
     connect(containment, &Plasma::Containment::appletRemoved, &m_widgetWatch, [this, containment](Plasma::Applet *applet)
     {

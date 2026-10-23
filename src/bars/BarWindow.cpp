@@ -81,7 +81,8 @@ int BarWindow::wantedLength() const
     return root ? root->property("wantedLength").toInt() : 0;
 }
 
-void BarWindow::place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin)
+void BarWindow::place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
+                      int roomBefore, int roomAfter)
 {
     using LayerShellQt::Window;
     if (!screen || length <= 0 || thickness <= 0)
@@ -91,7 +92,13 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
     }
     const bool vertical = sideEdge(edge);
     if (QQuickItem *root = rootObject())
+    {
         root->setProperty("vertical", vertical);
+        root->setProperty("editRoomBefore", roomBefore);
+        root->setProperty("editRoomAfter", roomAfter);
+    }
+    start -= roomBefore;
+    length += roomBefore + roomAfter;
 
     // Anchored to its edge and the edge's start, so that its margin along
     // the edge is where it starts.

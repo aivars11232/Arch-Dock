@@ -895,3 +895,83 @@ In edit mode each widget but the dock gets a strip of its own after it
 along the bar (22 px), holding its remove and settings buttons: stacked on
 a top or bottom bar, side by side on a side bar
 (`79-edit-buttons-in-their-strip.png`).
+
+## Owner test fixes — the bars' own edit mode, free places, the + menu (2026-10-23, evening)
+
+The owner asked for a way round Plasma's edit mode: Enter Edit Mode on a
+bar opens Panel Studio and shows the remove and settings buttons; a + on
+the bar, outside it at its start or end, adds widgets; widgets go anywhere
+free on the bar, as on Plasma's panels, and move again whenever wanted;
+Add panel… leaves the menu of a panel that is already there. Tested with a
+clock, an application launcher and a separator: added, moved, removed.
+
+### What Plasma does (read from its 6.8.0 sources)
+
+- **Moving a widget** (`containments/panel/ConfigOverlay.qml`,
+  `LayoutManager.js` of plasma-desktop): the widget follows the pointer
+  along the panel and lands in the panel's row, before or after the widget
+  under the pointer. Empty room on a Plasma panel is made by spacers.
+- **Spacers and separators** are hidden from Plasma's widget window
+  (`NoDisplay` in both plugins' metadata). A panel in edit mode adds them
+  from its Add New menu: Spacer, Margins Separator, Widgets…
+  (`configuration/PanelConfiguration.qml` of the desktop shell).
+- **Plasma's widget window** lists the widgets that fit the place it was
+  opened for, adds one with a single click, and is the shell's
+  `explorer/WidgetExplorer.qml`, held by the desktop view
+  (`views/Desktop.qml`).
+
+### What Arch Dock's bars do now
+
+- **Their own edit mode.** Enter Edit Mode in a bar's menu opens Panel
+  Studio for that bar and shows each widget's ✕ and ⚙; right-clicks never
+  end it; Exit Edit Mode in the same menu does. Plasma's own edit mode is
+  not touched.
+- **+ outside the bar**, past its end (past its start where the edge has
+  no room after it): the bar's window reaches 40 px past the bar in edit
+  mode. It opens Plasma's Add New menu: Spacer and Margins Separator go to
+  the bar's end; Widgets… opens the bar's widget window.
+- **The bar's widget window** is Plasma's own page, held for the bar the
+  way Plasma's desktop holds it for a panel, at the screen's left side; the
+  bar moves beside it. Widgets are dragged onto the bar, or added at its
+  end with one click (Arch Dock puts them in the bar's record). Plasma's
+  desktop stays out of edit mode.
+- **Free places.** A widget dropped on free room stands just there; every
+  other widget stays put. Each widget keeps the free room on its side away
+  from the dock (`AppletGaps` beside `AppletOrder` in the bar's settings).
+  Dropped on another widget or the dock's icons, it goes before or after
+  it, as on Plasma's panels. A widget from the widget window lands where it
+  was let go.
+- **The application menu on the start cap** is a launcher that is first in
+  the bar's order. It has its own ✕ and ⚙ in edit mode and is dragged off
+  the cap into the bar, or back onto it, like any widget.
+- **Add panel… is gone** from every Arch Dock panel's menu. New panels come
+  from Panel Studio opened on its own, which starts on its new-panel page.
+
+### Checked in a private KWin and Plasma session (bar 1300 px, bottom edge)
+
+All in `82-bar-add-move-remove-clock-launcher-spacer.png`:
+1. Clock and Application Launcher dragged in from the bar's widget window;
+   an Analog Clock added with one click: all three where dropped or at the
+   end.
+2. The clock dragged 120 px left, the first drag after the window closed:
+   it stood where it was let go.
+3. The launcher dragged onto the dock's icons: onto the start cap, with its
+   ✕ and ⚙. Dragged off the cap: into the free room it was let go on.
+4. + → Spacer and + → Margins Separator: both at the bar's end.
+5. Every widget removed with its ✕: the bar held only its dock.
+
+Also: Enter Edit Mode from the menu opened Panel Studio for the bar and the
+bar stayed in edit mode 12 s after a right-click
+(`80-bar-own-edit-mode-keeps-after-right-click.png`); a clock dragged to
+the middle stayed there through Exit and Enter Edit Mode
+(`81-bar-widget-stays-where-dropped.png`); the widget window stood at the
+screen's left with the bar beside it
+(`83-bar-widget-window-beside-the-bar.png`). Bar tests 5/5, Studio schema
+and navigation tests passed.
+
+### Not checked
+
+- The owner's own two accounts; a side (vertical) bar; a second screen
+  (the widget window shows on the screen Qt puts it on).
+- Plasma's widget window could be opened from Plasma itself too: it then
+  lists no spacers and puts Plasma's desktop in edit mode, as before.

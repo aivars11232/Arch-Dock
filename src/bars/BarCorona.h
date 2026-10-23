@@ -6,7 +6,11 @@
 #include <Plasma/Corona>
 
 #include <QHash>
+#include <QPointer>
+#include <QRect>
 #include <QSet>
+#include <QTimer>
+#include <QUrl>
 
 namespace Plasma
 {
@@ -52,6 +56,10 @@ public:
     Q_INVOKABLE void moveWidget(QObject *containment, QObject *applet, int index);
     // A bar's widget taken out with its remove button in edit mode.
     Q_INVOKABLE void removeWidget(QObject *containment, QObject *applet);
+    // Plasma's own widget explorer page, which a bar's widget window holds.
+    Q_INVOKABLE QUrl widgetExplorerUrl() const;
+    // Where a bar's widget window shows on the screen; empty once it closed.
+    Q_INVOKABLE void setWidgetWindow(const QRect &area);
 
 Q_SIGNALS:
     // A widget was removed from a bar through its own menu, not because the
@@ -63,13 +71,17 @@ Q_SIGNALS:
     void widgetMoved(const QString &barId, const QString &key, int index);
     // A bar's widget to take out of the record.
     void widgetRemoveRequested(const QString &barId, const QString &key);
+    // A bar's edit mode entered from its menu: Panel Studio opens for it.
+    void studioRequested(const QString &barId);
+    // A bar's widget window showed or closed: the bars keep clear of it.
+    void widgetWindowChanged(const QRect &area);
 
 private:
     void followRecord(Plasma::Containment *containment, const BarRecord &record);
     void followWidgets(Plasma::Containment *containment, Plasma::Applet *dock, const BarRecord &record);
     void rememberWidget(Plasma::Applet *applet, const QString &key);
     void trimMenus(Plasma::Applet *applet);
-    void watchRemovals(Plasma::Containment *containment);
+    void watchWidgets(Plasma::Containment *containment);
 
     // Widgets this corona is removing itself, which are no user's removal.
     QSet<Plasma::Applet *> m_removing;
@@ -78,6 +90,13 @@ private:
     // The key each bar widget was made with: a widget's own settings go with
     // it when it is removed.
     QHash<Plasma::Applet *, QString> m_widgetKeys;
+    // A widget this corona is adding to a bar from its record.
+    bool m_creating = false;
+    // Where a bar's widget window shows, empty while none does.
+    QRect m_widgetWindow;
+    // A bar's edit mode, entered or left from its menu a moment later.
+    QPointer<Plasma::Containment> m_toggling;
+    QTimer m_toggle;
     // What the widget watching above is connected through. Plasma deletes
     // the bars and their widgets as the corona closes, after this corona's
     // own parts are gone; being last, this goes first and takes the watching

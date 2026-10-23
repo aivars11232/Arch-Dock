@@ -35,12 +35,8 @@ namespace
 const QString BackendService = QStringLiteral("org.archdock.ArchDock");
 const QString BackendPath = QStringLiteral("/Control");
 const QString BackendInterface = QStringLiteral("local.PanelWindow");
-const QString PlasmaService = QStringLiteral("org.kde.plasmashell");
-const QString PlasmaPath = QStringLiteral("/PlasmaShell");
-const QString PlasmaInterface = QStringLiteral("org.kde.PlasmaShell");
-const QString PropertiesInterface = QStringLiteral("org.freedesktop.DBus.Properties");
-// How long after telling Plasma its edit mode the bars wait for it.
-constexpr qint64 PlasmaAnswerTime = 2000;
+// How far a bar's window reaches past the bar in edit mode, for its +.
+constexpr int EditRoom = 40;
 }
 
 BarHost::BarHost(BarCorona *corona, const QUrl &barView, QObject *parent)
@@ -120,9 +116,17 @@ void BarHost::start()
     connect(m_backendWatcher, &QDBusServiceWatcher::serviceRegistered, this, &BarHost::requestWindows);
     requestRecords();
     requestWindows();
-    connect(m_corona, &Plasma::Corona::editModeChanged, this, &BarHost::tellPlasmaEditMode);
-    connect(&m_editModeTimer, &QTimer::timeout, this, &BarHost::readPlasmaEditMode);
-    m_editModeTimer.start(1000);
+    // A bar's edit mode is its own, entered and left from the bar's menu:
+    // Plasma leaves its own edit mode whenever focus leaves its windows, as
+    // a bar's menu takes it, so the bars do not follow it. Entering it from
+    // the menu opens Panel Studio for the bar.
+    connect(m_corona, &BarCorona::studioRequested, this, [](const QString &barId)
+    {
+        QDBusMessage show = QDBusMessage::createMethodCall(BackendService, BackendPath, BackendInterface,
+                                                           QStringLiteral("showPanelSettings"));
+        show << barId;
+        QDBusConnection::sessionBus().asyncCall(show);
+    });
     connect(m_corona, &BarCorona::widgetDropped, this, &BarHost::addDroppedWidget);
     connect(m_corona, &BarCorona::widgetRemoveRequested, this, [](const QString &barId, const QString &key)
     {
@@ -134,14 +138,18 @@ void BarHost::start()
     // The menus' edit mode entries say which way they go, as Plasma's do.
     connect(m_corona, &Plasma::Corona::editModeChanged, this, [this](bool editing)
     {
-        if (!editing)
-            m_barTouched = false;
         const QString text = editing ? tr("Exit Edit Mode") : tr("Enter Edit Mode");
         if (QAction *action = m_corona->action(QStringLiteral("edit mode")))
             action->setText(text);
         for (Plasma::Containment *bar : m_corona->barContainments())
             if (QAction *configure = bar->internalAction(QStringLiteral("configure")))
                 configure->setText(text);
+        scheduleLayout();
+    });
+    connect(m_corona, &BarCorona::widgetWindowChanged, this, [this](const QRect &area)
+    {
+        m_widgetWindow = area;
+        scheduleLayout();
     });
     connect(m_corona, &BarCorona::widgetMoved, this, [](const QString &barId, const QString &key, int index)
     {
@@ -149,59 +157,6 @@ void BarHost::start()
                                                            QStringLiteral("moveBarWidget"));
         move << barId << key << index;
         QDBusConnection::sessionBus().asyncCall(move);
-    });
-}
-
-void BarHost::tellPlasmaEditMode(bool editing)
-{
-    if (m_followingPlasma)
-        return;
-    m_toldPlasma.start();
-    QDBusMessage set = QDBusMessage::createMethodCall(PlasmaService, PlasmaPath, PropertiesInterface,
-                                                      QStringLiteral("Set"));
-    set << PlasmaInterface << QStringLiteral("editMode") << QVariant::fromValue(QDBusVariant(editing));
-    QDBusConnection::sessionBus().asyncCall(set);
-}
-
-void BarHost::readPlasmaEditMode()
-{
-    const auto answering = [this] { return m_toldPlasma.isValid() && m_toldPlasma.elapsed() < PlasmaAnswerTime; };
-    if (answering())
-        return;
-    QDBusMessage get = QDBusMessage::createMethodCall(PlasmaService, PlasmaPath, PropertiesInterface,
-                                                      QStringLiteral("Get"));
-    get << PlasmaInterface << QStringLiteral("editMode");
-    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(get, 800), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, answering](QDBusPendingCallWatcher *call)
-    {
-        call->deleteLater();
-        const QDBusPendingReply<QDBusVariant> reply = *call;
-        if (reply.isError() || answering())
-            return;
-        const bool editing = reply.value().variant().toBool();
-        if (editing == m_corona->isEditMode())
-            return;
-        // Plasma leaves edit mode as soon as focus leaves its own windows, as
-        // it does for a bar's menu: a bar stays in edit mode while one of its
-        // windows has focus (to remove or move a widget), and leaves it once
-        // focus goes elsewhere.
-        const auto working = [this]
-        {
-            if (QGuiApplication::focusWindow() || (m_lastPress.isValid() && m_lastPress.elapsed() < 5000))
-                return true;
-            // A menu or a widget's settings window open on a bar.
-            const QList<QWindow *> windows = QGuiApplication::topLevelWindows();
-            return std::any_of(windows.cbegin(), windows.cend(), [](const QWindow *window)
-            {
-                return window->isVisible() && (window->type() == Qt::Popup || window->type() == Qt::Dialog
-                                               || window->transientParent() != nullptr);
-            });
-        };
-        if (!editing && (m_barTouched || working()))
-            return;
-        m_followingPlasma = true;
-        m_corona->setEditMode(editing);
-        m_followingPlasma = false;
     });
 }
 
@@ -477,7 +432,10 @@ void BarHost::layoutBars()
         // of its edge beside it, shorter if it must be, and a bar on its side
         // stands beside it, as Plasma's own panels do.
         int freeStart = 0, freeEnd = vertical ? area.height() : area.width(), beside = 0;
-        for (const QRect &side : std::as_const(m_plasmaSides))
+        QList<QRect> sides = m_plasmaSides;
+        if (!m_widgetWindow.isEmpty())
+            sides.append(m_widgetWindow);
+        for (const QRect &side : std::as_const(sides))
         {
             const QRect shared = side.intersected(area);
             if (shared.isEmpty() || shared.height() < area.height() * 3 / 5)
@@ -509,15 +467,30 @@ void BarHost::layoutBars()
 
         int depth = 0;
         const QList<BarPlacement> placements = placeOnEdge(requests, edgeLength);
+        QList<BarPlacement> along = placements;
+        std::sort(along.begin(), along.end(), [](const BarPlacement &a, const BarPlacement &b) { return a.start < b.start; });
         for (const BarPlacement &placement : placements)
         {
             const auto record = std::find_if(edge.bars.cbegin(), edge.bars.cend(),
                                              [&](const BarRecord *bar) { return bar->id == placement.id; });
             if (record == edge.bars.cend())
                 continue;
+            // Edit mode: room for the bar's + outside it, past its end, or
+            // past its start where the edge has none after it.
+            int roomBefore = 0, roomAfter = 0;
+            if (m_corona->isEditMode())
+            {
+                const auto at = std::find(along.cbegin(), along.cend(), placement);
+                const int previousEnd = at == along.cbegin() ? 0 : std::prev(at)->start + std::prev(at)->length;
+                const int nextStart = std::next(at) == along.cend() ? edgeLength : std::next(at)->start;
+                if (nextStart - (placement.start + placement.length) >= EditRoom)
+                    roomAfter = EditRoom;
+                else if (placement.start - previousEnd >= EditRoom)
+                    roomBefore = EditRoom;
+            }
             BarWindow *bar = m_bars.value(placement.id);
             bar->place(edge.screen, edge.edge, freeStart + placement.start, placement.length, (*record)->thickness,
-                       (*record)->floatingMargin + beside);
+                       (*record)->floatingMargin + beside, roomBefore, roomAfter);
             bar->setHides(ArchDock::panelVisibilityModeFromString((*record)->visibilityMode)
                               != ArchDock::PanelVisibilityMode::AlwaysVisible,
                           m_edges);
@@ -595,12 +568,6 @@ bool BarHost::eventFilter(QObject *watched, QEvent *event)
 {
     if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
         m_evaluateTimer.start();
-    if (event->type() == QEvent::MouseButtonPress && watched->isWindowType())
-    {
-        m_lastPress.start();
-        if (m_corona->isEditMode())
-            m_barTouched = true;
-    }
     return QObject::eventFilter(watched, event);
 }
 }

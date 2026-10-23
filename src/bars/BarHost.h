@@ -7,7 +7,6 @@
 #include <QFileSystemWatcher>
 #include <QHash>
 #include <QObject>
-#include <QElapsedTimer>
 #include <QTimer>
 #include <QUrl>
 
@@ -47,7 +46,6 @@ public:
 private Q_SLOTS:
     void requestRecords();
     void requestWindows();
-    void readPlasmaEditMode();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -60,7 +58,6 @@ private:
     void scheduleLayout();
     void layoutBars();
     void evaluateBars();
-    void tellPlasmaEditMode(bool editing);
     void addDroppedWidget(const QString &barId, const QString &plugin, int index);
     [[nodiscard]] bool popupOpen(const BarWindow *bar) const;
     [[nodiscard]] QScreen *screenFor(const BarRecord &record) const;
@@ -72,20 +69,6 @@ private:
     QHash<QString, ReservedStrip *> m_strips;
     QTimer m_layoutTimer;
     QTimer m_evaluateTimer;
-    // Edit mode is Plasma's own: the bars follow Plasma's, read each second
-    // (Plasma says nothing when it changes), and edit mode entered on a bar
-    // is entered in Plasma too, whose widget explorer the bars take widgets
-    // from. Just after the bars told Plasma, its old answer is not followed.
-    QTimer m_editModeTimer;
-    QElapsedTimer m_toldPlasma;
-    // The last press on a bar: Plasma's edit mode ending just then is the
-    // owner working on the bar, which stays in edit mode.
-    QElapsedTimer m_lastPress;
-    // A bar was pressed during this edit mode: Plasma leaves edit mode then
-    // (focus left it), but the owner is working on the bar, which leaves
-    // edit mode only through its own Exit Edit Mode.
-    bool m_barTouched = false;
-    bool m_followingPlasma = false;
     QString m_recordsFile;
     QString m_windowsFile;
     QFileSystemWatcher m_fileWatcher;
@@ -95,6 +78,8 @@ private:
     // Plasma's own panels and side windows shown now: a bar keeps out of the
     // way of a tall one (the widget explorer), as Plasma's panels do.
     QList<QRect> m_plasmaSides;
+    // A bar's own widget window, kept clear of the same way.
+    QRect m_widgetWindow;
     bool m_fetching = false;
     bool m_fetchAgain = false;
     bool m_fetchingWindows = false;

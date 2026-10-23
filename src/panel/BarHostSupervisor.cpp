@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QStringList>
+#include <QTimer>
 
 #include <unistd.h>
 
@@ -88,6 +89,10 @@ void BarHostSupervisor::setWanted(bool wanted)
         m_starts.clear();
         if (!replaceStaleHost())
             startHost();
+        // Arch Dock may not own its name yet as the bars are first wanted:
+        // the check for a bar host left from before an update is made again.
+        for (const int delay : {3000, 10000})
+            QTimer::singleShot(delay, this, [this] { if (m_wanted && !m_stopped) replaceStaleHost(); });
     }
     else
     {
@@ -112,6 +117,10 @@ void BarHostSupervisor::syncAutostart()
 
 void BarHostSupervisor::barsChanged()
 {
+    // A bar host left from before an update is replaced whenever the bars
+    // change, too: at start Arch Dock may not yet own its name.
+    if (!m_stopped && m_wanted && running())
+        replaceStaleHost();
     if (m_stopped || !m_wanted || m_starts.size() < StartsAllowed || running())
         return;
     m_starts.clear();

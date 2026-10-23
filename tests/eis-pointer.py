@@ -8,14 +8,20 @@ no ambient socket is opened.
 Usage: eis-pointer.py X Y [X Y ...]
        eis-pointer.py push X Y DX DY [TIMES]
        eis-pointer.py click X Y [left|right]
+       eis-pointer.py dclick X Y
        eis-pointer.py drag X1 Y1 X2 Y2 [STEPS]
+       eis-pointer.py type TEXT
+       eis-pointer.py key NAME [NAME ...]
 The first moves the pointer to each point in turn, waiting for KWin to take
 each move. The second puts it at X Y and pushes it by DX DY again and again
 (five times unless told), a tenth of a second apart, as a hand pushes a mouse
 against a screen edge. The third moves it to X Y and clicks there with the
-left button, or the right one. The fourth presses the left button at X1 Y1,
+left button, or the right one; "dclick" clicks twice there, quickly, as
+a double click. The fourth presses the left button at X1 Y1,
 moves to X2 Y2 in STEPS steps (twenty unless told) and lets go there, as a
-hand drags something across the screen.
+hand drags something across the screen. The fifth types TEXT (small
+letters, digits, spaces, "-" and ".") on the keyboard, and the sixth presses
+the named keys one after another: escape, backspace, tab, enter or ctrl+a.
 ARCHDOCK_PRIVATE_KWIN_PID must name the private KWin the test started; the
 pointer is moved only when that KWin's runtime folder, session bus and
 Wayland display are this process's own, so a session outside the test is
@@ -46,10 +52,21 @@ def private_kwin_or_exit():
             sys.exit("eis-pointer: that KWin is not this test's own (%s differs)" % key)
 
 
+# The Linux input codes (KEY_*) of the keys "type" and "key" press.
+KEYS = dict(zip("1234567890", range(2, 12)))
+KEYS.update(zip("qwertyuiop", range(16, 26)))
+KEYS.update(zip("asdfghjkl", range(30, 39)))
+KEYS.update(zip("zxcvbnm", range(44, 51)))
+KEYS.update({" ": 57, "-": 12, ".": 52})
+NAMED_KEYS = {"escape": [1], "backspace": [14], "tab": [15], "enter": [28], "ctrl+a": [29, 30]}
+
+
 def main(arguments):
     push = None
     button = None
     drag = None
+    chords = None
+    clicks = 1
     if arguments and arguments[0] == "push":
         if len(arguments) not in (5, 6):
             sys.exit(__doc__)
@@ -62,12 +79,29 @@ def main(arguments):
         steps = max(1, int(arguments[5])) if len(arguments) == 6 else 20
         drag = [(x1 + (x2 - x1) * step / steps, y1 + (y2 - y1) * step / steps) for step in range(1, steps + 1)]
         points = [(x1, y1)]
+    elif arguments and arguments[0] == "dclick":
+        if len(arguments) != 3:
+            sys.exit(__doc__)
+        button = 0x110
+        clicks = 2
+        points = [(float(arguments[1]), float(arguments[2]))]
     elif arguments and arguments[0] == "click":
         if len(arguments) not in (3, 4) or (len(arguments) == 4 and arguments[3] not in ("left", "right")):
             sys.exit(__doc__)
         # The Linux input codes of the left and right buttons (BTN_LEFT, BTN_RIGHT).
         button = 0x111 if len(arguments) == 4 and arguments[3] == "right" else 0x110
         points = [(float(arguments[1]), float(arguments[2]))]
+    elif arguments and arguments[0] == "type":
+        text = " ".join(arguments[1:])
+        if not text or any(character not in KEYS for character in text):
+            sys.exit(__doc__)
+        chords = [[KEYS[character]] for character in text]
+        points = []
+    elif arguments and arguments[0] == "key":
+        if len(arguments) < 2 or any(name not in NAMED_KEYS for name in arguments[1:]):
+            sys.exit(__doc__)
+        chords = [NAMED_KEYS[name] for name in arguments[1:]]
+        points = []
     else:
         if len(arguments) < 2 or len(arguments) % 2:
             sys.exit(__doc__)
@@ -92,6 +126,7 @@ def main(arguments):
         "device_pointer_motion_absolute": (None, [pointer, c.c_double, c.c_double]),
         "device_pointer_motion": (None, [pointer, c.c_double, c.c_double]),
         "device_button_button": (None, [pointer, c.c_uint32, c.c_bool]),
+        "device_keyboard_key": (None, [pointer, c.c_uint32, c.c_bool]),
         "device_frame": (None, [pointer, c.c_uint64]), "now": (c.c_uint64, [pointer]),
         "new_ping": (pointer, [pointer]), "ping": (None, [pointer]), "ping_unref": (pointer, [pointer]),
     }
@@ -119,8 +154,8 @@ def main(arguments):
             if kind == 8:
                 device = lib.ei_event_get_device(event)
                 started = False
-                # Relative pointer, absolute pointer, buttons.
-                for capability in (1, 2, 32):
+                # Relative pointer, absolute pointer, keyboard, buttons.
+                for capability in (1, 2, 4, 32):
                     if lib.ei_device_has_capability(device, capability) and capability not in devices:
                         devices[capability] = lib.ei_device_ref(device)
                         started = True
@@ -155,7 +190,7 @@ def main(arguments):
         time.sleep(0.05)
     if button is not None:
         wait_for(lambda: 32 in devices, "buttons from KWin")
-        for pressed in (True, False):
+        for pressed in (True, False) * clicks:
             lib.ei_device_button_button(devices[32], button, pressed)
             lib.ei_device_frame(devices[32], lib.ei_now(context))
             taken()
@@ -175,6 +210,15 @@ def main(arguments):
         lib.ei_device_button_button(devices[32], 0x110, False)
         lib.ei_device_frame(devices[32], lib.ei_now(context))
         taken()
+    if chords:
+        wait_for(lambda: 4 in devices, "keyboard from KWin")
+        for chord in chords:
+            for pressed in (True, False):
+                for code in chord if pressed else reversed(chord):
+                    lib.ei_device_keyboard_key(devices[4], code, pressed)
+                    lib.ei_device_frame(devices[4], lib.ei_now(context))
+                    taken()
+            time.sleep(0.03)
     if push:
         wait_for(lambda: 1 in devices, "relative pointer from KWin")
         for _ in range(push[4]):

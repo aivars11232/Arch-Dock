@@ -908,15 +908,6 @@ PlasmoidItem {
         onTriggered: root.openPanelStudio()
     }
 
-    // A new free panel, or one on a screen edge, from Panel Studio's page
-    // for new panels.
-    PlasmaCore.Action {
-        id: addPanelAction
-        text: qsTr("Add panel…")
-        icon.name: "list-add"
-        onTriggered: root.callDock("showNewPanelPage", [])
-    }
-
     // An edge panel Plasma holds for Arch Dock becomes a bar of Arch Dock's
     // own, its Plasma widgets and their settings with it: Arch Dock's looks
     // then reach the whole panel.
@@ -1785,7 +1776,9 @@ PlasmoidItem {
         }
     }
 
-    Plasmoid.contextualActions: [addPanelAction, moveIntoBarAction]
+    // New panels come from Panel Studio's own page for them, not from a
+    // panel that is already there.
+    Plasmoid.contextualActions: [moveIntoBarAction]
 
     Component.onCompleted: {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);

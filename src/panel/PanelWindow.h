@@ -99,7 +99,8 @@ public slots:
     // The supported way to stop Arch Dock: `arch-dock --quit` calls this.
     QVariantMap quit();
     void showPanelSettings(const QString &panelId);
-    // A panel's "Add panel…": the Studio's page for a new free or edge panel.
+    // The Studio's page for a new free or edge panel, where the Studio
+    // opened on its own starts (a panel's own menu has no Add panel).
     void showNewPanelPage();
     // The edges of the screen new panels go to where a panel already
     // stands: Arch Dock's, Plasma's own or another dock's. An edge panel is

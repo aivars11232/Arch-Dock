@@ -11,5 +11,12 @@
         <entry name="AppletOrder" type="String">
             <default></default>
         </entry>
+        <!-- The free room each widget keeps on its side away from the dock
+             (before it ahead of the dock, after it behind the dock), so it
+             stands where it was dropped: "appletId:pixels" joined by ";".
+             The bar writes it when a widget is moved in edit mode. -->
+        <entry name="AppletGaps" type="String">
+            <default></default>
+        </entry>
     </group>
 </kcfg>

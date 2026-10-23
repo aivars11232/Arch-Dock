@@ -42,8 +42,10 @@ public:
     // Stands the bar on this screen against `edge`, `start` pixels along it
     // from the edge's start (its left, or its top on a side edge), `length`
     // long, `thickness` deep and `margin` pixels off the edge. Shown unless
-    // it has no length.
-    void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin);
+    // it has no length. Its window reaches `roomBefore` pixels past its start
+    // and `roomAfter` past its end, for edit mode's + to stand outside it.
+    void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
+               int roomBefore = 0, int roomAfter = 0);
 
     // Whether the bar hides at times (it auto-hides or keeps out of windows'
     // way): it then has KWin's auto-hide edge along its screen edge, by which
