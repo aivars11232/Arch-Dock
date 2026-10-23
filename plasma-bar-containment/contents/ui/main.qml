@@ -503,8 +503,17 @@ ContainmentItem {
             Layout.topMargin: root.vertical ? lead : roomSideStart
             Layout.bottomMargin: root.vertical ? trail : roomSideEnd
             readonly property var hints: applet ? applet.Layout : null
-            readonly property real minimumAlong: !hints || dock ? 0
-                : Math.max(0, root.vertical ? hints.minimumHeight : hints.minimumWidth)
+            // As on Plasma's panels, a widget that asks for no length of its
+            // own has at least a square of the bar's depth: a launcher sizes
+            // itself from the room its icon has, and given none it would
+            // never show, whatever icon it is set to.
+            readonly property real across: Math.max(0, (root.vertical ? row.width : row.height) - roomSideStart - roomSideEnd)
+            readonly property real minimumAlong: {
+                if (!hints || dock)
+                    return 0
+                const minimum = root.vertical ? hints.minimumHeight : hints.minimumWidth
+                return fillsAlong ? Math.max(0, minimum) : minimum > 0 ? minimum : across
+            }
             readonly property real preferredAlong: {
                 if (!hints)
                     return 0
@@ -515,7 +524,9 @@ ContainmentItem {
                 // bar has, as on Plasma's panels: it never makes the bar longer.
                 if (!dock && fillsAlong)
                     return Math.max(0, minimum)
-                return Math.max(0, minimum, preferred >= 0 ? preferred : own)
+                if (dock)
+                    return Math.max(0, minimum, preferred >= 0 ? preferred : own)
+                return Math.max(minimumAlong, preferred > 0 ? preferred : own)
             }
             readonly property real maximumAlong: !hints || dock ? Infinity
                 : (root.vertical ? hints.maximumHeight : hints.maximumWidth)

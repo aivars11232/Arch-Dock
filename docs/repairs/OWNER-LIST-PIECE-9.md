@@ -991,3 +991,16 @@ Checked in a private KWin and Plasma session: right-click on a bar showed
 Remove Panel first in its menu; clicking it took the bar off the screen and
 its record out of Arch Dock's settings (`84-bar-remove-panel.png`). Edge and
 free panels were not tried.
+
+## Owner test fixes — a launcher's icon on a bar (2026-10-23, night)
+
+On the owner's other profile an Application Launcher on a bar showed its ✕
+and ⚙ but no icon, even with a custom icon. Plasma's launcher takes its
+length from its icon's width, which comes from the room it is given: given
+no room once, it stayed at none. Plasma's panels give a widget that asks for
+no length at least a square of the panel's depth
+(`findPositive(applet.Layout.minimumWidth, availHeight)` in
+`containments/panel/main.qml`); Arch Dock's bars now do the same. Checked in
+a private session: a top bar with the launcher and a clock shows both inside
+the bar, the launcher as large as the dock's icons
+(`85-bar-launcher-icon-shows.png`). Not checked on the owner's profile.
