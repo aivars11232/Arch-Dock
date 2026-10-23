@@ -7,6 +7,9 @@
 #include <Plasma/Containment>
 
 #include <QAction>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCall>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QScreen>
@@ -242,21 +245,26 @@ void BarCorona::followWidgets(Plasma::Containment *containment, Plasma::Applet *
         settings->save();
 }
 
+void BarCorona::dropWidget(QObject *containment, const QString &plugin, int index)
+{
+    const QString bar = barId(qobject_cast<Plasma::Containment *>(containment));
+    if (!bar.isEmpty() && !plugin.trimmed().isEmpty())
+        Q_EMIT widgetDropped(bar, plugin.trimmed(), std::max(0, index));
+}
+
 void BarCorona::trimMenus(Plasma::Applet *applet)
 {
-    // Panel Studio adds, orders and removes a bar's widgets, so what Plasma's
-    // menus offer for that stays out of them: its widget explorer and edit
-    // mode, which the bar host has neither of; a widget's alternatives (an
+    // A bar's widgets are its record's: what Plasma's menus offer that the
+    // record would not keep stays out of them: a widget's alternatives (an
     // analog clock for the digital one, a widget the bar's record does not
-    // hold, which the bar host would take out again); and Remove on the
-    // dock, which goes with its bar. Plasma makes these actions after a widget
-    // starts and may show them again, so they are hidden as each menu opens.
-    const auto trim = [this, applet]
+    // hold, which the bar host would take out again), and Remove on the
+    // dock, which goes with its bar. Edit mode stays, as on Plasma's own
+    // panels, and Add Widgets opens Plasma's own widget explorer, to drag
+    // widgets onto the bar. Plasma makes these actions after a widget starts
+    // and may show them again, so they are hidden as each menu opens.
+    const auto trim = [applet]
     {
-        hideAction(action(QStringLiteral("edit mode")));
-        if (applet->isContainment())
-            hideAction(applet->internalAction(QStringLiteral("add widgets")));
-        else
+        if (!applet->isContainment())
             hideAction(applet->internalAction(QStringLiteral("alternatives")));
         if (applet->pluginName() == QLatin1String(DockPlugin))
             hideAction(applet->internalAction(QStringLiteral("remove")));
@@ -265,6 +273,13 @@ void BarCorona::trimMenus(Plasma::Applet *applet)
     if (m_trimmed.contains(applet))
         return;
     m_trimmed.insert(applet);
+    if (auto *bar = qobject_cast<Plasma::Containment *>(applet))
+        connect(bar, &Plasma::Containment::showAddWidgetsInterface, &m_widgetWatch, []
+        {
+            QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(
+                QStringLiteral("org.kde.plasmashell"), QStringLiteral("/PlasmaShell"),
+                QStringLiteral("org.kde.PlasmaShell"), QStringLiteral("toggleWidgetExplorer")));
+        });
     connect(applet, &Plasma::Applet::contextualActionsAboutToShow, &m_widgetWatch, trim);
     connect(applet, &QObject::destroyed, &m_widgetWatch, [this, applet] { m_trimmed.remove(applet); });
 }

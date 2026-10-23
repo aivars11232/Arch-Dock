@@ -8,11 +8,14 @@ no ambient socket is opened.
 Usage: eis-pointer.py X Y [X Y ...]
        eis-pointer.py push X Y DX DY [TIMES]
        eis-pointer.py click X Y [left|right]
+       eis-pointer.py drag X1 Y1 X2 Y2 [STEPS]
 The first moves the pointer to each point in turn, waiting for KWin to take
 each move. The second puts it at X Y and pushes it by DX DY again and again
 (five times unless told), a tenth of a second apart, as a hand pushes a mouse
 against a screen edge. The third moves it to X Y and clicks there with the
-left button, or the right one.
+left button, or the right one. The fourth presses the left button at X1 Y1,
+moves to X2 Y2 in STEPS steps (twenty unless told) and lets go there, as a
+hand drags something across the screen.
 ARCHDOCK_PRIVATE_KWIN_PID must name the private KWin the test started; the
 pointer is moved only when that KWin's runtime folder, session bus and
 Wayland display are this process's own, so a session outside the test is
@@ -46,11 +49,19 @@ def private_kwin_or_exit():
 def main(arguments):
     push = None
     button = None
+    drag = None
     if arguments and arguments[0] == "push":
         if len(arguments) not in (5, 6):
             sys.exit(__doc__)
         push = [float(value) for value in arguments[1:5]] + [int(arguments[5]) if len(arguments) == 6 else 5]
         points = [(push[0], push[1])]
+    elif arguments and arguments[0] == "drag":
+        if len(arguments) not in (5, 6):
+            sys.exit(__doc__)
+        x1, y1, x2, y2 = (float(value) for value in arguments[1:5])
+        steps = max(1, int(arguments[5])) if len(arguments) == 6 else 20
+        drag = [(x1 + (x2 - x1) * step / steps, y1 + (y2 - y1) * step / steps) for step in range(1, steps + 1)]
+        points = [(x1, y1)]
     elif arguments and arguments[0] == "click":
         if len(arguments) not in (3, 4) or (len(arguments) == 4 and arguments[3] not in ("left", "right")):
             sys.exit(__doc__)
@@ -149,6 +160,21 @@ def main(arguments):
             lib.ei_device_frame(devices[32], lib.ei_now(context))
             taken()
             time.sleep(0.05)
+    if drag:
+        wait_for(lambda: 32 in devices, "buttons from KWin")
+        lib.ei_device_button_button(devices[32], 0x110, True)
+        lib.ei_device_frame(devices[32], lib.ei_now(context))
+        taken()
+        time.sleep(0.3)
+        for x, y in drag:
+            lib.ei_device_pointer_motion_absolute(devices[2], x, y)
+            lib.ei_device_frame(devices[2], lib.ei_now(context))
+            taken()
+            time.sleep(0.04)
+        time.sleep(0.3)
+        lib.ei_device_button_button(devices[32], 0x110, False)
+        lib.ei_device_frame(devices[32], lib.ei_now(context))
+        taken()
     if push:
         wait_for(lambda: 1 in devices, "relative pointer from KWin")
         for _ in range(push[4]):

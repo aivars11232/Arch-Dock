@@ -7,6 +7,7 @@
 #include <QFileSystemWatcher>
 #include <QHash>
 #include <QObject>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QUrl>
 
@@ -46,6 +47,7 @@ public:
 private Q_SLOTS:
     void requestRecords();
     void requestWindows();
+    void readPlasmaEditMode();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -58,6 +60,8 @@ private:
     void scheduleLayout();
     void layoutBars();
     void evaluateBars();
+    void tellPlasmaEditMode(bool editing);
+    void addDroppedWidget(const QString &barId, const QString &plugin, int index);
     [[nodiscard]] bool popupOpen(const BarWindow *bar) const;
     [[nodiscard]] QScreen *screenFor(const BarRecord &record) const;
 
@@ -68,6 +72,13 @@ private:
     QHash<QString, ReservedStrip *> m_strips;
     QTimer m_layoutTimer;
     QTimer m_evaluateTimer;
+    // Edit mode is Plasma's own: the bars follow Plasma's, read each second
+    // (Plasma says nothing when it changes), and edit mode entered on a bar
+    // is entered in Plasma too, whose widget explorer the bars take widgets
+    // from. Just after the bars told Plasma, its old answer is not followed.
+    QTimer m_editModeTimer;
+    QElapsedTimer m_toldPlasma;
+    bool m_followingPlasma = false;
     QString m_recordsFile;
     QString m_windowsFile;
     QFileSystemWatcher m_fileWatcher;

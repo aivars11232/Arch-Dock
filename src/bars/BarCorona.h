@@ -45,11 +45,16 @@ public:
     static QString barId(const Plasma::Containment *containment);
     // Removes a bar for good, with what it holds.
     void removeBar(Plasma::Containment *containment);
+    // A Plasma widget dropped on a bar (from Plasma's widget explorer) at a
+    // place along it, counted in the bar's widgets before the drop.
+    Q_INVOKABLE void dropWidget(QObject *containment, const QString &plugin, int index);
 
 Q_SIGNALS:
     // A widget was removed from a bar through its own menu, not because the
     // bar's record no longer lists it.
     void widgetRemovedByUser(const QString &barId, const QString &key);
+    // A widget dropped on a bar, for Arch Dock to add to the bar's record.
+    void widgetDropped(const QString &barId, const QString &plugin, int index);
 
 private:
     void followRecord(Plasma::Containment *containment, const BarRecord &record);

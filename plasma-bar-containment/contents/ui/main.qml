@@ -314,4 +314,73 @@ ContainmentItem {
         for (const applet of Plasmoid.applets)
             root.place(applet)
     }
+
+    // Edit mode, Plasma's own: the bar enters and leaves it with Plasma's
+    // desktop and panels. The bar is outlined, and a widget dragged from
+    // Plasma's widget explorer is dropped where the line shows, between the
+    // bar's widgets; the application menu stays first.
+    readonly property bool editing: Plasmoid.corona ? Plasmoid.corona.editMode : false
+    // Where a widget dropped at `point` goes: how many of the bar's widgets
+    // stand before it, and where along the bar the line between them is.
+    function dropPlace(point) {
+        const along = root.vertical ? point.y : point.x
+        const spans = []
+        for (const child of row.children) {
+            if (!child.plasmaApplet)
+                continue
+            if (child === root.launcherSlot) {
+                spans.push({ start: -Infinity, end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
+                continue
+            }
+            if (!child.visible)
+                continue
+            const corner = child.mapToItem(root, 0, 0)
+            const start = root.vertical ? corner.y : corner.x
+            spans.push({ start: start, end: start + (root.vertical ? child.height : child.width) })
+        }
+        spans.sort((a, b) => a.start - b.start)
+        let index = 0
+        while (index < spans.length && (spans[index].start + spans[index].end) / 2 < along)
+            ++index
+        const before = index > 0 ? spans[index - 1].end : 0
+        const after = index < spans.length ? spans[index].start : (root.vertical ? root.height : root.width)
+        return { index: index, at: index === 0 && spans.length > 0 && isFinite(spans[0].start)
+                     ? spans[0].start : index === spans.length ? before : (before + after) / 2 }
+    }
+    Rectangle {
+        anchors.fill: parent
+        z: 1000
+        visible: root.editing || widgetDrop.containsDrag
+        enabled: false
+        radius: 4
+        color: Qt.alpha(Kirigami.Theme.highlightColor, widgetDrop.containsDrag ? 0.2 : 0.08)
+        border.color: Kirigami.Theme.highlightColor
+        border.width: 2
+    }
+    Rectangle {
+        z: 1001
+        visible: widgetDrop.containsDrag
+        enabled: false
+        color: Kirigami.Theme.highlightColor
+        width: root.vertical ? root.width - 8 : 3
+        height: root.vertical ? 3 : root.height - 8
+        x: root.vertical ? 4 : widgetDrop.lineAt - width / 2
+        y: root.vertical ? widgetDrop.lineAt - height / 2 : 4
+    }
+    DropArea {
+        id: widgetDrop
+        anchors.fill: parent
+        z: 1002
+        keys: ["text/x-plasmoidservicename"]
+        property real lineAt: 0
+        onEntered: function(drag) { lineAt = root.dropPlace(Qt.point(drag.x, drag.y)).at }
+        onPositionChanged: function(drag) { lineAt = root.dropPlace(Qt.point(drag.x, drag.y)).at }
+        onDropped: function(drop) {
+            const plugin = String(drop.getDataAsString("text/x-plasmoidservicename") || "").trim()
+            if (!plugin.length || !Plasmoid.corona || typeof Plasmoid.corona.dropWidget !== "function")
+                return
+            Plasmoid.corona.dropWidget(Plasmoid, plugin, root.dropPlace(Qt.point(drop.x, drop.y)).index)
+            drop.acceptProposedAction()
+        }
+    }
 }

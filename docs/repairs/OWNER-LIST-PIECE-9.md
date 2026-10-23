@@ -753,3 +753,43 @@ that `--resume` ends a Quit's stop.
 Open: the truth-matrix test crashed once in five runs today inside Qt Quick
 3D refreshing a live icon layer (`QSGRhiLayer::grab`), the 3D panel's own
 icon textures; the flat panels' 3D icons no longer use a live layer.
+
+## Owner test fixes — edit mode on Arch Dock's bars (2026-10-23)
+
+The owner: "i can't enter edit mode by rightclicking on panel, nor the
+panel shows in edit mode. And that i need so i can actually drag plasma
+widgets onto panel"; "I never said that it needs to be removed ... It
+should've been there to begin with". Step 4 had hidden Plasma's edit mode
+and Add Widgets from the bars' menus on my own decision; that is undone.
+
+What was wrong, beyond the hidden menu entries: Plasma's edit mode turns on
+KWin's Show Desktop (`ShellCorona` calls `KWindowSystem::setShowingDesktop`
+when edit mode changes), which hides every window but the desktop and the
+docks, and KWin knows a layer-shell window for a dock only by its scope
+`dock` (`scopeToType` in KWin's `layershellv1window.cpp`; any other scope
+is a normal window). The bars' scope was `arch-dock-bar`, so a bar vanished
+whenever Plasma was in edit mode.
+
+What changed:
+
+- Both bar windows (the bar and its reserved strip) use the scope `dock`,
+  as Plasma's own panels do: a bar stays on screen in edit mode.
+- A bar's menus offer Enter/Exit Edit Mode and Add or Manage Widgets
+  again; Add Widgets opens Plasma's own widget explorer (`toggleWidgetExplorer`).
+- The bars follow Plasma's edit mode (read each second: Plasma sends no
+  signal) and entering it on a bar enters it in Plasma, so its toolbar and
+  widget explorer are there.
+- In edit mode a bar is outlined; a widget dragged from Plasma's widget
+  explorer shows a line where it will land between the bar's widgets
+  (the application menu stays first), and dropping it adds it to the bar's
+  record there (`addBarWidget` then `moveBarWidget`), which the bar draws.
+- `tests/eis-pointer.py` can drag (`drag X1 Y1 X2 Y2 [STEPS]`).
+
+Checked in a private Plasma session: the clock's menu on a bar shows
+Add or Manage Widgets and Enter Edit Mode; with Plasma in edit mode the
+bar stays drawn, outlined, its icons in their edit frames; Analog Clock
+dragged from the widget explorer onto the bar landed between the dock and
+the digital clock (the record: dock, analog clock, digital clock). The bar
+tests pass. Pictures:
+`build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/70-bar-menu-enter-edit-mode.png`,
+`71-bar-in-edit-mode.png` and `72-widget-dropped-on-bar.png`.

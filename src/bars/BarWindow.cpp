@@ -45,7 +45,10 @@ BarWindow::BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, c
     setContainment(containment);
 
     m_layer = LayerShellQt::Window::get(this);
-    m_layer->setScope(QStringLiteral("arch-dock-bar"));
+    // "dock" is the scope KWin knows a panel by, as Plasma's own panels use:
+    // any other is a normal window to it, which Show Desktop hides, and
+    // Plasma's edit mode shows the desktop, so a bar vanished in edit mode.
+    m_layer->setScope(QStringLiteral("dock"));
     m_layer->setLayer(LayerShellQt::Window::LayerTop);
     // Standing at the very edge, inside the room the edge's strip reserves.
     m_layer->setExclusiveZone(-1);
@@ -252,7 +255,8 @@ ReservedStrip::ReservedStrip(QScreen *screen, const QString &edge)
     setScreen(screen);
 
     m_layer = Window::get(this);
-    m_layer->setScope(QStringLiteral("arch-dock-bar-room"));
+    // A dock too, so the room stays reserved while the desktop is shown.
+    m_layer->setScope(QStringLiteral("dock"));
     m_layer->setLayer(Window::LayerBottom);
     m_layer->setKeyboardInteractivity(Window::KeyboardInteractivityNone);
     m_layer->setActivateOnShow(false);

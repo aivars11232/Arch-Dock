@@ -14,13 +14,13 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusServiceWatcher>
+#include <QDBusVariant>
 #include <QDebug>
 #include <QFile>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMenu>
 #include <QScreen>
 #include <QSet>
 #include <QWindow>
@@ -34,6 +34,12 @@ namespace
 const QString BackendService = QStringLiteral("org.archdock.ArchDock");
 const QString BackendPath = QStringLiteral("/Control");
 const QString BackendInterface = QStringLiteral("local.PanelWindow");
+const QString PlasmaService = QStringLiteral("org.kde.plasmashell");
+const QString PlasmaPath = QStringLiteral("/PlasmaShell");
+const QString PlasmaInterface = QStringLiteral("org.kde.PlasmaShell");
+const QString PropertiesInterface = QStringLiteral("org.freedesktop.DBus.Properties");
+// How long after telling Plasma its edit mode the bars wait for it.
+constexpr qint64 PlasmaAnswerTime = 2000;
 }
 
 BarHost::BarHost(BarCorona *corona, const QUrl &barView, QObject *parent)
@@ -113,6 +119,69 @@ void BarHost::start()
     connect(m_backendWatcher, &QDBusServiceWatcher::serviceRegistered, this, &BarHost::requestWindows);
     requestRecords();
     requestWindows();
+    connect(m_corona, &Plasma::Corona::editModeChanged, this, &BarHost::tellPlasmaEditMode);
+    connect(&m_editModeTimer, &QTimer::timeout, this, &BarHost::readPlasmaEditMode);
+    m_editModeTimer.start(1000);
+    connect(m_corona, &BarCorona::widgetDropped, this, &BarHost::addDroppedWidget);
+}
+
+void BarHost::tellPlasmaEditMode(bool editing)
+{
+    if (m_followingPlasma)
+        return;
+    m_toldPlasma.start();
+    QDBusMessage set = QDBusMessage::createMethodCall(PlasmaService, PlasmaPath, PropertiesInterface,
+                                                      QStringLiteral("Set"));
+    set << PlasmaInterface << QStringLiteral("editMode") << QVariant::fromValue(QDBusVariant(editing));
+    QDBusConnection::sessionBus().asyncCall(set);
+}
+
+void BarHost::readPlasmaEditMode()
+{
+    const auto answering = [this] { return m_toldPlasma.isValid() && m_toldPlasma.elapsed() < PlasmaAnswerTime; };
+    if (answering())
+        return;
+    QDBusMessage get = QDBusMessage::createMethodCall(PlasmaService, PlasmaPath, PropertiesInterface,
+                                                      QStringLiteral("Get"));
+    get << PlasmaInterface << QStringLiteral("editMode");
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(get, 800), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, answering](QDBusPendingCallWatcher *call)
+    {
+        call->deleteLater();
+        const QDBusPendingReply<QDBusVariant> reply = *call;
+        if (reply.isError() || answering())
+            return;
+        const bool editing = reply.value().variant().toBool();
+        if (editing == m_corona->isEditMode())
+            return;
+        m_followingPlasma = true;
+        m_corona->setEditMode(editing);
+        m_followingPlasma = false;
+    });
+}
+
+void BarHost::addDroppedWidget(const QString &barId, const QString &plugin, int index)
+{
+    // Arch Dock adds the widget to the bar's record, at its end, and moves
+    // it to where it was dropped; the bar then draws it from the record.
+    QDBusMessage add = QDBusMessage::createMethodCall(BackendService, BackendPath, BackendInterface,
+                                                      QStringLiteral("addBarWidget"));
+    add << barId << plugin;
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(add), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [barId, plugin, index](QDBusPendingCallWatcher *call)
+    {
+        call->deleteLater();
+        const QDBusPendingReply<QString> reply = *call;
+        if (reply.isError() || reply.value().isEmpty())
+        {
+            qWarning().noquote() << "Arch Dock could not add the widget" << plugin << "to the bar" << barId;
+            return;
+        }
+        QDBusMessage move = QDBusMessage::createMethodCall(BackendService, BackendPath, BackendInterface,
+                                                           QStringLiteral("moveBarWidget"));
+        move << barId << reply.value() << index;
+        QDBusConnection::sessionBus().asyncCall(move);
+    });
 }
 
 void BarHost::requestRecords()
@@ -451,26 +520,6 @@ bool BarHost::eventFilter(QObject *watched, QEvent *event)
 {
     if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
         m_evaluateTimer.start();
-    // A bar's containment puts its own copy of Plasma's edit mode into a
-    // widget's menu as the menu opens. The bar host has no edit mode: Panel
-    // Studio adds, orders and removes a bar's widgets. The copy is known by
-    // being a bar's and by the edit mode's icon, which stays the same in
-    // every language.
-    if (event->type() == QEvent::Show)
-    {
-        if (auto *menu = qobject_cast<QMenu *>(watched))
-        {
-            const QAction *editMode = m_corona->action(QStringLiteral("edit mode"));
-            const QList<QAction *> actions = menu->actions();
-            for (QAction *action : actions)
-            {
-                const auto *bar = qobject_cast<Plasma::Containment *>(action->parent());
-                if (bar && editMode && !BarCorona::barId(bar).isEmpty()
-                    && action->icon().name() == editMode->icon().name())
-                    action->setVisible(false);
-            }
-        }
-    }
     return QObject::eventFilter(watched, event);
 }
 }
