@@ -839,3 +839,16 @@ Checked in a private session: the clock dragged to the front of the bar
 moved there (record: digital clock, dock, launcher, tray), the tray's
 remove button took it out; right-clicking a widget kept edit mode.
 Picture: `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/75-bar-widget-moved-and-removed.png`.
+
+The owner: "some widgets can be edited, like spacers, even clocks, app
+launchers ... that too must work". A widget's settings window belongs to
+the bar host, so a bar now stays in edit mode while it is open. The Panel
+Spacer could not be added at all: it hides itself from ordinary widget
+lists (NoDisplay) and the bars' list dropped such widgets; the spacer and
+the margins separator, which Plasma offers for panels, are now in it. In
+edit mode a spacer shows where it is, a handle at its end drags it to its
+own size (it then stops filling), and its remove button takes it out. A
+flexible spacer made the bar grow nearly to full width, its preferred
+size counting in the bar's length; a widget that fills now takes the room
+the bar has, as on Plasma's panels. Picture:
+`build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/76-bar-spacer-in-edit-mode.png`.

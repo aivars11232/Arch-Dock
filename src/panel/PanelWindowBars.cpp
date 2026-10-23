@@ -237,10 +237,14 @@ const QVariantMap &PanelWindow::installedBarWidgets(bool reread) const
         const QStringList formFactors = metadata.value(QStringLiteral("X-Plasma-FormFactors"), QStringList{});
         const bool panelWidget = formFactors.isEmpty() || formFactors.contains(QLatin1String("panel"))
             || formFactors.contains(QLatin1String("horizontal")) || formFactors.contains(QLatin1String("vertical"));
+        // Plasma's widget explorer offers the panel spacer and the margins
+        // separator for panels only, though they hide themselves elsewhere.
+        const bool panelOnly = plugin == QLatin1String("org.kde.plasma.panelspacer")
+            || plugin == QLatin1String("org.kde.plasma.marginsseparator");
         if (!ArchDock::Bars::validWidgetPlugin(plugin) || plugin.startsWith(QLatin1String("org.archdock."))
             || plugin.contains(QLatin1String(".private."))
             || (!containment.isEmpty() && containment != QLatin1String("CustomEmbedded"))
-            || metadata.isHidden() || metadata.value(QStringLiteral("NoDisplay"), false) || !panelWidget
+            || (!panelOnly && (metadata.isHidden() || metadata.value(QStringLiteral("NoDisplay"), false))) || !panelWidget
             || m_installedBarWidgets.contains(plugin))
             continue;
         m_installedBarWidgets.insert(plugin, QVariantMap{

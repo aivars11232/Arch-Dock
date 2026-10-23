@@ -212,6 +212,48 @@ ContainmentItem {
                 }
                 onCanceled: root.movingSlot = null
             }
+            // Edit mode: a spacer shows where it is, and its end is dragged to
+            // give it its own size (it then stops filling the bar), as on
+            // Plasma's own panels.
+            readonly property bool spacer: plasmaApplet !== null && plasmaApplet.pluginName === "org.kde.plasma.panelspacer"
+            Rectangle {
+                anchors.fill: parent
+                z: 999
+                visible: root.editing && slot.spacer
+                color: Qt.alpha(Kirigami.Theme.highlightColor, 0.25)
+                border.color: Kirigami.Theme.highlightColor
+                border.width: 1
+                radius: 3
+            }
+            MouseArea {
+                z: 1002
+                visible: root.editing && slot.spacer
+                width: root.vertical ? parent.width : 10
+                height: root.vertical ? 10 : parent.height
+                x: root.vertical ? 0 : parent.width - width
+                y: root.vertical ? parent.height - height : 0
+                cursorShape: root.vertical ? Qt.SizeVerCursor : Qt.SizeHorCursor
+                property real startAlong: 0
+                property real startLength: 0
+                onPressed: function(mouse) {
+                    const point = mapToItem(root, mouse.x, mouse.y)
+                    startAlong = root.vertical ? point.y : point.x
+                    startLength = root.vertical ? slot.height : slot.width
+                }
+                onPositionChanged: function(mouse) {
+                    const point = mapToItem(root, mouse.x, mouse.y)
+                    const settings = slot.plasmaApplet.configuration
+                    settings.expanding = false
+                    settings.length = Math.max(4, Math.round(startLength + (root.vertical ? point.y : point.x) - startAlong))
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: root.vertical ? parent.width * 0.6 : 4
+                    height: root.vertical ? 4 : parent.height * 0.6
+                    radius: 2
+                    color: Kirigami.Theme.highlightColor
+                }
+            }
             // Edit mode: takes the widget out of the bar.
             Rectangle {
                 z: 1001
@@ -305,6 +347,10 @@ ContainmentItem {
                 const preferred = root.vertical ? hints.preferredHeight : hints.preferredWidth
                 const own = root.vertical ? applet.implicitHeight : applet.implicitWidth
                 const minimum = root.vertical ? hints.minimumHeight : hints.minimumWidth
+                // A widget that fills (a flexible spacer) takes the room the
+                // bar has, as on Plasma's panels: it never makes the bar longer.
+                if (!dock && fillsAlong)
+                    return Math.max(0, minimum)
                 return Math.max(0, minimum, preferred >= 0 ? preferred : own)
             }
             readonly property real maximumAlong: !hints || dock ? Infinity
