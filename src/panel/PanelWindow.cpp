@@ -576,18 +576,9 @@ void PanelWindow::syncRegistryFromLegacySettings()
         QStringLiteral("side"),
         {{QStringLiteral("type"), m_settings.sidePanelType()}});
 
-    const std::array visibilityRequests{
-        std::pair{QStringLiteral("bottom"), m_settings.bottomPanelVisible()},
-        std::pair{QStringLiteral("top"), m_settings.desktopSuite() && m_settings.topLauncherVisible()},
-        std::pair{QStringLiteral("side"), m_settings.desktopSuite() && m_settings.sideRailVisible()},
-    };
-    for (const auto &[panelId, visible] : visibilityRequests)
-    {
-        if (!setPanelVisible(panelId, visible))
-        {
-            qWarning() << "Could not synchronize native panel visibility for" << panelId;
-        }
-    }
+    // Whether a panel is shown is its own record's: the old global switches
+    // (bottomPanelVisible and the like, on by default) no longer show a
+    // panel the owner hid or removed, at every start.
 
     for (const QString &panelId : m_panelRegistry.panelIds())
     {

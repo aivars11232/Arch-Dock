@@ -134,6 +134,8 @@ void BarHost::start()
     // The menus' edit mode entries say which way they go, as Plasma's do.
     connect(m_corona, &Plasma::Corona::editModeChanged, this, [this](bool editing)
     {
+        if (!editing)
+            m_barTouched = false;
         const QString text = editing ? tr("Exit Edit Mode") : tr("Enter Edit Mode");
         if (QAction *action = m_corona->action(QStringLiteral("edit mode")))
             action->setText(text);
@@ -195,7 +197,7 @@ void BarHost::readPlasmaEditMode()
                                                || window->transientParent() != nullptr);
             });
         };
-        if (!editing && working())
+        if (!editing && (m_barTouched || working()))
             return;
         m_followingPlasma = true;
         m_corona->setEditMode(editing);
@@ -594,7 +596,11 @@ bool BarHost::eventFilter(QObject *watched, QEvent *event)
     if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWindowType())
         m_evaluateTimer.start();
     if (event->type() == QEvent::MouseButtonPress && watched->isWindowType())
+    {
         m_lastPress.start();
+        if (m_corona->isEditMode())
+            m_barTouched = true;
+    }
     return QObject::eventFilter(watched, event);
 }
 }

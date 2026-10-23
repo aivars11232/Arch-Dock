@@ -869,3 +869,17 @@ bars never take keyboard focus, so the check for a focused bar window never
 held). The bar's configure action now enters and leaves edit mode, its text
 following; a bar stays in edit mode while one of its menus or windows is
 open, or for five seconds after a press on it.
+
+The owner after 0.1.1-37: a right-click anywhere on the bar still ended
+edit mode, and the Bottom panel that came back after updates could not be
+removed for good; "don't claim that u did when it's not fixed". My check of
+0.1.1-37 photographed the bar 4 s after the right-click, inside its five
+seconds' grace: it proved nothing. Now a bar pressed during edit mode
+ignores Plasma leaving edit mode (Plasma leaves it whenever focus leaves
+its windows, as a bar's menu takes it) and leaves only through its own Exit
+Edit Mode. Checked with a 12 s wait: Plasma out of edit mode, the bar still
+in it, its menu reading Exit Edit Mode (`77-bar-stays-in-edit-mode.png`,
+owner ticked). The Bottom panel: Arch Dock's sync of its old global
+settings showed the Bottom panel again from `bottomPanelVisible` (on by
+default) at each start, whatever its record said; whether a panel is shown
+is now its record's alone. Capability, registry and bar tests pass.

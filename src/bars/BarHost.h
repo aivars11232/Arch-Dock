@@ -81,6 +81,10 @@ private:
     // The last press on a bar: Plasma's edit mode ending just then is the
     // owner working on the bar, which stays in edit mode.
     QElapsedTimer m_lastPress;
+    // A bar was pressed during this edit mode: Plasma leaves edit mode then
+    // (focus left it), but the owner is working on the bar, which leaves
+    // edit mode only through its own Exit Edit Mode.
+    bool m_barTouched = false;
     bool m_followingPlasma = false;
     QString m_recordsFile;
     QString m_windowsFile;
