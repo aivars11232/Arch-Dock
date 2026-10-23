@@ -60,7 +60,17 @@ boundaries.
 
 ## Install and start
 
-Use the checksum-pinned local Arch package route in
+On Arch Linux with KDE Plasma 6, install the newest package in one step;
+pacman fetches what it needs from the Arch repositories:
+
+```bash
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-43/arch-dock-0.1.1-43-x86_64.pkg.tar.zst
+systemctl --user restart plasma-plasmashell.service
+```
+
+To update later, run the same two lines with the newer package from the
+[releases page](https://github.com/aivars11232/Arch-Dock/releases). To build
+the package yourself, use the checksum-pinned route in
 [the installation guide](docs/INSTALL.md#arch-package). It lists dependencies,
 source export, native makepkg, upgrade, recovery and uninstall commands.
 
