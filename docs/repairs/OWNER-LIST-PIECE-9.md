@@ -801,4 +801,8 @@ tests pass. Pictures:
 `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/70-bar-menu-enter-edit-mode.png`,
 `71-bar-in-edit-mode.png`, `72-widget-dropped-on-bar.png` and
 `73-bar-beside-widget-explorer.png` (the explorer 498 px wide at the
-left: the 1100 px bar moved from x 410 to 659, whole beside it).
+left: the 1100 px bar moved from x 410 to 659, whole beside it) and
+`74-three-bars-in-edit-mode.png` (the owner: "Test also top, right and
+bottom panel at the same time": all three stay in view in edit mode with
+the explorer open, the top and bottom bars beside it, the explorer under
+the top bar).
