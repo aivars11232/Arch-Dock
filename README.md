@@ -60,12 +60,12 @@ boundaries.
 
 ## Arranging a panel
 
-- **Icons:** drag an icon along its panel to a new place, on any Arch Dock
-  panel, in edit mode or not.
+- **Icons and widgets:** drag one along its panel to a new place, in edit
+  mode or not; on a bar a widget stays just where you let go. A click still
+  opens the app or the widget.
 - **Edit mode:** right-click an Arch Dock bar and choose **Enter Edit Mode**.
   Panel Studio opens for that bar, and each widget shows its remove (✕) and
-  settings (⚙) buttons. Drag a widget to any free place on the bar; it stays
-  where you let go. **Exit Edit Mode** in the same menu ends it.
+  settings (⚙) buttons. **Exit Edit Mode** in the same menu ends it.
 - **Adding:** in edit mode, the **+** beside the bar adds a **Spacer**, a
   **Margins Separator** or **Widgets…** (Plasma's widget list for that bar:
   drag a widget onto the bar, or click it to add it at the end).
@@ -77,7 +77,7 @@ On Arch Linux with KDE Plasma 6, install the newest package in one step;
 pacman fetches what it needs from the Arch repositories:
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-44/arch-dock-0.1.1-44-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-45/arch-dock-0.1.1-45-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 

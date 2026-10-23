@@ -369,6 +369,26 @@ ContainmentItem {
                 onReleased: function(mouse) { root.endMove(slot, mapToItem(root, mouse.x, mouse.y)) }
                 onCanceled: root.cancelMove()
             }
+            // Out of edit mode a widget is dragged to a new place too: a
+            // click stays the widget's own, and once the pointer moves the
+            // bar takes the drag over from it.
+            DragHandler {
+                target: null
+                enabled: !root.editing && !slot.dock
+                acceptedButtons: Qt.LeftButton
+                grabPermissions: PointerHandler.CanTakeOverFromItems | PointerHandler.CanTakeOverFromHandlersOfDifferentType
+                function point(scene) { return root.mapFromItem(null, scene.x, scene.y) }
+                onActiveChanged: {
+                    if (active)
+                        root.beginMove(slot, point(centroid.scenePressPosition))
+                    else
+                        root.endMove(slot, point(centroid.scenePosition))
+                }
+                onCentroidChanged: {
+                    if (active)
+                        root.dragMove(slot, point(centroid.scenePosition))
+                }
+            }
             // Edit mode: a spacer shows where it is, and its end is dragged to
             // give it its own size (it then stops filling the bar), as on
             // Plasma's own panels.
