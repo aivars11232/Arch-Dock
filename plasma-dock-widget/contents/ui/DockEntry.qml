@@ -59,6 +59,8 @@ Item {
     required property bool inputEnabled
     property var inputContainsPoint: function(point) { return true }
     required property bool editMode
+    // Dragged to a new place in edit mode too (a bar's own edit mode).
+    property bool reordersInEditMode: false
     required property bool acceptDrops
     required property var invoke
     required property var reorder
@@ -471,7 +473,7 @@ Item {
         hoverEnabled: true
         enabled: root.inputEnabled
         containmentMask: entryHitMask
-        drag.target: root.acceptDrops && !root.editMode && root.entry.isStatus !== true ? dragProxy : null
+        drag.target: root.acceptDrops && (!root.editMode || root.reordersInEditMode) && root.entry.isStatus !== true ? dragProxy : null
         drag.threshold: Kirigami.Units.gridUnit / 2
         drag.smoothed: false
 
@@ -506,6 +508,9 @@ Item {
                 root.openEntryContextMenu();
                 return;
             }
+            // In edit mode an icon is moved, not opened.
+            if (root.editMode)
+                return;
             root.activateEntry();
         }
         onPositionChanged: {
@@ -541,7 +546,7 @@ Item {
 
         anchors.fill: parent
         containmentMask: entryHitMask
-        enabled: root.acceptDrops && root.inputEnabled && !root.editMode && root.entry.isStatus !== true
+        enabled: root.acceptDrops && root.inputEnabled && (!root.editMode || root.reordersInEditMode) && root.entry.isStatus !== true
         keys: ["application/x-archdock-app", "text/uri-list"]
         onEntered: drag => {
             root.dispatchMotionEvent("drop-entered");

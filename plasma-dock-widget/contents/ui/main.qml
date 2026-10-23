@@ -161,7 +161,7 @@ PlasmoidItem {
         String(configuration.effectiveRendererTier || "")
     readonly property bool sceneInputEnabled: freeSurface
         ? FreeEntryPolicy.interactionEnabled(plasmaEditMode)
-        : dockService.registered && !plasmaEditMode
+        : dockService.registered && (!plasmaEditMode || reordersInEditMode)
     // Headroom the panel must reserve so an effect is not clipped by the host
     // it lives in: magnification growth plus the furthest the bound profile can
     // actually travel. Reduced motion holds still, so it reserves nothing.
@@ -680,8 +680,12 @@ PlasmoidItem {
             callDock("setPanelDecorationSeat", [panelId, String(appId || "")], refresh);
     }
 
+    // A bar's edit mode is Arch Dock's own, with nothing of Plasma's over the
+    // dock: its icons are dragged to new places then too. In Plasma's edit
+    // mode Plasma moves the whole widget instead.
+    readonly property bool reordersInEditMode: drawsBarSurface
     function reorderEntry(appId, beforeAppId) {
-        if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
+        if (!dockService.registered || (plasmaEditMode && !reordersInEditMode) || !configuration.acceptDrops
                 || appId === beforeAppId)
             return false;
         let movedId = appId;
@@ -1692,6 +1696,7 @@ PlasmoidItem {
             solidLighting: Number(parent.sceneIconLighting === undefined ? 0.5 : parent.sceneIconLighting)
             motionContextKey: parent.sceneMotionContextKey
             editMode: root.plasmaEditMode
+            reordersInEditMode: root.reordersInEditMode
             acceptDrops: root.configuration.acceptDrops
             invoke: root.invokeEntry
             reorder: root.reorderEntry
