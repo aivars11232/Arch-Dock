@@ -1,6 +1,6 @@
 pkgname=arch-dock
 pkgver=0.1.1
-pkgrel=31
+pkgrel=32
 pkgdesc='Native Plasma Wayland dock panels with shared rendering and presets'
 arch=('x86_64')
 url='https://github.com/aivars11232/Arch-Dock'
@@ -8,7 +8,7 @@ license=('GPL-3.0-or-later' 'MIT')
 depends=('glibc' 'gcc-libs' 'qt6-base>=6.8' 'qt6-declarative>=6.8'
          'qt6-svg' 'qt6-wayland' 'kirigami' 'kservice' 'kio'
          'kglobalaccel' 'kglobalacceld' 'libplasma>=6.8' 'plasma-workspace'
-         'plasma-desktop' 'kwin' 'layer-shell-qt>=6.8' 'kpackage' 'kconfig')
+         'plasma-desktop' 'kwin' 'layer-shell-qt>=6.8' 'kpackage' 'kconfig' 'plasma5support')
 makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d' 'qt6-shadertools')
 optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work without it'
             'kpipewire: optional live window thumbnails')
@@ -16,7 +16,7 @@ optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work wi
 options=('!lto' '!debug')
 source=("arch-dock-${pkgver}.tar.gz")
 # tools/prepare-arch-source.py writes a checksummed source and pinned recipe.
-sha256sums=('b24fc4ae1d19e1b35bac746bc8a6cb2096eaf7b471bfa33d3bd06e060dd44105')
+sha256sums=('2a3ba3af32c93d0d7cb64036291e0df632c3b0ff0284a82c71b8c0319f3c2fdc')
 
 build() {
     cmake -S "$srcdir/arch-dock-$pkgver" -B "$srcdir/build" \
