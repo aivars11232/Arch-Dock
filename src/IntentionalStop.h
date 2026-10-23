@@ -20,4 +20,10 @@ QString sessionIdentity();
 bool active();
 bool record(const QString &reason, QString *error = nullptr);
 bool clear(QString *error = nullptr);
+// Whether this program's own file was replaced while it ran, as a package
+// update does: the kernel then names the running file "(deleted)". A stop
+// signal that reaches it then is the update's restart, not a Quit.
+bool executableReplaced();
+// The same judgement on the text of a /proc/<pid>/exe link.
+bool replacedLink(const QString &link);
 }

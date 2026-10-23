@@ -125,4 +125,16 @@ bool clear(QString *errorText)
     }
     return true;
 }
+
+bool replacedLink(const QString &link)
+{
+    return link.endsWith(QStringLiteral(" (deleted)"));
+}
+
+bool executableReplaced()
+{
+    char buffer[4096];
+    const ssize_t length = ::readlink("/proc/self/exe", buffer, sizeof buffer - 1);
+    return length > 0 && replacedLink(QString::fromLocal8Bit(buffer, int(length)));
+}
 }

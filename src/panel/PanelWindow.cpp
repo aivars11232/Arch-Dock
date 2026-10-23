@@ -496,9 +496,17 @@ QVariantMap PanelWindow::quit()
 QVariantMap PanelWindow::stopIntentionally(const QString &reason)
 {
     // Record first: from here on an activation request must find the stop.
+    // A stop signal after this program's own file was replaced is a package
+    // update's restart, not a Quit: Arch Dock starts again when its panels
+    // ask, so they keep their looks and icons.
+    const bool update = reason == QStringLiteral("signal") && ArchDock::IntentionalStop::executableReplaced();
     QString error;
-    const bool recorded = ArchDock::IntentionalStop::record(reason, &error);
-    if (!recorded)
+    const bool recorded = !update && ArchDock::IntentionalStop::record(reason, &error);
+    if (update)
+    {
+        qInfo().noquote() << "Arch Dock stops for its update and starts again when asked.";
+    }
+    else if (!recorded)
     {
         qWarning().noquote() << "Arch Dock stops without staying stopped:" << error;
     }

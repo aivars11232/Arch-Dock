@@ -711,3 +711,26 @@ garbage collector; that function passes alone).
 Pictures (replica, a test folder of ten empty files):
 `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/60-along-the-dock-all-the-way-round.png`
 and `61-along-the-dock-quarter-half.png`.
+
+## Owner test fixes — panels bare after an update (2026-10-23)
+
+The owner: after updating, "the panel that was already made on my desktop,
+reset to just bare panel, with no visuals or icons".
+
+The panel's record was whole (its decoration, layout and widget link were
+saved). Arch Dock was not running: the update steps stop it with `pkill`,
+whose TERM Arch Dock has counted as Quit since ADFIX (System Monitor's
+"Quit Application" sends TERM), so when Plasma started again every
+activation was refused ("Arch Dock was quit for this session") and the
+widgets drew bare panels.
+
+A TERM that reaches an Arch Dock whose own program file was replaced while
+it ran (`/proc/self/exe` ends in "(deleted)", as after `pacman -U`) is now
+the update's restart: Arch Dock stops without keeping itself stopped and
+starts again when its panels ask. A Quit, `--quit` and System Monitor's
+TERM without an update keep it stopped as before (the session start-up
+test still checks that). `intentional-stop-test` checks the judgement.
+
+The fix acts from the next update on: the Arch Dock running during this
+update is the old one, so this time Arch Dock is started from the
+application menu after the update (that also clears the stop).

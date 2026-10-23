@@ -66,6 +66,11 @@ void IntentionalStopTest::recordsAndClearsForThisSession()
     QVERIFY(!active());
     QVERIFY(!QFileInfo::exists(path));
     QVERIFY(clear(&error));
+    // A package update replaces the running file: its link then ends in
+    // "(deleted)", and a stop signal is the update's restart, not a Quit.
+    QVERIFY(replacedLink(QStringLiteral("/usr/bin/arch-dock (deleted)")));
+    QVERIFY(!replacedLink(QStringLiteral("/usr/bin/arch-dock")));
+    QVERIFY(!executableReplaced());
 }
 
 void IntentionalStopTest::anotherLoginSessionDoesNotStayStopped()
