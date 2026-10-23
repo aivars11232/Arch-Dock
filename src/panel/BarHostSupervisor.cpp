@@ -1,16 +1,20 @@
 #include "BarHostSupervisor.h"
 
 #include "BarAutostart.h"
+#include "../IntentionalStop.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
+#include <QDBusReply>
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
 #include <QProcess>
 #include <QStringList>
+
+#include <unistd.h>
 
 namespace
 {
@@ -79,9 +83,11 @@ void BarHostSupervisor::setWanted(bool wanted)
         return;
     if (wanted)
     {
-        // Wanted again, it starts afresh.
+        // Wanted again, it starts afresh; a bar host left from before an
+        // update makes way for the new one first.
         m_starts.clear();
-        startHost();
+        if (!replaceStaleHost())
+            startHost();
     }
     else
     {
@@ -128,6 +134,27 @@ bool BarHostSupervisor::isTheBackend()
     const QDBusConnectionInterface *names = bus.interface();
     return bus.isConnected() && names
         && names->serviceOwner(QStringLiteral("org.archdock.ArchDock")).value() == bus.baseService();
+}
+
+bool BarHostSupervisor::replaceStaleHost()
+{
+    // An update replaces the bar host's program while it runs: the kernel
+    // then names the running file "(deleted)", and the bars keep the old
+    // program's ways. It is asked to quit; once it is gone the new one starts
+    // (hostGone).
+    if (!isTheBackend() || !running())
+        return false;
+    const QDBusReply<uint> pid = QDBusConnection::sessionBus().interface()->servicePid(QString::fromLatin1(ServiceName));
+    if (!pid.isValid() || pid.value() == 0)
+        return false;
+    char buffer[4096];
+    const QByteArray link = QStringLiteral("/proc/%1/exe").arg(pid.value()).toLocal8Bit();
+    const ssize_t length = ::readlink(link.constData(), buffer, sizeof buffer - 1);
+    if (length <= 0 || !ArchDock::IntentionalStop::replacedLink(QString::fromLocal8Bit(buffer, int(length))))
+        return false;
+    qInfo() << "Arch Dock's bar host is from before an update; it is started anew.";
+    askToQuit();
+    return true;
 }
 
 void BarHostSupervisor::startHost()

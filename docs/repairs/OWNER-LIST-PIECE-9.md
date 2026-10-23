@@ -852,3 +852,11 @@ flexible spacer made the bar grow nearly to full width, its preferred
 size counting in the bar's length; a widget that fills now takes the room
 the bar has, as on Plasma's panels. Picture:
 `build-codex-adrep/evidence/OWNER-TEST-FIXES-2026-10-22/76-bar-spacer-in-edit-mode.png`.
+
+The owner after 0.1.1-35: "nothing ... was fixed" on the second account's
+bars (the crash was: "no crash this time"). The update steps restart
+Arch Dock but not its bar host; Arch Dock's quit request to the bar host
+can be lost as Arch Dock exits, and a new Arch Dock found a bar host
+running and left it, so the bars kept the old program. Arch Dock now asks
+a bar host whose program file was replaced while it ran ("(deleted)") to
+quit, and starts the new one when it has gone.

@@ -39,6 +39,9 @@ public:
 
 private:
     void startHost();
+    // A bar host left running from before an update, asked to quit so the
+    // new one starts; whether there was one.
+    bool replaceStaleHost();
     void hostGone();
     void askToQuit();
 
