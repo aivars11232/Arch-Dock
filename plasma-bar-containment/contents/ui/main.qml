@@ -254,6 +254,31 @@ ContainmentItem {
                     color: Kirigami.Theme.highlightColor
                 }
             }
+            // Edit mode: opens the widget's own settings (a clock's format,
+            // a launcher's icon), as its menu would.
+            readonly property QtObject settingsAction: plasmaApplet ? plasmaApplet.internalAction("configure") : null
+            Rectangle {
+                z: 1001
+                visible: root.editing && !slot.dock && slot.settingsAction !== null && slot.settingsAction.enabled
+                width: 18
+                height: 18
+                radius: 9
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.rightMargin: 22
+                color: Kirigami.Theme.highlightColor
+                Kirigami.Icon {
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    source: "configure"
+                    isMask: true
+                    color: "white"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: slot.settingsAction.trigger()
+                }
+            }
             // Edit mode: takes the widget out of the bar.
             Rectangle {
                 z: 1001

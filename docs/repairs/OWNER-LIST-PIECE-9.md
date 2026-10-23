@@ -883,3 +883,9 @@ owner ticked). The Bottom panel: Arch Dock's sync of its old global
 settings showed the Bottom panel again from `bottomPanelVisible` (on by
 default) at each start, whatever its record said; whether a panel is shown
 is now its record's alone. Capability, registry and bar tests pass.
+
+The owner: "create a path for [widget editing] too, same like u did with
+x for removal". In edit mode each widget but the dock has a round settings
+button beside its remove button, opening the widget's own settings as its
+menu would. Checked: the clock's button opened Digital Clock Settings and
+the bar stayed in edit mode 12 s later (`78-widget-settings-button.png`).
