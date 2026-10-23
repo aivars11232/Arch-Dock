@@ -686,8 +686,11 @@ PlasmoidItem {
     readonly property bool reordersInEditMode: drawsBarSurface
     function reorderEntry(appId, beforeAppId) {
         if (!dockService.registered || (plasmaEditMode && !reordersInEditMode) || !configuration.acceptDrops
-                || appId === beforeAppId)
+                || appId === beforeAppId) {
+            console.warn("Arch Dock reorder skipped:", appId, "before", beforeAppId, "service",
+                dockService.registered, "edit mode", plasmaEditMode, "drops", configuration.acceptDrops);
             return false;
+        }
         let movedId = appId;
         let beforeId = beforeAppId;
         if (freeSurface) {
@@ -696,8 +699,10 @@ PlasmoidItem {
             movedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
             beforeId = beforeAppId
                 ? FreeEntryPolicy.panelEntryId(root.entries, beforeAppId) : "";
-            if (movedId.length === 0 || (beforeAppId && beforeId.length === 0))
+            if (movedId.length === 0 || (beforeAppId && beforeId.length === 0)) {
+                console.warn("Arch Dock reorder skipped: no panel entry for", appId, "or", beforeAppId);
                 return false;
+            }
         }
         const accepted = dropBackend.moveEntry(panelId, movedId, beforeId);
         if (accepted) refresh();

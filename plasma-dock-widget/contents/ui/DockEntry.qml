@@ -135,6 +135,24 @@ Item {
         magnification, influence)
     property bool clickPulse: false
     property bool dragging: false
+    // Another icon of this panel nearest a point on the screen, within twice
+    // its size, or none.
+    function nearestEntry(scenePoint) {
+        let best = null;
+        let bestDistance = Infinity;
+        for (const other of (root.parent ? root.parent.children : [])) {
+            if (!other || other === root || other.entry === undefined || !other.visible
+                    || other.entry.isStatus === true)
+                continue;
+            const centre = other.mapToItem(null, other.width / 2, other.height / 2);
+            const distance = Math.hypot(centre.x - scenePoint.x, centre.y - scenePoint.y);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = other;
+            }
+        }
+        return best && bestDistance <= 2 * Math.max(best.width, best.height) ? best : null;
+    }
     readonly property int cycleDuration: Math.max(80, motionDuration)
     readonly property real visualScale: magnificationLayer.scale
     readonly property var logicalInputRegion: ({
@@ -520,7 +538,14 @@ Item {
         onReleased: mouse => {
             root.clickPulse = false;
             if (root.dragging) {
-                dragProxy.Drag.drop();
+                // The icon nearest where the pointer is let go, as the panel
+                // draws it now, takes the move: a drop area could miss once
+                // the panel turned, magnified or moved its icons meanwhile.
+                const target = root.nearestEntry(hoverArea.mapToItem(null, mouse.x, mouse.y));
+                if (target)
+                    root.reorder(root.entry.appId, target.entry.appId);
+                else
+                    dragProxy.Drag.drop();
                 dragProxy.x = 0;
                 dragProxy.y = 0;
                 root.dragging = false;

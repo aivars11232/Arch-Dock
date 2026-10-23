@@ -77,7 +77,7 @@ On Arch Linux with KDE Plasma 6, install the newest package in one step;
 pacman fetches what it needs from the Arch repositories:
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-45/arch-dock-0.1.1-45-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-46/arch-dock-0.1.1-46-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 
