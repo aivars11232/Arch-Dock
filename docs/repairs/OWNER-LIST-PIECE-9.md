@@ -1004,3 +1004,69 @@ no length at least a square of the panel's depth
 a private session: a top bar with the launcher and a clock shows both inside
 the bar, the launcher as large as the dock's icons
 (`85-bar-launcher-icon-shows.png`). Not checked on the owner's profile.
+
+## Owner list — widgets between the dock's icons (2026-10-25)
+
+The owner's Plasma panel holds folders on the left, the application menu in
+the middle between spacers and LibreOffice on the right; on an Arch Dock bar
+a widget could only stand before or after all the icons, because the dock
+drew them as one widget.
+
+### What Plasma does
+
+Plasma's task manager is one widget too: widgets stand between task groups
+only where the user adds a second task manager and spacers. The panel packs
+its widgets from the start (`lastSpacer` fills the rest while no spacer
+widget is there, `containments/panel/main.qml`) and a spacer pushes what
+follows to the end.
+
+### What Arch Dock's bars do now (431f73c)
+
+- **Groups.** The dock's icons stand in groups, one per segment of the dock's
+  layout (Panel Studio > Segments; one group when there is one segment), and
+  each group is laid out in the bar's row like a widget: widgets and spacers
+  go between groups, before them and after them.
+- **The dock itself** draws the bar's look along the whole bar underneath
+  (the chassis); a group's place in the row shows nothing of its own, and
+  the dock draws that group's icons there. A segment given a background of
+  its own still draws its band; the others show the bar's look.
+- **Dragging.** A widget is dragged as before (in and out of edit mode). In
+  edit mode a group has a grip in its strip after it: dragging the grip
+  moves the group; its icons keep taking the pointer, so icons still move
+  within the group by themselves.
+- **Free room.** Each widget and group keeps the free room before it from
+  where it was dropped. Without a spacer widget the free room lies after the
+  last one, as on Plasma's panels; a spacer takes it.
+- **Kept** in the bar's own settings beside the record's widget order:
+  `Arrangement` (the order of widgets and groups) and `AppletGaps` (the free
+  room before each). A new widget or a new segment goes to the end.
+- **3D looks:** the dock splits into groups for flat (2D) looks only; a 3D
+  bar keeps one group.
+
+### Checked in a private KWin and Plasma session
+
+Bottom bar, 1300 px, five pinned icons, a clock
+(`86-bar-icon-groups-among-widgets.png`):
+1. One group and the clock after it.
+2. The icons split into two groups (3 + 2) through the backend's segments:
+   the bar's look stays drawn along the whole bar.
+3. Edit mode: a grip after each group, ✕ and ⚙ on the clock.
+4. The clock dragged from the end onto the second group: it stands between
+   the groups.
+5. The first group dragged by its grip to the end: the icons follow.
+6. Exit Edit Mode: the arrangement stays (`Arrangement=3;group:side;group:main`).
+
+A left bar with the same groups and clock stacks them inside the bar's look
+(`87-side-bar-icon-groups.png`). Bar and Studio tests: 7/7.
+
+Not checked: the owner's profiles; dragging on a side bar; a Plasma spacer
+between groups (added as a widget it is laid out the same way).
+
+### Mistakes on the way
+
+- The first build looped: the dock's group lengths were read from the laid
+  out groups, which were laid out from the places the bar made from those
+  lengths. Lengths now come from the groups laid out on their own, and the
+  places are handed to the dock a moment after they change.
+- With segments the bar's look vanished: the bar-wide surface was off for
+  segmented scenes. It stays on along a bar.
