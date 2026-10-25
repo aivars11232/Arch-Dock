@@ -550,7 +550,7 @@ function adoptResult(session, result, refreshedSnapshot) {
 }
 
 // The panel's settings changed outside the editor (another settings change,
-// a profile, its owner's hand) while the editor's changes were not applied:
+// a profile, the user's hand) while the editor's changes were not applied:
 // start again from the new settings and keep each change made here, except
 // where the outside change set the same value itself; there, the newer one
 // stands.

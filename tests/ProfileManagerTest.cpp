@@ -192,7 +192,7 @@ private slots:
         QCOMPARE(registry.creates, 0);
         QVERIFY(!manager.active());
     }
-    // The owner (2026-10-12): a profile had captured 21 free panels whose
+    // A profile had captured 21 free panels whose
     // widgets were long gone, and one Apply created 13 of them again.
     void profilesHoldOnlyThePanelsOnTheDesktop()
     {

@@ -614,7 +614,7 @@ TestCase {
         verify(!host.openFolder())
     }
 
-    // ADREP-TASK-003: a free panel's own folder shapes. The folder stands at
+    // A free panel's own folder shapes. The folder stands at
     // the middle of a large screen with a dock icon either side of it, a
     // little behind it, as on a ring.
     readonly property point shapeFolder: Qt.point(1920, 1080)
@@ -1103,7 +1103,7 @@ TestCase {
         compare(shown.length, Math.min(data.count, layout.capacity))
         verify(layout.capacity >= Math.min(data.count, 2), "the shape holds children: " + layout.capacity)
         if (data.kind === "fan") {
-            // PD-11: the apex just outside the folder, the children on the arc
+            // The apex just outside the folder, the children on the arc
             // joining two edges 90 degrees apart about the outward direction.
             const reach = 24 / Math.max(Math.abs(n.x), Math.abs(n.y)) + 6
             fuzzyCompare(shape.apex.x, shapeFolder.x + n.x * reach, 0.01)
@@ -1117,7 +1117,7 @@ TestCase {
             for (const entry of shown)
                 fuzzyCompare(Math.hypot(entry.x - shape.apex.x, entry.y - shape.apex.y), shape.radius, 0.05)
         } else if (data.kind === "arc") {
-            // PD-13: at one distance from the folder, symmetric about its
+            // At one distance from the folder, symmetric about its
             // outward direction.
             for (const point of samples)
                 fuzzyCompare(Math.hypot(point.x - shapeFolder.x, point.y - shapeFolder.y), shape.radius, 0.01)
@@ -1128,7 +1128,7 @@ TestCase {
             fuzzyCompare(turnBetween(n, direction(shapeFolder, first)),
                          -turnBetween(n, direction(shapeFolder, last)), 0.05)
         } else if (data.kind === "stack") {
-            // PD-12: a straight line from the folder outward, as long as
+            // A straight line from the folder outward, as long as
             // Stack length allows.
             compare(layout.capacity, Math.min(data.count, 5))
             for (let index = 0; index < shown.length; ++index) {
@@ -1152,7 +1152,7 @@ TestCase {
             if (data.count <= layout.capacity)
                 compare(shown.length, data.count, "a small band holds every child")
         } else {
-            // PD-14: a second circle beside the folder along its outward
+            // A second circle beside the folder along its outward
             // direction, the children on its circumference.
             verify(shape.closed)
             for (const point of samples)
@@ -1278,7 +1278,7 @@ TestCase {
         ]
     }
     function test_folderPathsWrapAround(data) {
-        // PD-10: an open path's child that leaves one end comes back at the
+        // An open path's child that leaves one end comes back at the
         // other, whether or not every child fits; a ring carries them round.
         const shape = shapeOf(data.kind, { x: 0, y: -1 }, data.count, true, { ringSize: "panel" })
         const rest = layoutOf(shape, data.count, 0)
@@ -1350,7 +1350,7 @@ TestCase {
         return { item: item, fan: fan }
     }
     function test_folderWheelGathersNotches() {
-        // PD-16: one notch, or one pitch of touchpad travel, moves one child,
+        // One notch, or one pitch of touchpad travel, moves one child,
         // however finely the wheel reports it, scaled by Scroll sensitivity.
         const view = fanView(24, false)
         const item = view.item
@@ -1376,7 +1376,7 @@ TestCase {
         compare(item.takeWheel(0, item.pitch / 2), 0)
         compare(item.takeWheel(0, item.pitch / 2), 1, "a pitch of touchpad travel is one child")
         compare(item.trackOffset, 2)
-        // Everything fits on a short folder, and it still goes round (PD-10).
+        // Everything fits on a short folder, and it still goes round.
         const small = fanView(3, false).item
         const before = small.track.entries.map(function(entry) { return entry.onTrack })
         verify(before.every(function(shown) { return shown }))

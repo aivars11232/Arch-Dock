@@ -4,7 +4,7 @@ import org.kde.kirigami as Kirigami
 import "../plasma-dock-widget/contents/ui" as DockUi
 import "../plasma-dock-widget/contents/ui/SceneDefinition.js" as SceneDefinition
 
-// ADREP-TASK-001 Studio truth matrix: one panel drawn the way the Arch Dock
+// The Studio truth matrix: one panel drawn the way the Arch Dock
 // applet draws it (plasma-dock-widget/contents/ui/main.qml), from the runtime
 // configuration the backend hands that applet. The scene definition is the
 // applet's own (SceneDefinition.js). Every line marked "// applet" is copied

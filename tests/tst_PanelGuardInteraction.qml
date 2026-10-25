@@ -4,7 +4,7 @@ import QtTest
 import ArchDock.Rendering 1.0
 import "../plasma-dock-widget/contents/ui" as DockUi
 
-// TASK-0032 Phase B: the guard path end to end.
+// The guard path end to end.
 //
 // tst_PanelPresentationGuards proves the controller's rules against synthetic
 // inputs. This file proves the wiring: that the production DockEntry actually

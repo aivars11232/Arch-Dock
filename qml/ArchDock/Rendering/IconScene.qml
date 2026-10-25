@@ -26,12 +26,11 @@ Item {
     // an opened folder's items, painted from the 3D scene's own shapes: a
     // horizontal stand seen a little from above, the icon centred over it
     // and floating its Lift above the stand's top, so no part of the stand
-    // shows through the icon (the owner, 2026-10-12). Auto is a column, as
+    // shows through the icon. Auto is a column, as
     // in 3D, unless the icon style draws its own pedestal; None, the
     // default, draws nothing.
     // On a free panel's path the stand stands on the path at the icon's
-    // place and the icon floats above it (the owner, 2026-10-12: "why are
-    // they outside the dock"); in an edge panel's row and a folder opening
+    // place and the icon floats above it; in an edge panel's row and a folder opening
     // icon and stand are centred together on the cell.
     property bool pedestalOnPath: false
     // The screen edge an edge panel stands on: its stands stand at that
@@ -77,7 +76,7 @@ Item {
     readonly property real pedestalOpacity: tileValue("pedestalOpacity", 1, 0.1, 1)
     readonly property real pedestalGlow: tileValue("pedestalGlow", 0, 0, 1)
     // Light round the icon's picture and round its tile, each with its own
-    // strength, reach and colour (the owner, 2026-10-13). A 3D panel draws
+    // strength, reach and colour. A 3D panel draws
     // these itself, so its flat icons, which are the 3D icons' pictures,
     // draw none.
     readonly property real iconGlow: tileValue("iconGlow", 0, 0, 1)
@@ -1271,7 +1270,7 @@ Item {
                             - Number(root.styleInset.bottom || 0))
                     : width
                 source: root.resolvedIconSource
-                // PD-20: the owner chooses a continuous logo size. Native
+                // The logo size is continuous. Native
                 // bucket rounding shrinks e.g. a 59 px logo to 48 px.
                 roundToIconSize: false
 

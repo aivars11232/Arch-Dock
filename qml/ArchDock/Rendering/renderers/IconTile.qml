@@ -63,7 +63,7 @@ Item {
                     const inset = root.borderWidth / 2
                     const w = Math.max(0, root.width - 2 * inset)
                     const h = Math.max(0, root.height - 2 * inset)
-                    // PD-20: a diamond uses the full cell, with the same
+                    // A diamond uses the full cell, with the same
                     // inside-stroke convention as every other shape.
                     if (root.shape === "diamond")
                         return [Qt.point(inset + w / 2, inset),

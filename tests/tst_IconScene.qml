@@ -151,7 +151,7 @@ TestCase {
         // column, as in 3D, unless the icon style draws its own pedestal;
         // every shape draws a horizontal stand under the icon, centred, and
         // the icon floats above the stand's top, so no part of the stand is
-        // behind or over the icon (the owner, 2026-10-12); the icon's input
+        // behind or over the icon; the icon's input
         // bounds never move.
         const scene = createScene({ tileSettings: ({}) })
         const layer = findChild(scene, "icon-layer-pedestal")

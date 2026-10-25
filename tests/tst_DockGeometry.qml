@@ -159,8 +159,7 @@ TestCase {
             "polygon", 0, 4, polygon, 0, 4, "radial", "runtime")
         compare(Math.round(liveUpright.x), 132)
         compare(Math.round(liveUpright.y), 12)
-        // Contract change, ADREP-TASK-001 (PD-08 and the settings truth
-        // contract): Panel Studio offers Icon path orientation on free panels,
+        // The settings truth contract: Panel Studio offers Icon path orientation on free panels,
         // whose applet uses the live profile, so a chosen orientation turns the
         // icon there too. It used to be ignored. Upright stays upright.
         compare(liveUpright.rotation, 0)
@@ -183,7 +182,7 @@ TestCase {
         const singleFan = geometry("fan", 1, 17)
         compare(runtimePosition(
                     "fan", 0, 1, singleFan, 17, "tangent").rotation, 17)
-        // ADREP-TASK-001 (PD-08): the live profile honours the orientation.
+        // The live profile honours the orientation.
         compare(livePosition(
                     "fan", 0, 1, singleFan, 17, "tangent").rotation, 17)
     }
@@ -267,7 +266,7 @@ TestCase {
         const pedestal = LayoutEngine.themeStyle("pedestal", "", 52)
         verify(glass.trackVisible)
         verify(floating.trackVisible)
-        // PD-19: Plate and Pedestal now draw solid textured bodies.
+        // Plate and Pedestal now draw solid textured bodies.
         verify(plate.trackVisible && plate.depth > 0)
         verify(pedestal.trackVisible && pedestal.depth > plate.depth)
         verify(glass.stroke !== floating.stroke)
@@ -297,7 +296,7 @@ TestCase {
         }
     }
 
-    // TASK-0033 Phase B: no layout, entry count or hostile numeric input may
+    // No layout, entry count or hostile numeric input may
     // yield a non-finite coordinate, a zero-sized panel, a normal that is not
     // a unit vector, or an entry outside its unrotated panel.
     function test_degenerateInputsNeverProduceNonFiniteGeometry_data() {
@@ -905,7 +904,7 @@ TestCase {
     // Criterion: an open curve that cannot hold its entries side by side
     // keeps them icon + spacing apart and shows `capacity` of them, centred.
     // Travel moves every entry one slot per step round a loop longer than the
-    // curve (ADREP-TASK-002): an entry leaving one end comes back at the other.
+    // curve: an entry leaving one end comes back at the other.
     function test_overcrowdedOpenCurvesWrapAround_data() {
         return [
             { tag: "semicircle", layout: "semicircle", sweep: 180 },
@@ -1014,7 +1013,7 @@ TestCase {
     // Criterion: on a closed track an entry's progress is ((index + travel)
     // mod count) / count along the real outline - the circle, the ellipse,
     // the polygon's edges, the star's points - never a circle standing in for
-    // a polygon (ADREP-TASK-002).
+    // a polygon.
     function test_closedTracksCarryEntriesRound_data() {
         return [
             { tag: "circular", layout: "circular" },
@@ -1381,7 +1380,7 @@ TestCase {
         compare(crowded.entries[2].visibility, 0)
         verify(crowded.entries[3].onTrack && crowded.entries[8].onTrack)
         compare(crowded.entries[9].onTrack, false)
-        // Contract change, ADREP-TASK-003 (PD-10): the travel no longer stops
+        // The travel no longer stops
         // at the last child; the folder's children come round, so the last
         // one stands in the first place one step on from rest.
         const end = LayoutEngine.folderTrackLayout(curve(200, 200, 181), 20, 70, -14)
@@ -1394,8 +1393,7 @@ TestCase {
         compare(LayoutEngine.folderTrackLayout([], 5, 70, 0).entries.length, 0)
         compare(LayoutEngine.folderTrackLayout(curve(200, 200, 181), 0, 70, 0).entries.length, 0)
         // A star is curved too: its folders open along the curve round the
-        // dock (the owner, 2026-10-13: "when I change panel shapes, folder
-        // openings go crazy"); a straight row and a spiral are not.
+        // dock; a straight row and a spiral are not.
         verify(LayoutEngine.curvedLayout("ring") && LayoutEngine.curvedLayout("arc")
                && LayoutEngine.curvedLayout("hexagon") && LayoutEngine.curvedLayout("star")
                && !LayoutEngine.curvedLayout("horizontal") && !LayoutEngine.curvedLayout("spiral"))

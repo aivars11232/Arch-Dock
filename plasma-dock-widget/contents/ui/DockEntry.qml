@@ -138,13 +138,15 @@ Item {
     property bool clickPulse: false
     property bool dragging: false
     // Another icon of this panel nearest a point on the screen, within twice
-    // its size, or none.
+    // its size, that takes a drop in its state (as its drop area would), or
+    // none.
     function nearestEntry(scenePoint) {
         let best = null;
         let bestDistance = Infinity;
         for (const other of (root.parent ? root.parent.children : [])) {
             if (!other || other === root || other.entry === undefined || !other.visible
-                    || other.entry.isStatus === true)
+                    || other.entry.isStatus === true || !other.acceptDrops || !other.inputEnabled
+                    || (other.editMode && !other.reordersInEditMode))
                 continue;
             const centre = other.mapToItem(null, other.width / 2, other.height / 2);
             const distance = Math.hypot(centre.x - scenePoint.x, centre.y - scenePoint.y);
@@ -466,7 +468,7 @@ Item {
         id: entryHitMask
         // A custom mask replaces Qt's default rectangle check. Visibility
         // may narrow that rectangle, but must not make a neighbour's point
-        // part of this entry's pointer or drop target (PD-18). The point is
+        // part of this entry's pointer or drop target. The point is
         // the pointer area's; the raised icon takes it as the cell does.
         function contains(point: point): bool {
             if (root === null)
@@ -545,7 +547,7 @@ Item {
                 // the panel turned, magnified or moved its icons meanwhile.
                 const target = root.nearestEntry(hoverArea.mapToItem(null, mouse.x, mouse.y));
                 if (target)
-                    root.reorder(root.entry.appId, target.entry.appId);
+                    target.reorder(root.entry.appId, target.entry.appId);
                 else
                     dragProxy.Drag.drop();
                 dragProxy.x = 0;
@@ -685,7 +687,7 @@ Item {
         // Qt draws popup contents in the window overlay without the entry's
         // perspective scale. The tip can therefore overlap the exposed part
         // of an icon. This entry-owned informational popup takes no input;
-        // the visible icon keeps its pointer target (PD-18).
+        // the visible icon keeps its pointer target.
         enabled: false
         visible: root.showTooltip && hoverArea.containsMouse && !root.dragging
             && !root.windowPreviewAvailable

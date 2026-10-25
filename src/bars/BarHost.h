@@ -3,12 +3,15 @@
 
 #include "BarRecord.h"
 #include "PanelVisibility.h"
+#include "QmlGarbageCollector.h"
 
 #include <QFileSystemWatcher>
 #include <QHash>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
+
+#include <memory>
 
 class QDBusServiceWatcher;
 class QScreen;
@@ -64,6 +67,8 @@ private:
 
     BarCorona *m_corona = nullptr;
     QUrl m_barView;
+    // Held until the first bar window exists; see QmlGarbageCollector.h.
+    std::unique_ptr<QmlGarbageCollector::WholeCollections> m_wholeCollections;
     QList<BarRecord> m_records;
     QHash<QString, BarWindow *> m_bars;
     QHash<QString, ReservedStrip *> m_strips;

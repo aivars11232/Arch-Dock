@@ -300,7 +300,7 @@ Item {
             ? "horizontal" : "free"
     // On a free panel's path a stand stands on the path at its icon's place
     // and the icon floats above it; in an edge panel's row icon and stand are
-    // centred together in the row (the Pedestals page, 2026-10-12).
+    // centred together in the row.
     readonly property bool pedestalOnPath: themeOrientation === "free"
     // A flat scene leaves room round its layout for an icon that floats over
     // its stand, and its growth about its foot when magnified; for a
@@ -343,7 +343,7 @@ Item {
         return ({ top: Math.ceil(sides.top), bottom: Math.ceil(sides.bottom),
                   left: Math.ceil(sides.left), right: Math.ceil(sides.right) })
     }
-    // Free-panel motion (ADREP-TASK-002). The entries travel along the
+    // Free-panel motion. The entries travel along the
     // panel's own path, the whole scene turns, or both, as "Continuous motion
     // moves" says, and the wheel and a drag move the same thing. Travel is a
     // phase in entry slots that every geometry call receives
@@ -370,7 +370,7 @@ Item {
     readonly property real travelSpeed: Number(definitionValue(
         "layout", "travelSpeed", "panelTravelSpeed", 0.5))
     // How many slots one wheel notch, or one slot's distance of touchpad
-    // travel, moves the entries (PD-16).
+    // travel, moves the entries.
     readonly property real scrollSensitivity: {
         const value = Number(definitionValue(
             "layout", "scrollSensitivity", "scrollSensitivity", 1))
@@ -378,7 +378,7 @@ Item {
     }
     // Panel Studio offers Scroll sensitivity where the wheel moves the panel's
     // own entries or turns it, a free radial panel; its folders scroll by it
-    // there too, and one child or row per notch elsewhere (PD-16).
+    // there too, and one child or row per notch elsewhere.
     readonly property real folderScrollSensitivity:
         freeHost && rotationCapabilityAvailable && LayoutEngine.supportsWholeSceneRotation(layoutPath)
         ? scrollSensitivity : 1
@@ -389,7 +389,7 @@ Item {
         bakedTierRequested && activeThemeTrack !== null
         ? LayoutEngine.trackSupportsRotation(activeThemeTrack)
         : LayoutEngine.supportsWholeSceneRotation(layoutPath)
-    // What moves (PD-25): the entries along the path, the whole panel, or
+    // What moves: the entries along the path, the whole panel, or
     // both. Where the scene cannot turn - an open baked track - only the
     // entries can, whatever the record says.
     readonly property string motionTarget: {
@@ -458,7 +458,7 @@ Item {
         return since >= 0 && since < wheelLatchMs && Number.isFinite(Number(last.x))
             && Math.hypot(point.x - Number(last.x), point.y - Number(last.y)) < wheelLatchReach
     }
-    // How long one wheel step takes to arrive, eased out (OF-11). It ends
+    // How long one wheel step takes to arrive, eased out. It ends
     // within 120 ms of the wheel event, the frame that shows it included.
     readonly property int stepDuration: 100
     readonly property real sceneRotationAngle:
@@ -510,7 +510,7 @@ Item {
                  y: contentBounds.y + layoutGeometry.height / 2 }
     }
 
-    // Wheel input gathers until it makes whole steps (PD-16): 120 angle
+    // Wheel input gathers until it makes whole steps: 120 angle
     // units are one notch, and touchpad pixels count by the distance between
     // two neighbouring entries. One step moves the entries one slot, or
     // turns the panel 15 degrees, and Scroll sensitivity says how many steps
@@ -837,8 +837,7 @@ Item {
     })
     // Where the panel is drawn, in its own coordinates: its box with the
     // effects' margins, and as far as a 3D scene reaches out of the box -
-    // scaled, tilted or moved, nothing of it is cut at the box (the owner,
-    // 2026-10-13: "the only edge is edge of the screen"). The host lets
+    // scaled, tilted or moved, nothing of it is cut at the box. The host lets
     // input reach it there; the widget's own size stays the box's.
     readonly property rect drawnBounds: {
         const effect = effectBounds
@@ -1754,7 +1753,7 @@ Item {
                                   y: contentBounds.y + layoutGeometry.height / 2 }
     }
     // The drawn centres of every entry but `folderIndex`: a folder's fan,
-    // arc, stack or ring keeps clear of them (ADREP-TASK-003).
+    // arc, stack or ring keeps clear of them.
     function folderObstacles(folderIndex) {
         const size = layoutGeometry.iconSize
         return popupAnchors.entries.filter(function(anchor) {
@@ -2098,7 +2097,8 @@ Item {
             const parameters = Object.assign({}, (definition.surface || {}).parameters3D || definition.surface3D || ({}))
             for (const [key, parameter] of [["scene3DCameraYaw", "cameraYaw"],
                     ["scene3DThickness", "thickness"], ["scene3DIconElevation", "iconElevation"],
-                    ["scene3DIconDepth", "iconDepth"], ["scene3DIconTurn", "iconTurn"], ["scene3DIconRelief", "iconRelief"],
+                    ["scene3DIconSolid", "iconSolid"], ["scene3DIconDepth", "iconDepth"],
+                    ["scene3DIconTurn", "iconTurn"], ["scene3DIconRelief", "iconRelief"],
                     ["scene3DIconLighting", "iconLighting"],
                     ["scene3DRoll", "roll"], ["scene3DPositionX", "positionX"],
                     ["scene3DPositionY", "positionY"], ["scene3DPositionZ", "positionZ"],
@@ -2298,7 +2298,7 @@ Item {
             enabled: sceneInputEnabled
             containmentMask: QtObject {
                 function contains(point: point): bool {
-                    // PD-18 visibility narrows the local rectangle. Qt uses
+                    // Visibility narrows the local rectangle. Qt uses
                     // this result instead of its default bounds check.
                     return root !== null && entryItem !== null
                         && point.x >= 0 && point.y >= 0

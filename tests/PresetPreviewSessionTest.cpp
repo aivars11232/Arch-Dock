@@ -108,7 +108,7 @@ void PresetPreviewSessionTest::iconPreparationRejectsEveryPanelMutation()
 
 void PresetPreviewSessionTest::iconParameterPreparationAndSnapshotsStayInScope()
 {
-    // ADREP-TASK-005: appearance/tile parameters belong to the icon preset;
+    // Appearance/tile parameters belong to the icon preset;
     // icon cell size, spacing, per-entry overrides and panel settings do not.
     auto icon = IconPresetDefinition::fromVariantMap(PresetTestSupport::iconPresetMap());
     QVERIFY(icon);
@@ -771,7 +771,7 @@ void PresetPreviewSessionTest::sessionIconIsolationAndUserActions()
     QCOMPARE(PresetTestSupport::directoryDigest(QStringLiteral(ARCHDOCK_SOURCE_PRESET_ROOT)), builtInsBefore);
 }
 
-// AD3D-TASK-002: desktop 3D editing is an audition of the panel itself. The
+// Desktop 3D editing is an audition of the panel itself. The
 // host shows every draft, only 3D settings may change, Cancel restores the
 // panel exactly, Apply commits once, and an interrupted edit is recovered.
 void PresetPreviewSessionTest::sessionSceneEditDraftsCommitsAndRecovers()

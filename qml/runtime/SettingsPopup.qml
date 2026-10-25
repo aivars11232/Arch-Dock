@@ -165,9 +165,9 @@ Window {
     }
 
     // The presets made for the selected panel. A free panel lists free-panel
-    // presets and an edge panel the edge presets of its orientation (the
-    // owner, 2026-10-07: "if I make free panel why would I need to see
-    // horizontal and vertical panel presets"). Icon presets set only icon
+    // presets and an edge panel the edge presets of its orientation: a free
+    // panel has no use for horizontal or vertical panel presets. Icon
+    // presets set only icon
     // values, which act on every panel.
     function presetsForSelectedPanel(kind, scope) {
         const revision = presetLibrary.revision;
@@ -278,7 +278,7 @@ Window {
             : edge === "right" ? qsTr("New right panel") : "";
     }
     // The panel list and its button belong to Panels; the preview to the
-    // pages that show the panel (the owner, 2026-10-13): Overview, Icons,
+    // pages that show the panel: Overview, Icons,
     // Icon Tiles and Pedestals. In Panels it shows only the new panel being
     // added or a preset being previewed.
     readonly property bool previewSection: mainTabIndex === 0 || mainTabIndex === 2
@@ -308,7 +308,7 @@ Window {
         : ({ edge: newPanelEdge, type: "empty", rendererTier: "procedural2d" })
     // A panel along an edge takes its length from what is on it: with no
     // applications yet it had nothing to draw, and the preview of a hidden
-    // Bottom panel stayed empty (the owner, 2026-10-13). It is shown bare.
+    // Bottom panel stayed empty. It is shown bare.
     readonly property bool previewShowsBarePanel: !presetPreviewActive && previewMode !== "free"
         && selectedRendererCandidate.segmentEntries !== undefined
         && selectedRendererCandidate.segmentEntries.length === 0
@@ -605,8 +605,8 @@ Window {
     }
 
     // Whether a tab has anything to change on the selected panel. A tab with
-    // nothing to change is not shown, as the owner asked; tabs keep their
-    // indices (ADREP-TASK-001).
+    // nothing to change is not shown; tabs keep their
+    // indices.
     function subtabAvailable(sectionIndex, subtabIndex) {
         const sectionNumber = Number(sectionIndex);
         const subtabNumber = Number(subtabIndex);
@@ -719,8 +719,7 @@ Window {
     // A slider sends a value for every step of a drag. The draft takes each
     // value at once and the preview follows it; the backend's check of the
     // draft runs when the drag pauses. Each check takes about a tenth of a
-    // second, and run on every step it stalled the window (the owner,
-    // 2026-10-13). Apply runs a pending check first.
+    // second, and run on every step it stalled the window. Apply runs a pending check first.
     Timer {
         id: projectionTimer
         interval: 150
@@ -1014,9 +1013,7 @@ Window {
         };
     }
 
-    // One Look for each surface (the owner, 2026-10-13: material and texture
-    // "are exactly the same thing ... it's enough with just one of them ...
-    // that includes pedestals and other stuff too"). The first key is shown
+    // One Look for each surface. The first key is shown
     // as Look; setting it sets its pair, which is not shown.
     readonly property var lookPairs: ({
         scene3DMaterial: { key: "scene3DTexture", value: function(look) { return look; } },
@@ -1095,7 +1092,7 @@ Window {
                 if (String(source[index].section) !== sectionId)
                     continue;
                 // A setting that draws nothing in the panel's present state
-                // is kept by the backend but not shown (ADREP-TASK-001).
+                // is kept by the backend but not shown.
                 if (source[index].inactive === true)
                     continue;
                 if (lookPairedKeys.includes(String(source[index].key)))
@@ -1117,7 +1114,7 @@ Window {
                             "fan"].includes(String(panelValue("layout", ""))))
                     row.description = qsTr("On a curved path, values below 8 draw the icons together and 0 makes them touch. From 8 up they are spread evenly, unless there are more icons than fit: then the value is the gap between the ones shown.");
                 // One plain sentence for what each of these changes on the
-                // dock (ADREP-TASK-001, PD-03 and PD-07).
+                // dock.
                 const sentences = {
                     layoutPadding: qsTr("The space between the icons and the edge of the theme's artwork."),
                     showBadges: qsTr("A round number in the top-right corner of an application's icon, such as unread messages, when the application reports one."),
@@ -1141,9 +1138,7 @@ Window {
     }
 
     // A section's glow settings under their own heading, or nothing where
-    // its glow cannot show (the owner, 2026-10-13: each of the panel, its
-    // icons, its tiles and its stands has its own glow, and a setting that
-    // cannot apply is not shown).
+    // its glow cannot show.
     function glowRows(sectionId, description) {
         const fields = fieldsForSection(sectionId);
         return fields.length === 0 ? [] : [section(qsTr("Glow"), description)].concat(fields);
@@ -1268,7 +1263,7 @@ Window {
 
     function panelGeneralRows() {
         const rows = schemaSectionRows("panels-general", qsTr("General"), qsTr("Identity and placement of the selected panel."));
-        // General has no buttons (the owner, 2026-10-13): a panel is added
+        // General has no buttons: a panel is added
         // with the button beside the panel list and removed with its own
         // right-click menu, an edge panel is hidden with Behavior > Visible,
         // and applications are added by dropping them on the panel from the
@@ -1284,8 +1279,7 @@ Window {
                     : qsTr("Not on the desktop yet")));
         }
         // Only a placement Plasma refused is reported here; the notes and the
-        // raw placement result went (the owner, 2026-10-13: "these green
-        // things can be removed, they serve no purpose").
+        // raw placement result went.
         if (isNativePanel() && PlacementStatus.isProblem(selectedPlacementResult))
             rows.push(notice(qsTr("Placement detail: %1").arg(PlacementStatus.problemText(selectedPlacementResult)), true));
         return rows;
@@ -1293,7 +1287,7 @@ Window {
 
     // A size control is offered only where it changes what is drawn. A free
     // panel is drawn from its layout, so it has no Size page: Radius and
-    // Layout scale on its Layout page set its size (ADREP-TASK-001, PD-02).
+    // Layout scale on its Layout page set its size.
     function panelLayoutRows() {
         const rows = schemaSectionRows("panels-layout", qsTr("Layout"),
             qsTr("Shape geometry and content placement."));
@@ -1306,9 +1300,7 @@ Window {
 
     // A 3D platform's look - its material and texture (neon, lightning,
     // aurora...), colour, and the look's own background, colours and
-    // motion - on Appearance with the rest of the panel's look (the owner,
-    // 2026-10-13, on a 3D panel's Appearance page: "no neons settings, no
-    // lightning, nothing is there"). The 3D page keeps where and how the
+    // motion - on Appearance with the rest of the panel's look. The 3D page keeps where and how the
     // platform stands.
     function scene3DLookRows() {
         if (!scene3DQualityVisible)
@@ -1449,7 +1441,7 @@ Window {
 
     // Why this panel cannot be drawn in 3D, and the one way out where there
     // is one. Without 3D there is no 3D page, so Appearance says this
-    // (ADREP-TASK-001, owner rule: a tab with nothing to change is not shown).
+    // (a tab with nothing to change is not shown).
     function scene3DUnavailableRows() {
         const blocker = CapabilityModel.scene3DBlocker(
             selectedCapabilityResolution, selectedPreviewTheme,
@@ -1498,9 +1490,7 @@ Window {
                 return fields.find(function(row) { return row.key === key; });
             }).filter(function(row) { return row !== undefined; });
         };
-        // Moving and scaling are done by hand, on the desktop (the owner,
-        // 2026-10-13: "those controls I don't really need, since I can do it
-        // physically on my desktop"); the exact turn stays here.
+        // Moving and scaling are done by hand, on the desktop; the exact turn stays here.
         rows.push(section(qsTr("Orientation"),
             qsTr("Pitch, yaw and roll turn the platform. Edit on desktop moves, turns and scales it by hand.")));
         rows.push.apply(rows, pick(["scene3DCameraPitch", "scene3DCameraYaw", "scene3DRoll"]));
@@ -1515,7 +1505,7 @@ Window {
         rows.push({ kind: "actions", label: qsTr("Transform"), actions: transformActions });
         // The platform's shape. A look without a 3D platform of its own stands
         // on one generated along the panel's layout, chosen on the Layout page
-        // (one place per setting, ADREP-TASK-001); its width and bend are set
+        // (one place per setting); its width and bend are set
         // here. A theme's own 3D platform keeps the shape it brings.
         const generatedScene = Boolean(((selectedPreviewTheme || {}).scene3D || {}).generated);
         rows.push(section(qsTr("Shape"), generatedScene
@@ -1550,8 +1540,7 @@ Window {
     // Panel themes and skins are their own resource type, separate from
     // Panel Presets: a theme restyles this panel, it is not a whole panel.
     // A free panel lists the looks made for free docks and an edge panel the
-    // looks of its own orientation (the owner, 2026-10-13: the horizontal
-    // chassis skins offered on a free panel are "unrelated to free docks").
+    // looks of its own orientation.
     // A look that names no orientation, a built-in flat look, fits any panel.
     // A free panel laid out as a bar takes the bar looks too.
     function themeFitsSelectedPanel(theme) {
@@ -1641,10 +1630,9 @@ Window {
 
     // The panel's own motion. Opening and closing belong to edge panels whose
     // host and theme can draw a mechanism, motion along the path to free
-    // panels; a group with nothing to offer is not shown (ADREP-TASK-001,
-    // PD-01, PD-08). Motion is listed in the order it is decided: whether it
-    // runs, what it moves, how fast, when, and how far the wheel moves it
-    // (ADREP-TASK-002, PD-16, PD-25).
+    // panels; a group with nothing to offer is not shown. Motion is listed
+    // in the order it is decided: whether it runs, what it moves, how fast,
+    // when, and how far the wheel moves it.
     function panelAnimationRows() {
         const presentationKeys = ["presentationMode", "presentationTrigger", "collapseMechanism",
             "collapseAxis", "revealHandle", "openDelay", "closeDelay"];
@@ -1679,7 +1667,7 @@ Window {
         return rows;
     }
 
-    // Direction for the open paths (ADREP-TASK-002, PD-24): Up, Down, Left
+    // Direction for the open paths: Up, Down, Left
     // and Right are layout angles at which the middle of the path faces that
     // side. The fan, arc and semicircle face up at angle 0, the radial path
     // faces right. The fine Layout angle stays below it.
@@ -1712,7 +1700,7 @@ Window {
     }
 
     function iconAppearanceRows() {
-        // One place per setting (the owner, 2026-10-13): the shape under the
+        // One place per setting: the shape under the
         // icon is on Icon Tiles, the style's own pedestal on Pedestals.
         const rows = schemaSectionRows("icons-appearance", qsTr("Appearance"),
             qsTr("Style, size and logo options for the selected panel.")).filter(function(row) {
@@ -1887,7 +1875,7 @@ Window {
                 break;
             }
         }
-        // The icon style is chosen in one place, Icons > Appearance (PD-05).
+        // The icon style is chosen in one place, Icons > Appearance.
         if (!custom)
             filtered.push(readOnlyRow(qsTr("Icon style"),
                 optionLabel("iconStyle", panelValue("iconStyle", "plain-original")),
@@ -3033,8 +3021,8 @@ Window {
 
                     // The picked panel and nothing else: the preview's own
                     // orientation, icon state and open/collapsed controls
-                    // changed only this picture and were taken out (the
-                    // owner, 2026-10-13). The picture follows the panel.
+                    // changed only this picture and were taken out.
+                    // The picture follows the panel.
                     Label {
                         objectName: "panel-studio-preview-title"
                         Layout.fillWidth: true

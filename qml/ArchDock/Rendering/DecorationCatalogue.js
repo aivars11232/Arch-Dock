@@ -27,8 +27,8 @@
 // materials/CREDITS.md lists every set.
 //
 // The frames follow Arwes (MIT, Romel Perez), the console bars the LCARS
-// proportions of the R package lcars (MIT); the looks were drawn after the
-// owner's references: film and game interfaces (Oblivion's screens by
+// proportions of the R package lcars (MIT); the looks were drawn after
+// these references: film and game interfaces (Oblivion's screens by
 // GMUNK, Territory Studio's work), Alienware's own desktop themes, the
 // Harry Potter films' props, Star Trek's ships. No names, logos or crests
 // of any of them are used.

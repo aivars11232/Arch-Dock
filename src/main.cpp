@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "IntentionalStop.h"
+#include "QmlGarbageCollector.h"
 #include "WindowWatcher.h"
 #include "panel/PanelManager.h"
 #include "persistence/ConfigurationBackup.h"
@@ -268,7 +269,11 @@ int main(int argc, char *argv[])
         return EXIT_SUCCESS;
     }
 
+    // The engine reads the collector policy as it is created (see the header);
+    // the policy leaves the environment again before anything is started.
+    auto wholeCollections = std::make_unique<ArchDock::QmlGarbageCollector::WholeCollections>();
     QQmlApplicationEngine engine;
+    wholeCollections.reset();
     PanelManager panelManager(engine);
 
     if (parser.isSet(settingsOption))

@@ -256,7 +256,7 @@ void Baked25DAssetTest::productionPackagesValidateAndShareGeometry()
         QCOMPARE(definition.effectMargins.right, 16.0);
         QCOMPARE(definition.effectMargins.bottom, 16.0);
 
-        // PD-18: rear entries pass beneath the solid surface and the rim.
+        // Rear entries pass beneath the solid surface and the rim.
         // Reuse the original rear artwork as a second foreground layer.
         int rearLayers = 0;
         int foregroundLayers = 0;

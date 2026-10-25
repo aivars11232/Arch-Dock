@@ -37,7 +37,7 @@ TestCase {
         // A saved setting cannot replace the consumer's successful probe.
         verify(!CapabilityModel.scene3DControlsAvailable(resolution,
             { rendererTier: "true3d", scene3DQuality: "high" }, { rendererAvailable: false }))
-        // ADFIX-TASK-002: a look without meshes of its own qualifies when the
+        // A look without meshes of its own qualifies when the
         // renderer generates its platform, and only then.
         const generated = { valid: true, scene3D: { generic: true, generated: {} },
             scene3DResources: { material: {} },
@@ -49,7 +49,7 @@ TestCase {
         verify(!CapabilityModel.scene3DControlsAvailable(resolution, generated, {}))
     }
 
-    // ADFIX AUD-03: the 3D page names what actually blocks 3D.
+    // The 3D page names what actually blocks 3D.
     function test_scene3DBlockerNamesTheActualBlocker() {
         const resolution = { rendererChoices: [{ tier: "true3d", available: true },
                                                { tier: "baked2.5d", available: true }] }

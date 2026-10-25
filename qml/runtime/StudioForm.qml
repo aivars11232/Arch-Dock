@@ -74,7 +74,7 @@ ScrollView {
     // list as the model every row was built again each time: the page jumped
     // back to its top, the control in use was destroyed under the pointer, so
     // a drag or an edit low on the page was lost, and every row (with every
-    // theme card's live preview) was rebuilt (the owner, 2026-10-13). Each row
+    // theme card's live preview) was rebuilt. Each row
     // keeps its place under a key now: a changed value updates its row, and
     // only rows that come or go are built or dropped.
     function rowKey(row) {

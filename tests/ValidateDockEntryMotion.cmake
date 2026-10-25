@@ -1,4 +1,4 @@
-# TASK-0030 acceptance: no migrated animation preset may need a dedicated
+# No migrated animation preset may need a dedicated
 # conditional branch in DockEntry. Effects are data now, not code, so the
 # delegate must not name a single effect or run an animation of its own.
 if(NOT DEFINED SOURCE_DIR)

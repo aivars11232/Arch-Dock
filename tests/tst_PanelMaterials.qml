@@ -3,7 +3,7 @@ import QtQuick.Window
 import QtTest
 import ArchDock.Rendering 1.0
 
-// ADREP-TASK-004, PD-19: material texture survives a common colour tint.
+// Material texture survives a common colour tint.
 // Sample inside the stroke, away from its edges: antialiasing and shadows
 // cannot turn a flat coloured line into a passing textured material.
 TestCase {

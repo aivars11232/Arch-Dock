@@ -215,7 +215,7 @@ TestCase {
         }
     }
 
-    // ADREP-TASK-002: while the entries travel the drawn outline keeps
+    // While the entries travel the drawn outline keeps
     // still; when the whole panel turns, the painting turns as one piece at
     // once instead of being painted again a few frames after the icons moved.
     function test_surfaceKeepsStillWhileEntriesTravelAndTurnsWhole() {
@@ -807,7 +807,7 @@ TestCase {
         compare(slot.delegateItem.bridgedInputEnabled, false)
         compare(slot.width, scene.layoutGeometry.iconSize)
         compare(slot.height, scene.layoutGeometry.iconSize)
-        // Contract change, ADREP-TASK-001 (PD-08): Studio offers the path
+        // Studio offers the path
         // orientation on free panels, so the live scene turns a tangent icon
         // with its path instead of ignoring the choice.
         fuzzyCompare(slot.rotation, scene.entryGeometryAt(1).tangentAngle, 0.001)

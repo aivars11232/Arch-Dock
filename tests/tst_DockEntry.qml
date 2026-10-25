@@ -109,7 +109,7 @@ TestCase {
     }
 
     function test_toolTipOverAnExposedEntryDoesNotTakeItsPress() {
-        // PD-18: a platform may leave only the top of an icon exposed. Qt's
+        // A platform may leave only the top of an icon exposed. Qt's
         // unscaled popup can overlap that part when the icon is scaled down.
         let launches = 0
         const item = createHostedEntry({
@@ -130,7 +130,7 @@ TestCase {
     }
 
     function test_platformInputMaskKeepsTheEntryRectangle() {
-        // PD-18: visibility narrows the entry's own target; it must never
+        // Visibility narrows the entry's own target; it must never
         // replace that rectangle with an unbounded visible plane.
         const item = createHostedEntry({
             inputContainsPoint: function(point) { return true }

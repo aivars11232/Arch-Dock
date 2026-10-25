@@ -116,7 +116,7 @@ void DockModelTest::pinnedAndRunningRepresentationsShareOneIdentity()
     QVERIFY(merged.value(QStringLiteral("running")).toBool());
 }
 
-// TASK-0033 Phase A: a free panel pins an application as its desktop entry,
+// A free panel pins an application as its desktop entry,
 // so the model must hand out one snapshot and one desktop file for any
 // application it knows, whether that application is pinned globally or only
 // running.
@@ -369,7 +369,7 @@ void DockModelTest::legacyCustomGlyphRemainsExplicitBaseData()
              legacyBytes);
 }
 
-// TASK-0031: a click asks for an activation. Only a started process is a
+// A click asks for an activation. Only a started process is a
 // verified success; raising a window is a request the compositor never answers,
 // and it may never be reported as a launch that succeeded.
 void DockModelTest::activationOutcomeSeparatesVerifiedLaunchFromRequest()

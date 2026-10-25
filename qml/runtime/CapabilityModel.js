@@ -100,7 +100,7 @@ var exact3DLayouts = ["circular", "ring", "ellipse", "radial", "polygon", "trian
 // Why the 3D page cannot offer 3D for this panel, as { code, text }, or null
 // when it can. The checks run from the panel's kind to its renderer, its
 // look and its layout, so the message names what actually blocks 3D rather
-// than blaming the layout for everything (ADFIX AUD-03). `facts`: nativePanel,
+// than blaming the layout for everything. `facts`: nativePanel,
 // layout, importedArtwork.
 function scene3DBlocker(resolution, theme, consumer, facts) {
     const known = facts || ({})

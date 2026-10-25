@@ -101,8 +101,7 @@ foreach(required_preset_studio_contract
 endforeach()
 
 # A preset page lists its catalog for the selected panel: panel presets made
-# for that panel's kind and orientation, every icon preset (ADREP-TASK-001,
-# the owner's request of 2026-10-07).
+# for that panel's kind and orientation, every icon preset.
 foreach(required_preset_studio_contract
         "PresetBrowser {"
         "StudioNavigation.presetPage(mainTabIndex, subTabIndex)"
@@ -137,7 +136,7 @@ foreach(forbidden_preset_preview
 endforeach()
 
 # The preset components receive data and emit requests. They hold no route to
-# a panel or to the preset store. TASK-0041 adds explicit action requests.
+# A panel or to the preset store. Explicit action requests came later.
 foreach(forbidden_preset_access
         "panelController"
         "panelRegistry"

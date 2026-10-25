@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0032 Phase B: interaction guards and the close timer.
+// Interaction guards and the close timer.
 //
 // One property is defended here above all others: a panel that is being used
 // does not close. Not while a context menu is open, not while something is

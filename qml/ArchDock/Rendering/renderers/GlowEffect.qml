@@ -2,9 +2,8 @@ import QtQuick
 import QtQuick.Effects
 
 // Light round a flat item, as its layer effect: the item's own shape,
-// blurred, in the glow's colour, behind it - a halo, not a brighter item
-// (the owner, 2026-10-13: "the glow isn't really glow, it's just intense
-// color"). Intensity is how strong it is, from 0 to 1; reach how far it
+// blurred, in the glow's colour, behind it - a halo, not a brighter item.
+// Intensity is how strong it is, from 0 to 1; reach how far it
 // spreads out of the item, from about 8 to 64 pixels. The layer grows to
 // hold the halo, so nothing round the item cuts it off.
 MultiEffect {

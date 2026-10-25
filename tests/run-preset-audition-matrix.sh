@@ -290,7 +290,7 @@ preset_icons_group() {
     preset_require_equal "$host" "$(preset_host_snapshot "$PRESET_BOTTOM_HOST")" 'S7 Apply host unchanged'
     preset_unrelated_unchanged S7; preset_no_orphans
 
-    # ADREP-TASK-005 / PD-20..22: every icon preset may change its bounded
+    # Every icon preset may change its bounded
     # appearance block; geometry, content, iconSize, spacing, per-entry
     # overrides and ownership remain protected by the full-record projection.
     local id preset definition expected saved revision defaults_file copy_file
@@ -477,7 +477,7 @@ preset_defaults_group() {
     preset_ok beginPreview "{'kind': <'panel'>, 'presetId': <'circular-blue-ring'>, 'panelId': <'$id'>, 'newPanel': <false>, 'useRecommendedIcons': <false>}" >/dev/null
     # A baked platform draws no procedural surface, so its Theme is a refused
     # edit. Appearance > Shape, drawn by nothing, is no editor field any more
-    # (ADREP-TASK-001, PD-04). Opacity is not such a field: every renderer
+    #. Opacity is not such a field: every renderer
     # applies it, so it is no longer a refused edit.
     reply="$(preset_call updateDraft "{'appearance': <'neon'>}")"
     jq -e '.success==false and .errorCode=="unavailable-panel-field" and .state=="ACTIVE"' <<<"$reply" >/dev/null
@@ -498,7 +498,7 @@ preset_defaults_group() {
     wait_for_free_host_snapshot_stable "$desktop" "$applet" recovery >/dev/null
     preset_require_equal "$geometry" "$(preset_free_geometry "$desktop" "$applet")" 'S12 exact free crash recovery'
     preset_require_equal "$registry" "$(panel_registry_json)" 'S12 recovery never commits'
-    # AD3D-TASK-002: desktop 3D editing is an audition of the panel itself.
+    # Desktop 3D editing is an audition of the panel itself.
     log_session_phase 'S13 desktop 3D edit / exact Cancel / single Apply / interruption recovery'
     local revision applied
     revision="$(panel_registry_value "$id" settingsRevision)"

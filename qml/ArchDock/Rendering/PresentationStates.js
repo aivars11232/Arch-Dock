@@ -38,8 +38,8 @@ var REQUESTS = ["open", "collapse", "conceal", "reveal"];
 // a guard that is off, and a dock that closes under an open context menu is
 // the exact defect this list exists to prevent.
 //
-// `windowPreviewOpen` has no producer yet - grouped window previews are owned
-// by TASK-0037 - but it is a first-class guard so the preview work has a seam
+// `windowPreviewOpen` has no producer yet - grouped window previews come
+// later - but it is a first-class guard so the preview work has a seam
 // to report into rather than a controller to modify.
 var GUARDS = [
     "popupOpen",

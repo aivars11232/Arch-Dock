@@ -9,8 +9,8 @@ namespace ArchDock
 struct PanelDefinition;
 
 // How many icons a panel's shape holds side by side. Each icon's slot is its
-// own size and a 16 pixel gap - the gap between the icons of the owner's own
-// Plasma panel, kept at every icon size, so bigger icons fit fewer. A ring or
+// own size and a 16 pixel gap - the gap between the icons of a Plasma
+// panel, kept at every icon size, so bigger icons fit fewer. A ring or
 // a polygon holds its outline's length in slots, an open arc one more, a
 // star the length of its outline, a Möbius band two fewer than its length
 // holds, for the gaps where its loops cross. A row, a grid or a spiral grows with its

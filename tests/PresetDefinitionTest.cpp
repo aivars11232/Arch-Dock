@@ -424,7 +424,7 @@ void PresetDefinitionTest::iconPresetRoundTrips()
 
 void PresetDefinitionTest::iconPresetParametersAreBoundedAndRoundTrip()
 {
-    // ADREP-TASK-005, PD-20/21/22: a preset carries icon/tile appearance,
+    // A preset carries icon/tile appearance,
     // while its parameter block cannot mutate any panel or global setting.
     const QVariantMap parameters{{"iconShape", "hexagon"}, {"iconDiameter", 70},
         {"iconLogoSize", 88}, {"iconOutlineWidth", 4}, {"iconBodyColor", "#114477"},
@@ -580,7 +580,7 @@ void PresetDefinitionTest::iconPresetPanelValuesStayInsideTheIconLayer()
     {
         for (const QString &panelKey : PanelPresetDefinition::panelValueKeys(group))
         {
-            // PD-20 moves icon Shape into the style's saved parameters. The
+            // Icon Shape moved into the style's saved parameters. The
             // version-one panel preset format still carries its legacy copy
             // in "layout"; that alias must not forbid an icon preset's Shape.
             if (panelKey == QStringLiteral("iconShape")) {

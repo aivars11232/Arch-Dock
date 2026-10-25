@@ -128,8 +128,8 @@ void PanelModelTest::defaultsExposeEveryVersionTwoSection()
     QCOMPARE(definition.layout.pathType, QStringLiteral("circular"));
     QCOMPARE(definition.surface.appearance, QStringLiteral("glass"));
     QCOMPARE(definition.surface.glowIntensity, 1.0);
-    // ADREP-TASK-005, PD-20: new panels use the style's signature until
-    // the owner explicitly chooses a shape. Saved choices remain explicit.
+    // New panels use the style's signature until
+    // A shape is chosen explicitly a shape. Saved choices remain explicit.
     QCOMPARE(definition.iconStyle.shape, QStringLiteral("style-default"));
     QCOMPARE(definition.iconStyle.styleReference,
              QStringLiteral("plain-original"));
@@ -289,7 +289,7 @@ void PanelModelTest::legacyRecordConvertsWithDeterministicDefaults()
     QCOMPARE(first->normalized(), *first);
 }
 
-// TASK-0033 Phase A: a free panel's content is one ordered list across its
+// A free panel's content is one ordered list across its
 // application and URL entries. Legacy records carry no order, so it is derived
 // deterministically; a stored order that names unknown or repeated ids is
 // repaired rather than trusted.
@@ -327,7 +327,7 @@ void PanelModelTest::contentOrderIsCanonicalAndDerived()
     QCOMPARE(repaired->normalized(), *repaired);
     QVERIFY(PanelSettingsSchema::isKnownPanelField(QStringLiteral("contentOrder")));
 
-    // TASK-0033 Phase C: rotation is configuration; its running angle is not.
+    // Rotation is configuration; its running angle is not.
     QVariantMap rotating = legacy;
     rotating.insert(QStringLiteral("panelRotationMode"), QStringLiteral("Clockwise"));
     rotating.insert(QStringLiteral("panelRotationSpeed"), 999);
@@ -343,7 +343,7 @@ void PanelModelTest::contentOrderIsCanonicalAndDerived()
     QCOMPARE(derived->layout.rotationMode, QStringLiteral("none"));
     QCOMPARE(derived->layout.rotationSpeed, 12.0);
 
-    // ADREP-TASK-002 (PD-25): a record saved before "Continuous motion
+    // A record saved before "Continuous motion
     // moves" existed keeps the motion it had - one that rotated turns as a
     // whole, any other moves its items - and a saved choice is kept. How far
     // the items have travelled is never stored.

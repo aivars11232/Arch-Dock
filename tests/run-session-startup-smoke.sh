@@ -270,7 +270,7 @@ run_session_startup_smoke() {
         <<<"$renderer" >/dev/null
     ids="$(panel_ids)"
     owner="$ARCHDOCK_SESSION_ARCH_DOCK_PID"
-    # Background starts never show Panel Studio (ADREP-TASK-001, PD-26).
+    # Background starts never show Panel Studio.
     require_no_studio 'on-demand D-Bus activation'
     "$ARCHDOCK_STARTUP_STAGED_BINARY" >"$ARCHDOCK_TEST_LOG_DIR/repeated-launch.log" 2>&1
     require_no_studio 'a repeated plain start'
@@ -298,7 +298,7 @@ run_session_startup_smoke() {
     run_intentional_quit_smoke "$owner"
 }
 
-# ADREP-TASK-001, PD-26: activating the application entry always shows Panel
+# Activating the application entry always shows Panel
 # Studio. Here Arch Dock runs; the stopped states follow the Quit smoke.
 run_menu_entry_matrix() {
     local owner="$1"
@@ -409,7 +409,7 @@ run_intentional_quit_smoke() {
     wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'TERM'
     hold_stopped 'TERM'
 
-    # ADREP-TASK-001, PD-26: from the menu a stopped Arch Dock starts with
+    # From the menu a stopped Arch Dock starts with
     # Panel Studio in front, also after Quit, whose stop the start clears.
     log_session_phase 'ADREP-TASK-001 the application entry starts a stopped Arch Dock'
     require_menu_start 'while Arch Dock is stopped'

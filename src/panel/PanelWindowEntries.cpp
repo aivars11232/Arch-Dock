@@ -435,7 +435,9 @@ QVariantMap PanelWindow::commitIconOverrideTransaction(
     const QVariantMap &overrideValues,
     bool reset)
 {
-    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+    if (profileBusy())
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     ArchDock::IconOverrideTransactionOutcome outcome;
     const std::optional<ArchDock::PanelDefinition> current =

@@ -253,6 +253,16 @@ a 3D panel costs more than over a flat one. CPU figures measured through
 `tests/visibility-window.py` include the harness's own per-icon hit-test
 sampling, which is most of what it reports for a 3D panel.
 
+Arch Dock's two programs run the QML garbage collector to completion in one
+go (`QV4_GC_TIMELIMIT=0`) rather than in the time slices Qt 6.8 and later use
+by default: the sliced collector crashed inside itself on recent Qt versions
+while Panel Studio pages were being built, as other Qt programs also report.
+A whole collection pauses the program for a moment on Arch Dock's small heaps.
+The setting is read as each engine starts and leaves the environment again
+right after, so programs started from a panel do not inherit it; a value you
+set yourself before starting Arch Dock is kept. Plasma's own shell, which
+draws the edge panels and runs the same QML, is outside Arch Dock's reach.
+
 ## Panel Studio presentation
 
 Panel Studio draws its own dark chrome with fixed colours and pixel font sizes.

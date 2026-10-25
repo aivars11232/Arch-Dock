@@ -1769,7 +1769,7 @@ if(BUILD_TESTING)
   set_tests_properties(folder-expansion-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-  # ADREP-TASK-003: the four folder easings are four different motions in
+  # The four folder easings are four different motions in
   # every folder layout, opening and closing, over the folder duration.
   add_test(NAME folder-easing-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
@@ -1973,8 +1973,8 @@ if(BUILD_TESTING)
   # Owner-visible folder placement on a curved free panel, flat, baked and in
   # true 3D: 90 real openings, every folder layout at five positions of the
   # ring, each checked against the clicked icon, the dock's centre and the
-  # dock's other icons; the owner's fan, arc, stack and ring by their own
-  # geometry (ADREP-TASK-003). A screen the size of the owner's leaves them
+  # Dock's other icons; the fan, arc, stack and ring by their own
+  # Geometry. A screen the size of the user's leaves them
   # room.
   add_test(NAME folder-anchor-smoke
     COMMAND ${CMAKE_COMMAND} -E env
@@ -2015,7 +2015,7 @@ if(BUILD_TESTING)
   set_tests_properties(decoration-3d-smoke
     PROPERTIES DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 270)
 
-  # ADREP-TASK-001: the Studio truth matrix drawn with a private compositor's
+  # The Studio truth matrix drawn with a private compositor's
   # real graphics backend, where shader-drawn effects and true 3D appear.
   add_test(NAME studio-truth-matrix-smoke
     COMMAND ${CMAKE_COMMAND} -E env
@@ -2037,7 +2037,7 @@ if(BUILD_TESTING)
   set_tests_properties(runtime-ui-interaction-smoke PROPERTIES
     DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 180)
 
-  # ADREP-TASK-002: a free panel's entries travel along its own path. Real
+  # A free panel's entries travel along its own path. Real
   # wheel input on twelve layouts in a private compositor: slots, wrap-around,
   # hit tests, step timing, what motion moves, and Direction; every resting
   # state is captured and every frame recorded.
@@ -2270,7 +2270,7 @@ foreach(rendering_file IN LISTS ARCHDOCK_RENDERING_MODULE_FILES)
     DESTINATION
       "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Rendering/${rendering_directory}")
 endforeach()
-# The application's icon and logo, from the owner's artwork
+# The application's icon and logo, from the project's artwork
 # (data/icons/arch-dock-logo-source.png), in the hicolor theme.
 foreach(icon_size IN ITEMS 16 22 24 32 48 64 128 256 512)
   install(FILES "data/icons/hicolor/${icon_size}x${icon_size}.png"

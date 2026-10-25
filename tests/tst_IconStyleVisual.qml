@@ -240,7 +240,7 @@ TestCase {
     }
 
     function test_packageShapeBindingDrawsAllShapesWithoutMutatingManifest() {
-        // ADREP-TASK-005, PD-20: a package declaration drives actual pixels;
+        // A package declaration drives actual pixels;
         // no renderer branch on the built-in ID can make this fixture pass.
         const style = loadStyle("metallic-blue")
         style.id = "package-defined-shape-fixture"
@@ -297,7 +297,7 @@ TestCase {
     }
 
     function test_everyBuiltInStyleFollowsEveryShape() {
-        // PD-20 changes the formerly fixed built-in silhouettes. The glyph
+        // The change to the formerly fixed built-in silhouettes. The glyph
         // stays the actual application image; all 90 shape pairs are pixels.
         const shapes = ["rounded", "square", "squircle", "circle", "hexagon", "diamond"]
         const styles = ["plain-original"].concat(styleIds)
@@ -335,7 +335,7 @@ TestCase {
     }
 
     function test_realApplicationLogosRetainContrastAtNormalSize() {
-        // ADREP-TASK-005, OF-34/36: original installed application glyphs,
+        // Original installed application glyphs,
         // at the normal 52 px cell size. Paired visible/hidden captures measure
         // their contrast against the actual style, including front treatments.
         // This sRGB graphical contrast measure is not a WCAG text ratio.
@@ -399,7 +399,7 @@ TestCase {
     }
 
     function test_plainDefaultAndOptionalOrbPedestalAreDrawnAsDeclared() {
-        // PD-20/21: preserve Plain Original's default glyph; the same
+        // Preserve Plain Original's default glyph; the same
         // conditional-layer mechanism removes Dark Orb's default pedestal.
         const plain = shapeScene(loadStyle("plain-original"), {iconShape: "style-default"})
         compare(plain.styledLayersActive, false)
@@ -418,7 +418,7 @@ TestCase {
     }
 
     function test_styleParametersChangeDrawnPixels() {
-        // OF-38, PD-20/21: an edited value alone is insufficient. Each
+        // An edited value alone is insufficient. Each
         // independent control must change the actual native rendered image.
         const baseline = {iconShape: "circle"}
         const cases = [

@@ -53,7 +53,7 @@ private slots:
     void everyEditorCapabilityHasAnAvailabilityRule();
 };
 
-// ADREP-TASK-001: Panel Studio offers a field only through the availability
+// Panel Studio offers a field only through the availability
 // rule of its capability, and the rules switch over EditorCapability, which
 // the compiler checks for completeness. A presented field naming a capability
 // with no rule would never be shown, so it fails here instead; a name the rule
@@ -127,7 +127,7 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
          QStringLiteral("folderStackLength"), QStringLiteral("folderRingSize")})
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
 
-    // ADREP-TASK-003: a free panel's folder shapes. A saved panel without
+    // A free panel's folder shapes. A saved panel without
     // them opens a 90 degree fan, a stack of five and a small ring.
     QCOMPARE(legacy->content.folderFanOpening, 90);
     QCOMPARE(legacy->content.folderStackLength, 3);
@@ -241,7 +241,7 @@ void PanelSettingsSchemaTest::tiltScalarsPreserveParameterMaps()
         QVERIFY(PanelSettingsSchema::isEditorField(PanelSettingsFieldScope::Panel, key));
 }
 
-// AD3D-TASK-002: the 3D page's transform, view, light and motion settings are
+// The 3D page's transform, view, light and motion settings are
 // saved in the same 3D parameter map, bounded, and read back unchanged. Every
 // 3D setting belongs to the one 3D page.
 void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
@@ -252,7 +252,7 @@ void PanelSettingsSchemaTest::sceneTransformFieldsAreBoundedAndReversible()
         {"scene3DPositionY", "positionY", -1.0, 1.0, 0.0},
         {"scene3DPositionZ", "positionZ", -1.0, 1.0, 0.0},
         // All the way round, and scales with no practical limit, all ways or
-        // sideways and up and down on their own (the owner, 2026-10-13).
+        // sideways and up and down on their own.
         {"scene3DCameraPitch", "cameraPitch", -180.0, 180.0, 25.0},
         {"scene3DScale", "scale", 0.05, 20.0, 1.0},
         {"scene3DScaleX", "scaleX", 0.05, 20.0, 1.0},
@@ -429,8 +429,7 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
     QVERIFY(!PanelSettingsSchema::isTransactionPanelField(
         QStringLiteral("surface3D")));
 
-    // Presentation left the hidden-state group when TASK-0032 Phase C gave it
-    // a renderer. physicsEnabled and surface3D stay hidden because the features
+    // Presentation left the hidden-state group once it had a renderer. physicsEnabled and surface3D stay hidden because the features
     // behind them still do not exist; presentation is now a real editor field,
     // and it is gated by capability rather than by concealment.
     for (const QString &key : {QStringLiteral("presentationMode"),
@@ -447,7 +446,7 @@ void PanelSettingsSchemaTest::editorCandidatesExcludeProtectedAndHiddenState()
         const PanelSettingsFieldDescriptor *descriptor =
             PanelSettingsSchema::panelDescriptor(key);
         QVERIFY2(descriptor, qPrintable(key));
-        // Contract change, ADREP-TASK-001 (OF-07, CF-05): opening and
+        // Opening and
         // closing is shown on one page, Animations > Opening and closing.
         QCOMPARE(descriptor->editor.section, QStringLiteral("panels-animations"));
         QCOMPARE(descriptor->editor.capability,
@@ -687,8 +686,8 @@ void PanelSettingsSchemaTest::consumerProjectionCannotBroadenTransactionAuthorit
 
 void PanelSettingsSchemaTest::tileParametersRoundTripAndRestoreWithTheFlatLook()
 {
-    // ADREP-TASK-005, OF-41/42: bounded durable settings consumed by both
-    // renderers; PD-17's complete flat-look restore includes these values.
+    // Bounded durable settings consumed by both
+    // Renderers; the complete flat-look restore includes these values.
     const QVariantMap values{{"iconTileTexture", "organic"}, {"iconTileThickness", 8.0},
         {"iconTileIconOffsetX", -7.0}, {"iconTileIconOffsetY", 5.0}, {"iconTileIconScale", 85},
         {"iconTileBevel", 3.0}, {"iconTileMaterial", "metallic"}, {"iconTileElevation", 12.0}};
@@ -723,7 +722,7 @@ void PanelSettingsSchemaTest::tileParametersRoundTripAndRestoreWithTheFlatLook()
 
 void PanelSettingsSchemaTest::iconParametersRoundTripAndRespectBounds()
 {
-    // ADREP-TASK-005, PD-20/21: one durable panel record owns these controls,
+    // One durable panel record owns these controls,
     // including explicit shapes which override the style's signature.
     auto record = PanelDefinition::defaults(
         QStringLiteral("icon-parameters"), QStringLiteral("Icon parameters"),
@@ -783,7 +782,7 @@ void PanelSettingsSchemaTest::iconParametersRoundTripAndRespectBounds()
 
 void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
 {
-    // Pedestals (2026-10-12): one page of their own, on every host and
+    // Pedestals: one page of their own, on every host and
     // renderer, stored beside the 3D parameters and bounded like them; the
     // icon stands in one section, the folder item stands in another, with
     // their own settings behind Own settings.
@@ -824,7 +823,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     {
         const auto *descriptor = PanelSettingsSchema::panelDescriptor(it.key());
         QVERIFY2(descriptor, qPrintable(it.key()));
-        // The stands' glow is grouped on the page as Glow (2026-10-13).
+        // The stands' glow is grouped on the page as Glow.
         QCOMPARE(descriptor->editor.section, it.key().startsWith(QStringLiteral("folder"))
             ? QStringLiteral("pedestals-folder")
             : it.key().startsWith(QStringLiteral("pedestalGlow")) ? QStringLiteral("pedestals-glow")
@@ -841,8 +840,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     const QVariantMap saved = restored->toPersistedMap();
     for (auto it = values.cbegin(); it != values.cend(); ++it)
         QCOMPARE(saved.value(it.key()), it.value());
-    // Defaults: a new panel has no stands (the owner, 2026-10-12: "by
-    // default when I make new panel, there shouldn't be any pedestals"),
+    // Defaults: a new panel has no stands,
     // no motion, folder items like the icons.
     const auto defaults = PanelDefinition::defaults(
         QStringLiteral("pedestal-defaults"), QStringLiteral("Pedestal defaults"),
@@ -904,7 +902,7 @@ void PanelSettingsSchemaTest::pedestalParametersRoundTripAndRespectBounds()
     QCOMPARE(result.value(QStringLiteral("pedestalOpacity")).toDouble(), 0.1);
     QCOMPARE(result.value(QStringLiteral("pedestalGlow")).toDouble(), 1.0);
     QCOMPARE(result.value(QStringLiteral("pedestalGlowReach")).toDouble(), 0.0);
-    // A glow reaches as far as the owner's pick by default (2026-10-13).
+    // A glow reaches as far as its default reach.
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("pedestalGlowReach"))->defaultValue.toDouble(), 0.75);
     QCOMPARE(PanelSettingsSchema::panelDescriptor(QStringLiteral("folderPedestalGlowReach"))->defaultValue.toDouble(), 0.75);
     // Each of the panel, its icons, its tiles and its stands has its own

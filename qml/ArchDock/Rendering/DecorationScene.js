@@ -786,8 +786,7 @@ function centreLines(bandRings) {
     return lines
 }
 
-// The colour settings that fit a decoration (the owner: every decoration
-// recolourable, a multi-colour one with settings that suit it): light
+// The colour settings that fit a decoration: light
 // colour, main colour, palette, picture colours, metal; each with what the
 // decoration is as designed.
 function colourControls(decoration) {

@@ -32,9 +32,9 @@ public:
     // (freeHostState hosted-owned, or hosted-stale after a failed check).
     // A detached free panel keeps its record
     // in the registry for "Put back on the desktop", but it is not part of
-    // the arrangement. On 2026-10-12 a profile had captured 21 detached
-    // records and one Apply created 13 desktop widgets before the owner
-    // killed the backend; Apply now refuses to create more free panels than
+    // the arrangement. Once a profile had captured 21 detached records and
+    // one Apply created 13 desktop widgets before the backend was stopped;
+    // Apply now refuses to create more free panels than
     // MaximumFreePanelsCreatedPerApply at once.
     static constexpr int MaximumFreePanelsCreatedPerApply = 4;
     [[nodiscard]] static bool onTheDesktop(const PanelDefinition &panel);

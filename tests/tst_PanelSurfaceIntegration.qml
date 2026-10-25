@@ -2,11 +2,11 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0032 Phase D: host visibility and surface presentation, joined.
+// Host visibility and surface presentation, joined.
 //
 // tst_PanelPresentation proves the state machine and tst_PanelMotionTracks
 // proves the geometry. Both work on their components in isolation, which is
-// exactly how TASK-0032 came to ship a presentation controller that nothing
+// Exactly how the project came to ship a presentation controller that nothing
 // read: every rule passed while the live panel stayed permanently open.
 //
 // This file proves the join. It builds the same chain the applet builds -
@@ -64,7 +64,7 @@ TestCase {
                 hostPhase: presentationController.hostPhase
             })
 
-            // Mirrors the applet's pointer rule after the TASK-0032 closure
+            // Mirrors the applet's pointer rule after the presentation closure
             // correction: hover and edge open on entry, click opens through a
             // tap, every non-manual trigger closes once the pointer leaves,
             // and a manual panel moves only by explicit request.
@@ -174,7 +174,7 @@ TestCase {
         verify(panel.scene.motionTracks["split-center"].scaleX < 1)
     }
 
-    // ADFIX UF-05: a collapse reaches the drawn shape, not only the icons'
+    // A collapse reaches the drawn shape, not only the icons'
     // clip. Before, a procedural surface ignored the track's scale, so a
     // collapsed ring or bar was drawn exactly as wide as an open one.
     function test_aCollapsedProceduralSurfaceIsDrawnOnItsHandle() {
@@ -210,7 +210,7 @@ TestCase {
         }
     }
 
-    // The TASK-0032 closure gap: a click could open a panel that then never
+    // The closure gap: a click could open a panel that then never
     // closed, because only hover asked for a collapse. Every pointer-driven
     // trigger must close once the pointer has left and the guards are clear.
     function test_everyPointerTriggerClosesAfterLeaving_data() {

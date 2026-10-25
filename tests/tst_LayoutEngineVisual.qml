@@ -117,7 +117,7 @@ TestCase {
         }
     }
 
-    // ---- ADREP-TASK-002: entries travel along the drawn path -------------
+    // ---- entries travel along the drawn path -------------
     property real travel: 0
     readonly property var travelGeometry: Object.assign({}, currentGeometry, { travel: travel })
     readonly property var travelOutline: LayoutEngine.surface(currentLayout, currentGeometry, 0, 6)
@@ -243,7 +243,7 @@ TestCase {
         ]
     }
 
-    // TASK-0033 Phase B: sparse and dense free layouts render, and every
+    // Sparse and dense free layouts render, and every
     // entry stays inside the panel the engine sized for it.
     function test_denseAndSparseLayoutsStayInsideTheirBounds_data() {
         const rows = []

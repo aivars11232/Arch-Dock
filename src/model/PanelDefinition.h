@@ -129,7 +129,7 @@ struct PanelContent
     QVariantMap barWidgetSettings;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
-    // A free panel's own folder shapes (ADREP-TASK-003): the fan's opening in
+    // A free panel's own folder shapes: the fan's opening in
     // degrees, how many children a stack shows, and a ring that fits its
     // children ("small") or has the dock's radius ("panel").
     int folderFanOpening = 90;
@@ -238,14 +238,14 @@ struct PanelLayoutDefinition
     QString rotationMode = QStringLiteral("none");
     qreal rotationSpeed = 12.0;
     QString rotationTrigger = QStringLiteral("idle");
-    // What that motion, the wheel and a drag move (ADREP-TASK-002, PD-25):
+    // What that motion, the wheel and a drag move:
     // `items` travel along the panel's own path, the whole `panel` turns, or
     // `both`. Item travel speed is in entry slots per second. How far the
     // items have travelled is runtime state and is never stored.
     QString motionTarget = QStringLiteral("items");
     qreal travelSpeed = 0.5;
     // How far one wheel notch, or one entry pitch of touchpad travel, moves
-    // the items: one entry at 1, from a quarter to four entries (PD-16).
+    // the items: one entry at 1, from a quarter to four entries.
     qreal scrollSensitivity = 1.0;
 
     bool operator==(const PanelLayoutDefinition &) const = default;
@@ -307,7 +307,7 @@ struct PanelIconStyleDefinition
     QString shape = QStringLiteral("style-default");
     int size = 52;
     qreal spacing = 8.0;
-    // ADREP-TASK-005: percentages keep the style inside its existing cell;
+    // Percentages keep the style inside its existing cell;
     // an unset colour or -1 outline retains the package's own treatment.
     int diameter = 100;
     int logoSize = 95;

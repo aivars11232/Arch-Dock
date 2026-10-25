@@ -269,6 +269,26 @@ wait_for_private_desktop() {
     return 1
 }
 
+# The panel's own revision from a dockConfiguration reply: the field at the
+# reply's top level. The reply nests whole records (the panel's snapshot, the
+# global settings), each with a revision of its own, so a pattern that takes
+# the last one in the text reads the wrong record.
+reply_revision() {
+    python3 -c '
+import re, sys
+depth = 0
+for match in re.finditer(r"\x27settingsRevision\x27: <uint64 (\d+)>|\x27(?:[^\x27\\\\]|\\\\.)*\x27|[{}]", sys.stdin.read()):
+    if match.group(1) is not None:
+        if depth == 1:
+            print(match.group(1))
+            break
+    elif match.group(0) == "{":
+        depth += 1
+    elif match.group(0) == "}":
+        depth -= 1
+'
+}
+
 panel_call() {
     local method="$1"
     shift
@@ -542,7 +562,7 @@ run_private_session() {
     fi
 
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
-        # ADREP-TASK-001: the Studio truth matrix drawn with this private
+        # The Studio truth matrix drawn with this private
         # compositor's real graphics backend. The offscreen run draws with Qt
         # Quick's software renderer, which has no shader effects and no 3D;
         # here every shown field must change the drawn panel or its documented
@@ -659,7 +679,7 @@ run_private_session() {
     # Forcing stderr logging for the applet host makes that check observe the
     # real applet. The service keeps its default routing: Panel Studio has a
     # known pre-existing binding loop (SettingsPopup.qml `rows`) owned by the
-    # TASK-0044 diagnostics cleanup, and this smoke asserts the applet, not
+    # the diagnostics cleanup, and this smoke asserts the applet, not
     # Studio internals.
     QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="${ARCHDOCK_RENDERING_QT_INPUT_TRACE:-org.archdock.rendering.debug=true}" plasmashell --no-respawn \
         >"$ARCHDOCK_RENDERING_LOG_DIR/plasmashell.log" 2>&1 &
@@ -791,12 +811,8 @@ run_private_session() {
 
         native_configuration="$(panel_call dockConfiguration bottom)"
         free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
-        native_revision="$(sed -n \
-            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
-            <<<"$native_configuration")"
-        free_revision="$(sed -n \
-            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
-            <<<"$free_configuration")"
+        native_revision="$(reply_revision <<<"$native_configuration")"
+        free_revision="$(reply_revision <<<"$free_configuration")"
         [[ "$native_revision" =~ ^[0-9]+$ &&
            "$free_revision" =~ ^[0-9]+$ ]] || {
             printf 'Could not read revisions before selecting %s: native=%s free=%s\n' \
@@ -805,7 +821,7 @@ run_private_session() {
         }
 
         # The edge host's row follows its edge, so it offers no Dock layout
-        # (ADREP-TASK-001); the free host is made a horizontal row.
+        #; the free host is made a horizontal row.
         energy_values="{'rendererTier': <'skinned2d'>, 'panelThemeId': <'$energy_theme_id'>, 'completeThemeId': <'$energy_theme_id'>, 'color': <'$energy_tint'>, 'glowIntensity': <1.15>}"
         printf 'Selecting staged energy theme %s on the private native and free hosts.\n' \
             "$energy_theme_id"
@@ -1145,12 +1161,8 @@ run_private_session() {
 
         native_configuration="$(panel_call dockConfiguration bottom)"
         free_configuration="$(panel_call dockConfiguration "$free_panel_id")"
-        native_revision="$(sed -n \
-            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
-            <<<"$native_configuration")"
-        free_revision="$(sed -n \
-            "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p" \
-            <<<"$free_configuration")"
+        native_revision="$(reply_revision <<<"$native_configuration")"
+        free_revision="$(reply_revision <<<"$free_configuration")"
         [[ "$native_revision" =~ ^[0-9]+$ &&
            "$free_revision" =~ ^[0-9]+$ ]] || {
             printf 'Could not read revisions before selecting %s: native=%s free=%s\n' \
@@ -1357,14 +1369,14 @@ run_private_session() {
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
-    # TASK-0032 Phase D live evidence. The real edge host is switched to a
+    # Live evidence. The real edge host is switched to a
     # collapsed manual shell through the settings transaction; its own applet
     # must report that it rests collapsed while the host still shows it. An
     # explicit request then opens it and another collapses it again, which is
     # the producer the manual trigger relies on. It is restored to an open
     # hover panel afterwards.
     #
-    # Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel has
+    # A free panel has
     # no opening or closing mechanism. The same collapse is refused for the
     # free host, which stays open.
     local presentation_panel
@@ -1391,7 +1403,7 @@ run_private_session() {
         return 1
     }
     wait_for_presentation_state "$free_panel_id" open || return 1
-    printf 'The free host refused to collapse and stays open (PD-01).\n'
+    printf 'The free host refused to collapse and stays open.\n'
     for presentation_panel in bottom; do
         wait_for_presentation_state "$presentation_panel" open || return 1
 
@@ -1440,7 +1452,7 @@ run_private_session() {
                 "$presentation_panel" >&2
             return 1
         }
-        # "Opens on" is offered only while the panel can close (PD-01), so
+        # "Opens on" is offered only while the panel can close, so
         # it goes back to hover first and the panel is then opened.
         local restore_presentation_values
         for restore_presentation_values in \
@@ -1470,7 +1482,7 @@ run_private_session() {
     kill -0 "$ARCHDOCK_RENDERING_PLASMASHELL_PID"
     require_no_import_errors
 
-    # TASK-0033 Phase C live evidence. The private free host is switched to a
+    # Live evidence. The private free host is switched to a
     # procedural ring with clockwise rotation through the ordinary settings
     # transaction; the backend must publish the rotation with the capability
     # available, and the live applet must keep running without QML errors while
@@ -1568,7 +1580,7 @@ run_private_session() {
 
 run_outer() {
     # The private session's own limit; the Studio truth matrix draws every
-    # field of 21 panels and the travel matrix (ADREP-TASK-002) twelve
+    # field of 21 panels and the travel matrix twelve
     # layouts step by step, so they need longer.
     local session_seconds=210
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
@@ -1579,7 +1591,7 @@ run_outer() {
         # Every folder layout at five places on three renderers.
         session_seconds=720
     elif [[ "${ARCHDOCK_RENDERING_FOLDER_LAYOUTS:-}" == '1' ]]; then
-        # ADREP-TASK-003 evidence: every folder layout, three folder sizes,
+        # Every folder layout, three folder sizes,
         # five folder positions.
         session_seconds=1200
     elif [[ "${ARCHDOCK_RENDERING_FOLDERS:-}" == '1' ]]; then

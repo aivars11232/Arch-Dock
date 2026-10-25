@@ -808,7 +808,7 @@ void PresetLibraryTest::everyIconPresetDuplicatesToAReusableMyPreset()
         const QVariantMap drawn = previewDefinition(copy);
         QCOMPARE(drawn.value(QStringLiteral("iconPedestalEnabled")).toBool(),
             id == QStringLiteral("blue-pedestal") || id == QStringLiteral("red-pedestal"));
-        // PD-20/21/22: the whole bounded appearance block survives duplication.
+        // The whole bounded appearance block survives duplication.
         for (const QString &key : ArchDock::IconPresetDefinition::parameterValueKeys())
             QCOMPARE(drawn.value(key), previewDefinition(original).value(key));
         QCOMPARE(directoryDigest(builtInRoot()), originalFiles);

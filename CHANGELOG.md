@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.1-48 — 2026-10-25
+
+- **Crash protection.** Arch Dock's two programs (`arch-dock`, `arch-dock-bars`)
+  run the QML garbage collector to completion in one go instead of in time
+  slices (`QV4_GC_TIMELIMIT=0`, read as each engine starts and taken out of
+  the environment again, so programs started from a panel do not inherit
+  it). The sliced collector of Qt 6.8 and later crashed inside itself while
+  Panel Studio pages were being built; a limit you set yourself is kept.
+  Plasma's own shell, which draws the edge panels, is outside Arch Dock's
+  reach.
+- **3D icons on 3D panels.** The 3D icons switch now reaches a true-3D
+  panel's scene; since 0.1.1-27 it had turned the solids on only for flat
+  panels, so a 3D panel kept flat pictures whatever the switch said.
+- **Folder openings on tilted panels.** "Along the dock" now steps out of
+  the dock point by point as seen on the screen: on a steeply tilted 3D
+  ring the far side stepped out on the panel's plane but hardly moved on
+  the screen, so every curve failed the clearance test and the children
+  were put back on the rim, over the icons. The fan lies on a 3D panel's
+  plane like the ring and the grid (it was built flat on the screen), so it
+  tilts with the panel. The children's names keep the dock's own letter
+  size wherever they stand along the depth, instead of swelling on the near
+  side and shrinking on the far side.
+- **Icon size with thickness, both ways.** An icon size that filled the
+  thickness keeps filling it when the thickness changes back; other sizes
+  scale with the thickness as before, within 24 to 128.
+- **Icon drops.** An icon dragged along a panel lands before the icon
+  nearest the pointer that can take it; icons that cannot (status entries,
+  icons without input, icons kept still in edit mode) are passed over.
+- Code comments rewritten in plain words for the community; test checks
+  brought up to date (the 3D icon solids switch, folder shapes as drawn).
+
 ## 0.1.1-41 to 0.1.1-47 — released 2026-10-23 to 2026-10-25
 
 Published as GitHub pre-releases with a one-line install (see README).

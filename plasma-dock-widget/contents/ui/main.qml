@@ -183,7 +183,7 @@ PlasmoidItem {
     // settings, their shape chosen on the Pedestals page ("same" keeps the
     // panel's own shape); with "Own settings" on, the folder items' own
     // size, thickness, lift, material, texture, colour, opacity, glow and
-    // motion (the owner, 2026-10-12).
+    // motion.
     readonly property var folderPedestalSettings: {
         const source = configuration || ({})
         const settings = {}
@@ -213,7 +213,7 @@ PlasmoidItem {
         if (!Number.isFinite(angle)) return folderPedestalSettings
         return Object.assign({}, folderPedestalSettings, { pedestalSeenAngle: angle })
     }
-    // The runtime state the scene draws from. Until TASK-0032 Phase D the
+    // The runtime state the scene draws from. Before this, the
     // presentation controller existed but nothing read it, so the live surface
     // was permanently "open" however the panel was configured. These three
     // fields are the wiring: one state machine, one surface.
@@ -1091,8 +1091,8 @@ PlasmoidItem {
                 || folderTrack.visible
             // A free panel opens its folders on a path outside the dock: a
             // curved one can open them on its own curve, "Along the dock",
-            // and any free panel as a fan, an arc, a stack or a ring
-            // (ADREP-TASK-003). Grid, and every edge panel, open a popup.
+            // and any free panel as a fan, an arc, a stack or a ring.
+            // Grid, and every edge panel, open a popup.
             // Along the dock kept from a curved shape opens as a fan once the
             // panel's shape has no curve (a straight row), never as a popup
             // that cannot draw it.
@@ -1337,8 +1337,7 @@ PlasmoidItem {
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
 
-            // A free panel has no edge of its own (the owner, 2026-10-13:
-            // "the only edge is edge of the screen"): its 3D scene is drawn
+            // A free panel has no edge of its own: its 3D scene is drawn
             // out of the widget's box as far as it reaches. The pointer over
             // what is drawn there is over the panel, and presses, the wheel
             // and drops reach it; the empty desktop around it stays the

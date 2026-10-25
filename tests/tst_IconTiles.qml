@@ -61,7 +61,7 @@ TestCase {
     }
 
     function test_tileTexture(data) {
-        // OF-41: a loaded choice alone is insufficient; static textured pixels
+        // A loaded choice alone is insufficient; static textured pixels
         // must differ from the otherwise identical custom fill, on both RHI
         // and the software backend, without filling the hexagon's corners.
         const tile = createTemporaryObject(tileComponent, captureWindow.contentItem,
@@ -130,7 +130,7 @@ TestCase {
     }
 
     function test_tilesAndUprightGlyphsOrbitTogether() {
-        // PD-22: actual scene transforms, not just the layout's returned values.
+        // Actual scene transforms, not just the layout's returned values.
         const scene = createTemporaryObject(panelComponent, captureWindow.contentItem, {
             orderedEntries: [0,1,2,3].map(function(index) {
                 return {id: "app-" + index, iconName: "file:///usr/share/icons/hicolor/scalable/apps/firefox.svg"}

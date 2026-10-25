@@ -124,7 +124,7 @@ class RendererCapabilityTest final : public QObject
 private slots:
     void wheelSourcesPreserveNotchesAndSmoothPixels()
     {
-        // PD-16: a real notch remains a notch even when Wayland also supplies
+        // A real notch remains a notch even when Wayland also supplies
         // pixels. A synthesized smooth event keeps its pixel travel, including
         // continuous devices that do not provide scroll phases.
         QQmlEngine engine;
@@ -253,7 +253,7 @@ private slots:
         // The platform and its two declared panel parts, and per entry: a
         // glyph and a tile quad (2 + 2), the theme's icon base and its
         // declared entry part (one platform mesh each). A new panel has no
-        // stands (the owner, 2026-10-12).
+        // stands.
         const int expectedTriangles = meshTriangles * 7 + 2 * (2 + 2);
         QCOMPARE(renderer->property("triangleCount").toInt(), expectedTriangles);
         QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 2);
@@ -395,12 +395,12 @@ private slots:
         QCoreApplication::sendEvent(&window, &wheel);
         QTRY_VERIFY(scene->property("wheelRotationAngle").toDouble() != dragged);
         QTRY_VERIFY(projectionMatches());
-        // A wheel step eases in over 120 ms (ADREP-TASK-002); let it rest
+        // A wheel step eases in over 120 ms; let it rest
         // before putting the panel back.
         QTRY_VERIFY(!scene->property("turnStepping").toBool());
         scene->setProperty("wheelRotationAngle", 0.0);
         scene->setProperty("wheelRotationTarget", 0.0);
-        // ADREP-TASK-002: with its entries travelling instead, the panel keeps
+        // With its entries travelling instead, the panel keeps
         // still and the 3D entries, their projection and their input move
         // along its track.
         {
@@ -426,7 +426,7 @@ private slots:
             scene->setProperty("panelDefinition", travelling);
             QTRY_VERIFY(projectionMatches());
         }
-        // ADREP-TASK-004: native material editing and a folded platform must
+        // Native material editing and a folded platform must
         // change the GPU output, preserve the track and keep input projection.
         {
             const auto own = plainValue(scene->property("panelDefinition")).toMap();
@@ -538,6 +538,9 @@ private slots:
                 QTest::qWait(200);
                 const QImage flatIcons = pixels();
                 auto deep = flat;
+                // A 3D panel's icons stay flat pictures until the 3D icons
+                // switch is on.
+                deep.insert("scene3DIconSolid", true);
                 deep.insert("scene3DIconDepth", 0.5);
                 deep.insert("scene3DIconTurn", 25.0);
                 // Ask for the rounded relief by name first, whatever the
@@ -633,8 +636,7 @@ private slots:
             edited.insert("scene3DIconElevation", 0.0);
             edited.insert("scene3DThickness", 4.0);
             edited.insert("panelMotionTarget", "items");
-            // With no box round the panel (the owner, 2026-10-13: "the only
-            // edge is edge of the screen") an entry that travels out of the
+            // With no box round the panel an entry that travels out of the
             // panel's box is still drawn and still answers there; each
             // entry answers exactly when nothing of the platform is in front
             // of it. (Before, entries out of the box were cut off and read
@@ -982,7 +984,7 @@ private slots:
             {QStringLiteral("presentationProgress"), 1.0}});
         QTRY_COMPARE(part->property("openAmount").toDouble(), 0.0);
         QVERIFY(part->property("position").value<QVector3D>() != openPosition);
-        // ADFIX UF-05: a radial collapse closes the whole platform toward its
+        // A radial collapse closes the whole platform toward its
         // centre, down to a small ring, instead of leaving it full size.
         QTRY_VERIFY(qAbs(content->property("scale").value<QVector3D>().x() - openScale.x() * 0.2f)
             < 1e-4f * qMax(1.0f, openScale.x()));
@@ -1259,7 +1261,7 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
-    // AD3D-TASK-002: the 3D page's transform scales, moves and rolls the
+    // The 3D page's transform scales, moves and rolls the
     // platform and its icons together, their input follows them, the view and
     // light settings reach the scene, and motion settings respect reduced
     // motion.
@@ -1585,7 +1587,7 @@ private slots:
         QVERIFY2(steeper.y() < steep.y(), qPrintable(values));
     }
 
-    // The owner's Panel Studio, 2026-10-13: picking the Top or Side panel
+    // Picking the Top or Side panel
     // while a 3D free panel was previewed killed Arch Dock (SIGSEGV in
     // QSGRhiLayer::grab, called from QQuick3DTexture's afterSynchronizing
     // update of an icon texture whose source had already left the window).
@@ -1715,14 +1717,14 @@ private slots:
                                  QStringLiteral("true3d"), 5000);
     }
 
-    // AD3D-TASK-002: on the desktop the panel's own handles edit its 3D
+    // On the desktop the panel's own handles edit its 3D
     // transform with the mouse. Each finished drag is reported once; a
     // cancelled drag leaves the scene and reports nothing; outside edit mode
     // there are no handles and a press changes nothing.
-    // ADFIX-TASK-002 (UF-03, AUD-02, UF-09): a look without a 3D mesh of its
+    // A look without a 3D mesh of its
     // own stands on a platform generated along its own layout, in its own
     // colours, with upright icons on pedestals. Every supported shape, the
-    // owner's baked blue ring and the steel octagon, drawn by the real RHI.
+    // the baked blue ring and the steel octagon, drawn by the real RHI.
     void tileDepthMaterialsPlacementAndOrbitRenderUnderRhi();
 
     // A panel decoration on a 3D panel stands as a solid of its own, drawn by
@@ -2179,7 +2181,7 @@ private slots:
             QVERIFY2(tilted.pixelColor(under).alpha() > 200, qPrintable(QStringLiteral(
                 "entry %1 has nothing under it at %2,%3").arg(index).arg(under.x()).arg(under.y())));
         }
-        // ADREP-TASK-004: all generated outlines fold their actual GPU mesh;
+        // All generated outlines fold their actual GPU mesh;
         // the entry feet and input projection move with it, then reset.
         const int triangles = renderer->property("triangleCount").toInt();
         const auto unfolded = plainValue(renderer->property("projectedEntryGeometry"));
@@ -2393,7 +2395,7 @@ private slots:
         QTest::qWait(150);
 
         // Scale: dragging the red arm's cube outward stretches the platform
-        // sideways only (the owner: "scale it also sideways or top or down").
+        // sideways only.
         renderer->setProperty("gizmoMode", QStringLiteral("scale"));
         QTest::qWait(150);
         const QPoint cube = screenPoint(QStringLiteral("gizmo-scale-x-tip"));
@@ -2422,7 +2424,7 @@ private slots:
                 || !renderer->property("dragOverride").isValid()
                 || plainValue(renderer->property("dragOverride")).isNull());
 
-        // ADFIX UF-07: dragging the platform's body, away from every handle
+        // Dragging the platform's body, away from every handle
         // and icon, turns it across and tilts it up and down.
         renderer->setProperty("gizmoMode", QStringLiteral("move"));
         QTest::qWait(150);
@@ -2459,7 +2461,7 @@ private slots:
                  qPrintable(QString::number(editedValues(6).value("scene3DCameraYaw").toDouble())));
         QTest::qWait(150);
 
-        // ADFIX AUD-04: seen from straight above, the Z arrow points at the
+        // Seen from straight above, the Z arrow points at the
         // viewer. It says so, and dragging it up still moves the platform.
         scene->setProperty("pitch", 0.0);
         scene->setProperty("yaw", 0.0);
@@ -2486,7 +2488,7 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
-    // The owner, 2026-10-13: a scaled, tilted or moved 3D panel was cut off at
+    // A scaled, tilted or moved 3D panel was cut off at
     // an invisible box, its widget's size - "there shouldn't be any edge ...
     // the only edge is edge of the screen". The view reaches past the box as
     // far as the scene does, nothing on the screen moves when it grows, and
@@ -2643,7 +2645,7 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
-    // The owner, 2026-10-13: a stand's glow "isn't really glow, it's just
+    // A stand's glow "isn't really glow, it's just
     // intense color". A glowing stand sheds light round it, over whatever is
     // behind the panel, as far as its Glow reach; without glow the view runs
     // no glow at all.
@@ -2688,7 +2690,7 @@ private slots:
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QQuickWindow window;
         window.setColor(Qt::black);
-        // The owner's green (a colour written in the QML above stops moc).
+        // The chosen green (a colour written in the QML above stops moc).
         std::unique_ptr<QObject> object(component.createWithInitialProperties({
             {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
             {QStringLiteral("standColour"), QStringLiteral("#07fd28")},
@@ -2754,7 +2756,7 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
-    // The owner, 2026-10-13: lightning, a look of its own that looks like
+    // Lightning, a look of its own that looks like
     // lightning, "together with animations", on a background from clear to
     // dark storm. In 3D it strikes at random - a flash past white, the bolts
     // jumping along the band - between faint flickers, and keeps still under
@@ -2845,7 +2847,7 @@ private slots:
         QVERIFY2(unexpectedWarnings.isEmpty(), qPrintable(unexpectedWarnings.join(QLatin1Char('\n'))));
     }
 
-    // Phase 2 (the owner, 2026-10-13): "freely in 360 every direction", "for
+    // Phase 2: "freely in 360 every direction", "for
     // scaling there shouldn't be a limit", "scale it also sideways or top or
     // down". The panel tilts all the way over and stays drawn and placed;
     // sideways and up and down stretch the platform and where its icons
@@ -3151,7 +3153,7 @@ private slots:
                                     .arg(scene->property("wheelRotationTarget").toDouble()).arg(before)));
     }
 
-    // The owner's desktop, 2026-10-13: a ring that fits its box, lightning
+    // A ring that fits its box, lightning
     // look, Panel glow on. Its light was cut along the box in a straight
     // line (the view only grew for a shape reaching out of the box), and the
     // glow's shell showed through the see-through band, so the ring was
@@ -3316,8 +3318,7 @@ private slots:
         };
 
         // At the middle of its range the look stays under its glow, the
-        // band does not turn white (the owner, 2026-10-13: white "closer to
-        // mid ... not okay"); further up the light spreads over it.
+        // band does not turn white; further up the light spreads over it.
         for (const double amount : {0.5, 0.8}) {
             const Lit lit = glowAt(amount, amount < 0.6 ? QStringLiteral("panel-glow-mid")
                                                         : QStringLiteral("panel-glow-on"));

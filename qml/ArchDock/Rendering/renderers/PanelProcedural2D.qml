@@ -21,7 +21,7 @@ Item {
     // drawn in a square centred on its path (LayoutEngine.rotationEnvelope),
     // so the path is painted at its resting angle and the turn rotates the
     // painting as a whole: the threaded canvas would otherwise show each turn
-    // after the icons had already moved (ADREP-TASK-002, OF-11).
+    // after the icons had already moved.
     property real restingAngle: layoutAngle
     readonly property bool turnsAsDrawn:
         Boolean(geometry && geometry.rotationEnvelope === true)
@@ -30,7 +30,7 @@ Item {
     property int polygonSides: 6
     property string appearance: "glass"
     // Lightning's bolts are drawn on a clear band; this much of the dark
-    // storm shows behind them (Lightning background, the owner 2026-10-13).
+    // storm shows behind them (the Lightning background setting).
     property real lightningBackground: 0
     // An energy look's own light (its Lightning, Plasma, Neon, Lime or
     // Circuit glow): 1 as the look is drawn, 0 none, 2 twice as much; and how
@@ -149,7 +149,7 @@ Item {
     // phase the distance travelled along the path, so it runs on from piece
     // to piece. It runs once along the whole track: repeated every track
     // width, its picture showed as sections along the panel instead of one
-    // continuous colour (the owner, 2026-10-13). A closed track carries it
+    // continuous colour. A closed track carries it
     // round its first half and back, mirrored, round its second, so the two
     // ends meet without a seam.
     function paintWrappedMaterial(context) {
@@ -425,7 +425,7 @@ Item {
             energy.requestPaint()
         }
     }
-    // Lightning (the owner, 2026-10-13): at random moments a bolt strikes
+    // Lightning: at random moments a bolt strikes
     // along part of the panel and dies away in a fifth of a second; between
     // strikes it flickers faintly. Each strike has its own shape (its seed),
     // kept while it fades.

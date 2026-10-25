@@ -263,7 +263,7 @@ TestCase {
         verify(!Object.prototype.hasOwnProperty.call(EditorModel.panelCandidate(session), "id"));
     }
 
-    // ADREP-TASK-001: a field's page is the server's. Opening and closing and
+    // A field's page is the server's. Opening and closing and
     // rotation live on Animations, the icon style on Icons > Appearance, and
     // the model neither moves a field to another page nor lists it twice.
     function test_fieldPagesComeFromTheServer() {

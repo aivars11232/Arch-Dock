@@ -17,7 +17,7 @@ Item {
     property var excludedItems: []
     // How far one wheel notch (120 angle units) scrolls each way, and how many
     // pixels one pixel of touchpad travel scrolls; Scroll sensitivity scales
-    // both (PD-16).
+    // both.
     readonly property real lineNotch: 20 * Qt.styleHints.wheelScrollLines
     property real verticalNotch: lineNotch
     property real horizontalNotch: lineNotch

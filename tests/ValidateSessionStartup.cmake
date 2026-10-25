@@ -17,7 +17,7 @@ function(check_install logical_prefix physical_prefix)
   endif()
   # On-demand activation is marked so a user's Quit can refuse it. The
   # application entry always opens Panel Studio, starting Arch Dock explicitly
-  # when it is stopped (ADREP-TASK-001, PD-26), and offers Quit.
+  # when it is stopped, and offers Quit.
   foreach(pair IN ITEMS
       "share/dbus-1/services/org.archdock.ArchDock.service|Exec| --dbus-activated"
       "share/applications/org.archdock.ArchDock.desktop|Exec| --settings|Exec=\"${executable}\" --quit"

@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0032 Phase C: the opening and closing tracks.
+// The opening and closing tracks.
 //
 // PanelPresentationController decides what state the panel is in and is proved
 // by tst_PanelPresentation. This proves the geometry that state turns into:

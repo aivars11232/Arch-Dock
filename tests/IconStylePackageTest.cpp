@@ -332,7 +332,7 @@ void IconStylePackageTest::threeDReferenceAssetsAreNotDecodeProbed()
 
 void IconStylePackageTest::shapeAndPedestalDeclarationsValidateAndProject()
 {
-    // ADREP-TASK-005, PD-20/21: optional package declarations reach the
+    // Optional package declarations reach the
     // resolver without weakening manifest validation for old packages.
     QFile source(repositoryFile(QStringLiteral(
         "assets/icon-styles/neon-green/archdock-icon-style.json")));

@@ -2,7 +2,7 @@ import QtQuick
 
 // Continuous motion for free panels, expressed as two offsets: an angle the
 // whole scene turns by, and a travel phase, in entry slots, by which the
-// entries move along the panel's own path (ADREP-TASK-002). Which of them
+// entries move along the panel's own path. Which of them
 // runs is the panel's "Continuous motion moves" choice, each at its own speed.
 //
 // The controller owns nothing but the offsets. PanelScene adds the angle to
@@ -24,7 +24,7 @@ Item {
     // whatever its record says, because its host cannot present it.
     property bool available: false
 
-    // What moves (PD-25), whether the entries have a path to travel along,
+    // What moves, whether the entries have a path to travel along,
     // how fast they travel in slots per second, and the slots in their loop.
     property bool turnsPanel: true
     property bool movesItems: false

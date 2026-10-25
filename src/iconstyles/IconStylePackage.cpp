@@ -1076,7 +1076,7 @@ private:
         }
         definition->extensions = manifest.value(QStringLiteral("extensions"))
                                      .toObject().toVariantMap();
-        // PD-20: signature defaults are package data, shared by every
+        // Signature defaults are package data, shared by every
         // renderer. Other namespaced extensions retain their old behavior.
         const QString key = QStringLiteral("org.archdock.iconParameters");
         if (definition->extensions.contains(key))

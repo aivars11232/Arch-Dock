@@ -131,7 +131,7 @@ hardening_resource_group() {
     after="$(awk '/VmRSS:/ {print $2}' "/proc/$ARCHDOCK_SESSION_ARCH_DOCK_PID/status")"
     (( after-before < 65536 )) || { printf 'Audition cycles grew resident memory by >=64 MiB.\n' >&2; return 1; }
     printf 'Eight create/cancel cycles: RSS before=%s KiB after=%s KiB; zero stale hosts.\n' "$before" "$after"
-    # ADREP-TASK-004: the same private backend must return to idle after the
+    # The same private backend must return to idle after the
     # eight cycles. Read its own CPU time; do not mix in the compositor or a
     # polling UI fixture. The existing memory bound above is unchanged.
     python3 - "$ARCHDOCK_SESSION_ARCH_DOCK_PID" <<'PY'

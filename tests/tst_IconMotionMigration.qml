@@ -165,7 +165,7 @@ TestCase {
         }
     }
 
-    // The values a pre-TASK-0030 configuration can still hold. This list is
+    // The values an older configuration can still hold. This list is
     // frozen history: it may never lose a member, because an existing setting
     // would then silently fall back to "none".
     readonly property var legacyValues: [
@@ -175,7 +175,7 @@ TestCase {
     ]
 
     // Everything the settings schema offers today: the legacy values plus the
-    // motions TASK-0031 added. Mirrors the iconAnimation choice list, which
+    // Motions added later. Mirrors the iconAnimation choice list, which
     // animation-profile-test checks against the catalog from the C++ side.
     readonly property var selectableValues: legacyValues.concat([
         "slow-y-turn", "jump", "shake-tangent", "enlarge", "spiral"

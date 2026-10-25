@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// ADREP-TASK-003, PD-15: the four folder easings are four different motions
+// The four folder easings are four different motions
 // in every folder layout - the popup's, which Grid and every edge panel use,
 // and a free panel's paths - opening and closing, over the folder animation
 // duration; reduced motion shows and hides a folder at once.

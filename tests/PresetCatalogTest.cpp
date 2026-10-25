@@ -1138,7 +1138,7 @@ void PresetCatalogTest::overridesTheStyleValidatorRejects_data()
         << "invalid-value" << "/borderWidth";
     QTest::newRow("shape the renderer cannot draw")
         << "/icon/visualOverrides/orb-pedestal/shape"
-        // PD-20 adds Hexagon; Triangle remains outside the icon declaration.
+        // Hexagon was added; Triangle remains outside the icon declaration.
         << QVariant(QStringLiteral("triangle")) << "invalid-enum" << "/shape";
     QTest::newRow("glyph scale out of range")
         << "/icon/stateOverrides/normal/glyphScale" << QVariant(3)
@@ -1668,7 +1668,7 @@ void PresetCatalogTest::builtInCatalogsAreExactAndValid()
                  QString::fromUtf8(expectedIconPresets[index].name));
         QVERIFY2(!preset->identity.description.isEmpty(), qPrintable(id));
         QVERIFY(preset->identity.builtIn);
-        // PD-21: the revised Pedestal preset explicitly enables its plate.
+        // The revised Pedestal preset explicitly enables its plate.
         const bool pedestalPreset = id == QStringLiteral("blue-pedestal") || id == QStringLiteral("red-pedestal");
         QCOMPARE(preset->identity.revision, pedestalPreset ? 2 : 1);
         QCOMPARE(preset->panelValues().value(QStringLiteral("iconPedestalEnabled")).toBool(),
@@ -1690,7 +1690,7 @@ void PresetCatalogTest::builtInCatalogsAreExactAndValid()
         QVERIFY(m_profiles->contains(preset->fallback.motionProfileId));
     }
 
-    // The lineage TASK-0034 declared on its themes is now closed: each named
+    // The lineage declared on its themes is now closed: each named
     // preset exists and is built on the theme that named it.
     int declaredIntents = 0;
     for (const QVariant &candidate : std::as_const(m_themes))

@@ -64,8 +64,8 @@ enum class PanelSettingsNormalization
     Revision
 };
 
-// What decides whether Panel Studio offers a field for the selected panel
-// (ADREP-TASK-001). Every presented field names one, and Panel Studio has one
+// What decides whether Panel Studio offers a field for the selected panel.
+// Every presented field names one, and Panel Studio has one
 // availability rule for each. A name that is not listed here is never offered
 // (fail closed), and panel-settings-schema-test fails on a field that uses one.
 enum class EditorCapability
@@ -203,7 +203,7 @@ public:
     [[nodiscard]] static QVariantMap runtimeValues(
         PanelSettingsFieldScope scope,
         const QVariantMap &record);
-    // The editor-owned surface, layout and icon appearance for PD-17. This is
+    // The editor-owned surface, layout and icon appearance a platform keeps. This is
     // projection data, including values whose controls are currently hidden.
     [[nodiscard]] static QVariantMap flatLookValues(const QVariantMap &record);
     [[nodiscard]] static QVariantList editorDescriptors(

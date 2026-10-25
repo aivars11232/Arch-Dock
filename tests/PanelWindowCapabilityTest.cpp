@@ -1,6 +1,7 @@
 #include "model/PanelIconCapacity.h"
 #include "model/PanelCapabilityResolver.h"
 #include "RendererBuildConfig.h"
+#include "QmlGarbageCollector.h"
 #include "model/PanelDefinition.h"
 #include "model/PanelSettingsSchema.h"
 #include "PanelRegistry.h"
@@ -114,7 +115,7 @@ QQuickItem *visibleItem(QQuickWindow *window, const QString &name)
     return nullptr;
 }
 
-// ADREP-TASK-001 Studio truth matrix (tests/data/studio-truth-matrix.json).
+// The Studio truth matrix (tests/data/studio-truth-matrix.json).
 QVariantMap truthMatrixFixture()
 {
     QFile file(QTest::qFindTestData(QStringLiteral("data/studio-truth-matrix.json"),
@@ -1306,7 +1307,7 @@ void PanelWindowCapabilityTest::studioFolderItemNames()
     QVERIFY(registry);
     const QString panel = native ? QStringLiteral("bottom") : registry->addFreePanel();
     // Folder settings are offered for content that can hold folders, the
-    // launcher and hybrid content that take drops (ADREP-TASK-001).
+    // launcher and hybrid content that take drops.
     if (!native)
         QVERIFY(backend.applyPanelSettingsTransaction(panel,
             registry->panelDefinition(panel)->settingsRevision, {{"type", "launcher"}})
@@ -1375,11 +1376,9 @@ void PanelWindowCapabilityTest::studioPlainSurfaceOffers3DWhereItWorks()
         && ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT;
     QTRY_COMPARE(popup->property("scene3DControlsAvailable").toBool(), session3D);
     // Appearance no longer sends people to the themes for 3D: it points to
-    // the one 3D page where 3D works. Contract change, ADREP-TASK-001 (owner,
-    // 2026-10-07: "If the tab is empty, there's no need for that tab"): a
+    // The one 3D page where 3D works. a
     // session that cannot draw 3D has no 3D page, and no note about it
-    // either (the owner, 2026-10-13: "these green things can be removed,
-    // they serve no purpose").
+    // either.
     QVariant rows;
     QVERIFY(QMetaObject::invokeMethod(popup.get(), "panelAppearanceRows", Q_RETURN_ARG(QVariant, rows)));
     const auto actionsOf = [](const QVariant &list) {
@@ -1646,7 +1645,7 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     const auto freeFields = fieldKeys(backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList());
     for (const QString &key : {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("panelRotationMode")})
         QVERIFY2(freeFields.contains(key), qPrintable(key));
-    // Contract change, ADREP-TASK-001 (PD-01): a free panel has no opening or
+    // A free panel has no opening or
     // closing mechanism, so none of its settings is offered there.
     for (const QString &key : {QStringLiteral("presentationMode"), QStringLiteral("openDelay"),
          QStringLiteral("closeDelay"), QStringLiteral("collapseMechanism")})
@@ -1759,7 +1758,7 @@ void PanelWindowCapabilityTest::studioPanelMotionControls()
     const auto candidate = popup->property("selectedRendererCandidate").value<QJSValue>().toVariant().toMap();
     QCOMPARE(candidate.value("presentationMode").toString(), QStringLiteral("collapsed"));
     QCOMPARE(candidate.value("collapseMechanism").toString(), QStringLiteral("collapse-horizontal"));
-    // The panel's preview is on Overview (the owner, 2026-10-13).
+    // The panel's preview is on Overview.
     QVERIFY(!item(popup.get(), "panel-studio-live-renderer-preview"));
     popup->setProperty("mainTabIndex", 0);
     QVERIFY(QQuickTest::qWaitForPolish(window));
@@ -1909,7 +1908,7 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
         QVERIFY(reloaded.panelDefinition(panel)->surface.parameters3D.value("iconSolid").toBool());
 }
 
-// AD3D-TASK-002: desktop 3D editing starts only for a free panel drawn in 3D,
+// Desktop 3D editing starts only for a free panel drawn in 3D,
 // and the panel's gizmo cannot change anything outside such an edit.
 void PanelWindowCapabilityTest::sceneEditAuditionsOnlyAFree3DPanel()
 {
@@ -1950,8 +1949,8 @@ void PanelWindowCapabilityTest::sceneEditAuditionsOnlyAFree3DPanel()
     QVERIFY(!backend.panelRendererConfiguration(panel).value("sceneEditActive").toBool());
 }
 
-// ADFIX UF-08: what the owner waits for while editing a 3D panel in Panel
-// Studio. The owner's panel is Orange in its own 3D on a circle of radius 300
+// What a user waits for while editing a 3D panel in Panel
+// Studio. The panel is Orange in its own 3D on a circle of radius 300
 // tilted to 60 degrees. Each operation is timed several times; with
 // ARCHDOCK_BENCHMARK_DIR set, p50 and p95 and the theme packages read from
 // disk are written there as settings-latency.json.
@@ -2242,8 +2241,7 @@ void PanelWindowCapabilityTest::themeCardsResolveEachThemesOwnRenderer()
             const QString id = it.key();
             showLook(id);
             QQuickItem *card = nullptr;
-            // A free panel lists the looks made for free docks (the owner,
-            // 2026-10-13): the horizontal skins resolve but have no card.
+            // A free panel lists the looks made for free docks: the horizontal skins resolve but have no card.
             const QStringList orientations = it.value().value("capabilities").toMap()
                 .value("orientations").toStringList();
             if (!orientations.isEmpty() && !orientations.contains(QStringLiteral("free"))) {
@@ -2308,8 +2306,8 @@ void PanelWindowCapabilityTest::studioPageWheelInput()
     QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
     QVERIFY2(component.isReady(), qPrintable(component.errorString()));
     // Panels > Behavior keeps enough rows to overflow at this size, and the
-    // Panels tabs overflow its width; Appearance lost its Shape row (PD-04)
-    // and Icons now has too few tabs to overflow (ADREP-TASK-001).
+    // Panels tabs overflow its width; Appearance lost its Shape row
+    // and Icons now has too few tabs to overflow.
     std::unique_ptr<QObject> popup(component.createWithInitialProperties({
         {"selectedPanelId", panel}, {"mainTabIndex", 1}, {"subTabIndex", 3},
         {"width", 640}, {"height", 520}}));
@@ -3001,7 +2999,7 @@ void PanelWindowCapabilityTest::studioEditsOnePanelAtATime()
     QTRY_VERIFY(place("free") && place("free")->property("checked").toBool());
 }
 
-// The owner, 2026-10-13: "make sure there aren't any duplicate settings";
+// Make sure there aren't any duplicate settings";
 // icon settings belong to Icons, tile settings to Icon Tiles and stand
 // settings to Pedestals. Every page offered for a free and an edge panel: no
 // setting is on two pages, the tile shape and the hover names are where they
@@ -3364,7 +3362,7 @@ void PanelWindowCapabilityTest::rendererSwitchRetainsOnlyUnchangedInactiveFields
         .contains(QStringLiteral("scene3DQuality")));
     const auto revision = registry->panelDefinition(panelId)->settingsRevision;
     const auto before = registry->panelDefinition(panelId)->toPersistedMap();
-    // A value other than the default (high since 2026-10-12): the default
+    // A value other than the default (high): the default
     // is no change and passes without touching the field.
     QCOMPARE(window.applyPanelSettingsTransaction(panelId, revision,
         {{QStringLiteral("scene3DQuality"), QStringLiteral("low")}}, {})
@@ -3641,7 +3639,7 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "cancelStudioChanges"));
         QCOMPARE(registry->panelDefinition(panelId)->toPersistedMap(), saved);
 
-        // AD3D-TASK-002: a baked 2.5D panel is switched to 3D on the 3D page
+        // A baked 2.5D panel is switched to 3D on the 3D page
         // and back, and keeps its own theme throughout.
         popup.reset();
         const auto blue = registry->themeCandidate(panelId, "ring-platform-blue", "complete");
@@ -3679,21 +3677,20 @@ void PanelWindowCapabilityTest::meshSceneEditorIsGatedAndTransactional()
                  "scene3DFieldOfView", "scene3DThickness", "scene3DQuality",
                  "scene3DKeyLight", "scene3DFillLight", "scene3DTransitions", "scene3DFloat"})
             QVERIFY2(keys.contains(key), qPrintable(key));
-        // Moving and scaling are done by hand on the desktop (the owner,
-        // 2026-10-13: "those controls I don't really need"): Edit on desktop
+        // Moving and scaling are done by hand on the desktop: Edit on desktop
         // and Reset stay, the sliders went.
         for (const QString &key : {"scene3DPositionX", "scene3DPositionY", "scene3DPositionZ", "scene3DScale",
                  "scene3DScaleX", "scene3DScaleY"})
             QVERIFY2(!keys.contains(key), qPrintable(key));
         QVERIFY(actions.contains("edit-3d-on-desktop") && actions.contains("reset-3d-transform"));
         // Pedestal height is Auto's column height: a new panel has no stands
-        // (the owner, 2026-10-12), so it is kept unseen until Auto is chosen.
+        //, so it is kept unseen until Auto is chosen.
         QVERIFY(!keys.contains("scene3DIconElevation"));
-        // ADFIX UF-06: the blue ring stands on a generated platform, so the
+        // The blue ring stands on a generated platform, so the
         // platform's width and its bend are offered.
         for (const QString &key : {"scene3DBand", "scene3DBend"})
             QVERIFY2(keys.contains(key), qPrintable(key));
-        // Contract change, ADREP-TASK-001 (no setting on two pages, PD-08):
+        // 
         // icon spacing is on Icons > Appearance and the Dock layout on Layout,
         // where the blue ring's ring and circle, which draw the same, are not
         // two choices.
@@ -3907,7 +3904,7 @@ void PanelWindowCapabilityTest::editorSnapshotsExposeOnlyProjectedEditableState(
     QVERIFY(studioSnapshot.value(QStringLiteral("success")).toBool());
     const QVariantList studioFields = studioSnapshot.value(
         QStringLiteral("panelFields")).toList();
-    // Contract change, ADREP-TASK-001 (settings truth): an edge panel's applet
+    // An edge panel's applet
     // lays its row out from the panel's own orientation and padding, so the
     // record's Dock layout, Layout scale and Panel padding reach nothing there
     // and are not offered.
@@ -3973,7 +3970,7 @@ void PanelWindowCapabilityTest::managedVersionTwoCapabilitiesDriveFallbackAndEdi
              QStringLiteral("fixture-baked-ring"));
     const QVariantMap validRenderer = validResolution.value(
         QStringLiteral("renderer")).toMap();
-    // The free host presents the baked renderer TASK-0034 installed, so this
+    // The free host presents the installed baked renderer, so this
     // package now resolves to the tier it asked for instead of falling back.
     QCOMPARE(validRenderer.value(QStringLiteral("requestedTier")).toString(),
              QStringLiteral("baked2.5d"));
@@ -4257,7 +4254,7 @@ void PanelWindowCapabilityTest::builtInThemeCandidateCommitsThroughUnifiedTransa
     QVERIFY(!values.contains(QStringLiteral("screenId")));
     QVERIFY(!values.contains(QStringLiteral("surface3D")));
 
-    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // Studio loads a theme through panelThemeCandidate(),
     // which leaves out values for fields that do not act on the panel. An edge
     // panel's applet draws its own row, so the theme's layout is not set.
     const QVariantMap studioValues = window.panelThemeCandidate(
@@ -4346,7 +4343,7 @@ void PanelWindowCapabilityTest::builtInChassisCandidateProjectsIntoStudioAndRend
     QCOMPARE(values.value(QStringLiteral("layout")).toString(),
              QStringLiteral("horizontal"));
 
-    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // Studio loads a theme through panelThemeCandidate(),
     // which leaves out values for fields that do not act on the panel. An edge
     // panel's applet draws its own row, so the theme's layout is not set.
     const QVariantMap studioValues = window.panelThemeCandidate(
@@ -4454,7 +4451,7 @@ void PanelWindowCapabilityTest::builtInEnergyCandidateProjectsGlowAndTheme()
     }
     QVERIFY(!cyanValues.isEmpty());
 
-    // ADREP-TASK-001: Studio loads a theme through panelThemeCandidate(),
+    // Studio loads a theme through panelThemeCandidate(),
     // which leaves out values for fields that do not act on the panel. An edge
     // panel's applet draws its own row, so the theme's layout is not set.
     const QVariantMap studioValues = window.panelThemeCandidate(
@@ -4691,7 +4688,7 @@ void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()
     panel.segments.first().source = QStringLiteral("status");
     panel.segments.first().entryIds = {QStringLiteral("status:cpu"), QStringLiteral("status:memory")};
     // Launch feedback is offered for content that launches applications
-    // (ADREP-TASK-001, PD-07), so this panel holds launcher content.
+    //, so this panel holds launcher content.
     const auto applied = window.applyPanelSettingsTransaction(panelId, panel.settingsRevision,
         {{"type", "launcher"}, {"layout", "horizontal"},
          {"segments", QVariantList{panel.segments.first().toVariantMap()}},
@@ -5304,7 +5301,7 @@ void PanelWindowCapabilityTest::runningOnlyIconPropertiesAreUnavailable()
              QStringLiteral("entry-not-supported"));
 }
 
-// TASK-0032 Phase D: the applet's guards reach the backend.
+// The applet's guards reach the backend.
 //
 // decidePanelVisibility already refused to conceal a locked panel, and
 // PanelVisibilityTest proves that rule for every guard. What was missing is the
@@ -5363,7 +5360,7 @@ void PanelWindowCapabilityTest::interactionGuardsReachTheHostVisibilityDecision(
              false);
 }
 
-// TASK-0032 closure: the live applet's resting presentation state is
+// The live applet's resting presentation state is
 // observable, and an explicit request reaches it. The first is how a harness
 // proves a real applet collapsed without injecting input; the second is the
 // producer the `manual` trigger lacked, which had left a collapsed manual
@@ -5440,7 +5437,7 @@ void PanelWindowCapabilityTest::presentationStateAndRequestsAreObservableThrough
              QStringLiteral("open"));
 }
 
-// TASK-0033 Phase A: a free panel's content type decides what it shows, its
+// A free panel's content type decides what it shows, its
 // entries are panel-specific and ordered, the order is committed as a
 // revision and survives a registry reload, and free ids never enter the
 // shared application reorder.
@@ -5603,7 +5600,7 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
     QCOMPARE(window.panelEntryOrder(panelId), QStringList({betaId}));
 }
 
-// TASK-0033 Phase C: the rotation controls exist only where the resolver says
+// The rotation controls exist only where the resolver says
 // the host can turn the scene. A native edge panel never sees them; a free
 // radial panel does, with the static angle carrying the resolved degree range
 // and the speed keeping its own schema bounds.
@@ -5698,7 +5695,7 @@ void PanelWindowCapabilityTest::wholePanelRotationFieldsAreGatedByTheResolver()
                 .value(QStringLiteral("rotation")).toMap()
                 .value(QStringLiteral("available")).toBool());
 
-    // ADREP-TASK-002 (PD-16, PD-25): what motion moves, the item travel
+    // What motion moves, the item travel
     // speed and the scroll sensitivity. A new free panel moves its items.
     QCOMPARE(registry->panelDefinition(panelId)->layout.motionTarget, QStringLiteral("items"));
     const auto motionFields = [&]() {
@@ -5834,11 +5831,11 @@ void PanelWindowCapabilityTest::studioDecorationPictures()
     }
 }
 
-// ADREP-TASK-002: Animations lists free-panel motion in the order it is
+// Animations lists free-panel motion in the order it is
 // decided and says what the wheel moves; Layout offers Direction for the open
-// shapes as presets of the layout angle, which stays below it (PD-24, PD-25).
+// shapes as presets of the layout angle, which stays below it.
 // Not a check: pictures of Panel Studio's real pages for design reviews
-// (the owner, 2026-10-13: "show me the design"), saved only when
+//, saved only when
 // ARCHDOCK_STUDIO_SNAPSHOT_DIR names a folder.
 namespace
 {
@@ -6310,8 +6307,7 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
         auto studio = open(); QVERIFY(studio);
         const QVariantList animations = rows(studio.get(), 9);
         QCOMPARE(keys(animations), QStringList({"panelRotationMode", "panelMotionTarget", "scrollSensitivity"}));
-        // No notes on the page (the owner, 2026-10-13: "these green things
-        // can be removed, they serve no purpose").
+        // No notes on the page.
         QVERIFY2(notices(animations).isEmpty(), qPrintable(notices(animations)));
     }
     QVERIFY(set({{"panelRotationMode", "clockwise"}}));
@@ -6386,7 +6382,7 @@ void PanelWindowCapabilityTest::studioMotionAndDirectionRows()
     QCOMPARE(directions(layoutPage(studio.get())).value("rows").toInt(), 1);
 }
 
-// ADREP-TASK-005, PD-20/21: package declarations govern available options;
+// Package declarations govern available options;
 // editable native controls stage values, and Apply alone persists them.
 void PanelWindowCapabilityTest::studioIconAppearanceOptionsAreTransactional()
 {
@@ -6466,7 +6462,7 @@ void PanelWindowCapabilityTest::studioIconAppearanceOptionsAreTransactional()
     QCOMPARE(draft(popup.get()).value("iconDiameter").toInt(), 74);
 
     // The style's own pedestal is on Pedestals, the shape under the icons on
-    // Icon Tiles (one page per setting, the owner, 2026-10-13).
+    // Icon Tiles (one page per setting).
     popup->setProperty("mainTabIndex", 4);
     popup->setProperty("subTabIndex", 0);
     QVERIFY(QQuickTest::qWaitForPolish(window));
@@ -6519,7 +6515,7 @@ void PanelWindowCapabilityTest::studioIconAppearanceOptionsAreTransactional()
 
 void PanelWindowCapabilityTest::studioTileParametersAreTransactional()
 {
-    // ADREP-TASK-005, OF-40/41: new tile controls preserve the original custom
+    // New tile controls preserve the original custom
     // shape/fill/border/opacity, stage before Apply, and survive reopening.
     QQmlApplicationEngine engine;
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
@@ -6595,7 +6591,7 @@ void PanelWindowCapabilityTest::studioTileParametersAreTransactional()
     QCOMPARE(registry->panelDefinition(panel)->iconStyle.tileThickness, 8.0);
 }
 
-// ADREP-TASK-003: Fan opening, Stack length and Ring size stand on Behavior
+// Fan opening, Stack length and Ring size stand on Behavior
 // right under Folder layout, each only while its own layout is chosen and
 // only on a free panel; Ring size only where the dock has a radius.
 void PanelWindowCapabilityTest::studioFolderShapeRows()
@@ -6831,11 +6827,9 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
 
     // The preset pages list two separate catalogs, and selecting a card
     // replaces the panel's preview with the preset's without applying it.
-    // Contract change, ADREP-TASK-001: the icon preset pages are 2:4 and 2:5
-    // since the Icon Styles tab was removed (PD-05); the bottom edge panel
-    // lists the 11 presets made for horizontal edge panels (owner,
-    // 2026-10-07: "if I make free panel why would I need to see horizontal
-    // and vertical panel presets"); and a catalog of your own with nothing
+    // The icon preset pages are 2:4 and 2:5
+    // since the Icon Styles tab was removed; the bottom edge panel
+    // lists the 11 presets made for horizontal edge panels; and a catalog of your own with nothing
     // in it has no tab (owner: "If the tab is empty, there's no need for that
     // tab"). The panel presets, built-in and your own, are on one page,
     // Panels > Presets, with the looks; the two panel preset tabs after it
@@ -6869,7 +6863,7 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
         QVERIFY(!popup->property("presetPreviewActive").toBool());
         QVERIFY(!findVisible(presetPreview));
         // The panel's own preview is on the pages that show the panel, not
-        // in Panels (the owner, 2026-10-13).
+        // in Panels.
         QCOMPARE(findVisible(QStringLiteral("panel-studio-live-renderer-preview")) != nullptr, page.section != 1);
 
         const QVariantList listed = cards();
@@ -6923,7 +6917,7 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
     // The decorations are on Appearance, under the panelpaper, nowhere
     // else; Presets holds the panel presets. The icon style is chosen in
     // one place, the Icon style choice on Icons > Appearance; the Icon
-    // Styles tab that repeated it is gone (PD-05).
+    // Styles tab that repeated it is gone.
     QVERIFY(openPage(1, 2));
     QTRY_VERIFY(findVisible(QStringLiteral("theme-live-preview-obsidian-glass")));
     QVERIFY(openPage(1, 6));
@@ -6984,8 +6978,8 @@ void PanelWindowCapabilityTest::studioPresetPagesBrowseWithoutChangingAnyPanel()
 
 void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
 {
-    // ADREP-TASK-001, the owner (2026-10-07): "if I make free panel why would
-    // I need to see horizontal and vertical panel presets". Built-in Panel
+    // A free panel has no use for horizontal and vertical panel presets.
+    // Built-in Panel
     // Presets lists the presets made for the selected panel: a free panel its
     // free-panel presets, an edge panel the edge presets of its orientation.
     // Icon presets set only icon values, which act on every panel, so every
@@ -7031,8 +7025,7 @@ void PanelWindowCapabilityTest::studioPresetListsMatchTheSelectedPanel()
     QCOMPARE(icons.size(), 15);
     QCOMPARE(listed(QStringLiteral("bottom"), 2, 4), icons);
 
-    // Panel Themes / Skins likewise (the owner, 2026-10-13: the horizontal
-    // chassis skins on a free panel are "unrelated to free docks"): a free
+    // Panel Themes / Skins likewise: a free
     // panel lists the looks made for free docks, an edge panel those of its
     // orientation; a built-in flat look fits both.
     const auto looks = [&](const QString &panel) {
@@ -7142,8 +7135,7 @@ void PanelWindowCapabilityTest::presetDefaultsDoNotRewriteExistingInstances()
     QCOMPARE(settingsSnapshot(), before);
 }
 
-// ADREP-TASK-001 (OF-02 to OF-10, PD-01 to PD-08): the owner's free circular
-// panel from the video audit of 2026-10-06 ("Free panel 13": a launcher circle
+// The free circular panel from the video audit ("Free panel 13": a launcher circle
 // whose Width was set to 700). Each Studio page it opens is read as drawn,
 // and only controls that act on this panel may be offered, each on one page.
 // With ARCHDOCK_STUDIO_CAPTURE_DIR set, every page is also saved as a capture.
@@ -7160,10 +7152,10 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
         registry->panelDefinition(panel)->settingsRevision,
         {{"type", "launcher"}, {"layout", "circular"}, {"appearance", "futuristic"},
          {"iconStyle", "dark-orb"}, {"panelRotationMode", "clockwise"},
-         // The owner's circle rotated, so the upgrade has it turn as a whole
-         // (ADREP-TASK-002, PD-25).
+         // The circle rotated, so the upgrade has it turn as a whole
+         //.
          {"panelMotionTarget", "panel"}}).value("success").toBool());
-    // Values the owner stored through controls that did nothing there: the
+    // Values stored through controls that did nothing there: the
     // Width they typed and a shape Dark Orb's own layers ignore.
     registry->setPanelValue(panel, QStringLiteral("width"), 700);
     registry->setPanelValue(panel, QStringLiteral("iconShape"), QStringLiteral("squircle"));
@@ -7199,7 +7191,7 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
         QVariant rows;
         QVERIFY(QMetaObject::invokeMethod(popup.get(), "rowsForCurrentPage", Q_RETURN_ARG(QVariant, rows)));
         rowsByPage.insert(page.name, rows.toList());
-        // A page is offered when its tab is shown; before ADREP-TASK-001
+        // A page is offered when its tab is shown; before the Studio truth rules
         // every tab was shown.
         QVariant offered = true;
         QMetaObject::invokeMethod(popup.get(), "subtabAvailable", Q_RETURN_ARG(QVariant, offered),
@@ -7259,15 +7251,13 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     const QStringList rotation{"panelRotationMode", "panelRotationSpeed", "panelRotationTrigger",
         "panelMotionTarget", "scrollSensitivity"};
 
-    // OF-02: no Alignment (nor any other edge-panel placement) on General.
+    // No Alignment (nor any other edge-panel placement) on General.
     for (const QString &key : {QStringLiteral("alignment"), QStringLiteral("edge")})
         QVERIFY2(!controls("panels-general").contains(key), qPrintable(key));
     QVERIFY(controls("panels-general").contains("x") && controls("panels-general").contains("y"));
-    // OF-03, PD-02: no Width or Height that does nothing. A tab with nothing
-    // to change is not shown (the owner, 2026-10-07: "If the tab is empty,
-    // there's no need for that tab"): a radius-driven circle's size is its
-    // Radius on the Layout page, which carries no notes (the owner,
-    // 2026-10-13: "these green things can be removed").
+    // No Width or Height that does nothing. A tab with nothing
+    // to change is not shown: a radius-driven circle's size is its
+    // Radius on the Layout page, which carries no notes.
     QVERIFY(!offeredByPage.value("panels-size"));
     QVERIFY(controls("panels-layout").contains("layoutRadius"));
     for (const QString &page : rowsByPage.keys())
@@ -7275,9 +7265,9 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
             QVERIFY2(value.toMap().value("kind").toString() != "notice"
                          || value.toMap().value("warning").toBool(),
                      qPrintable(page + ": " + value.toMap().value("text").toString()));
-    // OF-05, PD-04: Appearance has no Shape.
+    // Appearance has no Shape.
     QVERIFY(!controls("panels-appearance").contains("shape"));
-    // OF-06, OF-07, PD-01: Behavior has no Dynamic and no opening or closing.
+    // Behavior has no Dynamic and no opening or closing.
     QVERIFY(!controls("panels-behavior").contains("dynamic"));
     QVERIFY(!controls("panels-behavior").contains("visibilityMode"));
     for (const QString &page : rowsByPage.keys())
@@ -7285,7 +7275,7 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
             QVERIFY2(!controls(page).contains(key), qPrintable(page + ": " + key));
     QVERIFY2(!sections("panels-animations").contains("Opening and closing"),
              "Animations offers an opening and closing section on a free panel");
-    // OF-04, PD-08: rotation and travel only on Animations. The panel turns
+    // Rotation and travel only on Animations. The panel turns
     // as a whole, so its item travel speed is not shown.
     for (const QString &key : rotation) {
         QVERIFY2(!controls("panels-layout").contains(key), qPrintable(key));
@@ -7293,18 +7283,18 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     }
     for (const QString &page : rowsByPage.keys())
         QVERIFY2(!controls(page).contains("panelTravelSpeed"), qPrintable(page));
-    // OF-08, PD-06: no Indicators on a free panel.
+    // No Indicators on a free panel.
     QVERIFY(!offeredByPage.value("icons-indicators"));
     for (const QString &page : rowsByPage.keys())
         QVERIFY2(!controls(page).contains("showIndicators"), qPrintable(page));
-    // OF-09, PD-07: every notification item says in a sentence what it does.
+    // Every notification item says in a sentence what it does.
     for (const QVariant &value : rowsByPage.value("icons-notifications")) {
         const QVariantMap row = value.toMap();
         if (!row.value("key").toString().isEmpty())
             QVERIFY2(row.value("description").toString().endsWith('.'),
                      qPrintable(row.value("key").toString()));
     }
-    // OF-10, PD-05: one icon style selector, on Icons > Appearance.
+    // One icon style selector, on Icons > Appearance.
     QVERIFY(!(offeredByPage.value("icons-fifth-tab")
               && tabLabelByPage.value("icons-fifth-tab") == QStringLiteral("Icon Styles")));
     QStringList styleSelectors;
@@ -7316,7 +7306,7 @@ void PanelWindowCapabilityTest::ownersFreeCircleOffersOnlyWhatWorks()
     QHash<QString, QString> owner;
     for (const QString &page : rowsByPage.keys())
         for (const QString &key : controls(page)) {
-            // PD-20 places Shape beside Style; OF-40 preserves custom tile
+            // Shape stands beside Style; the custom tile
             // Shape on its original page. No other duplicate is permitted.
             const bool sharedShape = key == QStringLiteral("iconShape")
                 && QSet<QString>{owner.value(key), page}
@@ -7451,7 +7441,7 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
             for (const QString &key : pageKeys(section, subtab)) {
                 // (c) No setting is shown on two pages; the shape under the
                 // icons, once on Icons > Appearance as well, is on Icon Tiles
-                // alone (the owner, 2026-10-13).
+                // alone.
                 const QString earlier = pageOf.value(key, standPageOf.value(key));
                 if (!earlier.isEmpty() && earlier != page)
                     failures.append(QStringLiteral("%1 is on %2 and %3").arg(key, earlier, page));
@@ -7542,7 +7532,7 @@ void PanelWindowCapabilityTest::studioTruthMatrix()
         const auto apply = [&](const QVariant &next) {
             QVariantMap changedValues{{key, next}};
             if (key == QStringLiteral("rendererTier")) {
-                // PD-17: Platform presentation is the action now shown even
+                // Platform presentation is the action now shown even
                 // when the consumer cannot draw true 3D. Legacy bases here
                 // have no saved flat look; off clears their platform IDs.
                 // Restore the complete base after testing that action.
@@ -7674,6 +7664,8 @@ int main(int argc, char **argv)
             "DBUS_SESSION_BUS_ADDRESS",
             QByteArrayLiteral("unix:path=/nonexistent/archdock-phase-b-session-bus"));
     }
+    // Every engine this run creates collects in one go, as Arch Dock's programs do.
+    const ArchDock::QmlGarbageCollector::WholeCollections wholeCollections;
     QGuiApplication application(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("ArchDockTests"));
     QCoreApplication::setApplicationName(QStringLiteral("PanelWindowCapabilityTest"));

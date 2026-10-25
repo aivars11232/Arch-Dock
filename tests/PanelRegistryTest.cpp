@@ -3583,7 +3583,7 @@ void PanelRegistryTest::validatesBuiltInCapabilityCatalog()
                 QCOMPARE(profile->presentationMechanisms.size(), volumetric ? 2 : 1);
                 QCOMPARE(preview.value(QStringLiteral("mode")).toString(),
                          QStringLiteral("free"));
-                // Preset lineage for the built-in catalog TASK-0040 owns.
+                // Preset lineage for the built-in catalog owns.
                 const QVariantMap intent = theme.value(
                     QStringLiteral("presetIntent")).toMap();
                 QVERIFY(!intent.value(
@@ -3995,7 +3995,7 @@ void PanelRegistryTest::resolvesThemeCandidatesWithoutMutation()
     QVERIFY(!registry.panelIds().contains(preview.identity.id));
 }
 
-// AD3D-TASK-002: a free radial panel can be drawn in 3D without changing its
+// A free radial panel can be drawn in 3D without changing its
 // look. The look keeps its id; the generic scene adds the 3D tier, and turning
 // 3D off, or a session without 3D, returns to the look's own renderer.
 void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
@@ -4020,7 +4020,7 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
     const QVariantMap scene = projection->value("scene3D").toMap();
     QVERIFY(scene.value("generic").toBool());
     QVERIFY(!scene.contains("texture"));
-    // ADFIX UF-03: the renderer generates the platform from the panel's own
+    // The renderer generates the platform from the panel's own
     // layout; no other theme's mesh is borrowed and recoloured.
     const QVariantMap resources = projection->value("scene3DResources").toMap();
     QVERIFY(!resources.contains("mesh"));
@@ -4134,7 +4134,7 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
     QCOMPARE(emptyValue(QVariant(*sampled), QString{}), QString{});
     registry.setPanelValue(panelId, QStringLiteral("layout"), QStringLiteral("ring"));
 
-    // ADFIX AUD-02: adapted exactly where a platform follows the layout: the
+    // Adapted exactly where a platform follows the layout: the
     // 300-degree radial arc and the polygons are generated along their own
     // paths.
     for (const QString &layout : {QStringLiteral("radial"), QStringLiteral("octagon"),
@@ -4463,7 +4463,7 @@ void PanelRegistryTest::artworkClearPersistenceFailure()
     QVERIFY(PanelRegistry().panelValue("bottom", "themePackageManifest").toString().isEmpty());
 }
 
-// The theme package cache keeps the ADFIX speed (UF-08): an unchanged package
+// The theme package cache keeps its speed: an unchanged package
 // is read and verified once, however often the settings path asks for it.
 void PanelRegistryTest::themePackageCacheReusesAnUnchangedPackage()
 {

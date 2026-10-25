@@ -101,8 +101,7 @@ ColumnLayout {
         text: {
             if (!root.selected) return qsTr("Create a profile from your current panels, or import one.");
             // What is shown on the desktop: the hidden built-in edge panels
-            // every arrangement keeps are not counted (the owner, 2026-10-12:
-            // "it shows as if I saved 4 panels, when it's just 1").
+            // every arrangement keeps are not counted.
             const shown = root.selected.shownPanelCount === undefined
                 ? Number(root.selected.panelCount) : Number(root.selected.shownPanelCount);
             let summary = (shown === 1 ? qsTr("1 panel") : qsTr("%1 panels").arg(shown))
@@ -114,7 +113,7 @@ ColumnLayout {
         }
     }
     Label {
-        // The owner (2026-10-12): one Apply created 13 free panels from a
+        // Once one Apply created 13 free panels from a
         // profile that had captured every dead record. The backend refuses
         // more than its limit; this says so before the click.
         objectName: "profile-free-panel-notice"
@@ -223,7 +222,7 @@ ColumnLayout {
         wrapMode: Text.WordWrap
         font.pixelSize: 12
         color: root.theme.textSecondary
-        // The owner (2026-10-12): a saved arrangement must reach the desktop
+        // A saved arrangement must reach the desktop
         // even when its free panel is gone.
         text: qsTr("A profile holds the panels that are on the desktop when it is saved. Apply Profile puts the whole saved arrangement back: a free panel the profile holds that is not on the desktop is created again with its saved look. For one saved panel look, use Panels > Presets with \"Preview on a new panel\".")
         Accessible.name: text

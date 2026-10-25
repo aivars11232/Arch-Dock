@@ -84,9 +84,9 @@ bool curvedLayout(const QString &pathType)
 }
 
 // Whether light round a surface of this look makes sense: not round grass
-// (Organic), marble (Pedestal) or a lime's peel, the natural materials (the
-// owner, 2026-10-13: "where glow wouldn't really be practical, that setting
-// ... should be invisible"). Glass, energy, circuitry and the tech metals
+// (Organic), marble (Pedestal) or a lime's peel, the natural materials,
+// where a glow would not be practical, so the setting is hidden. Glass,
+// energy, circuitry and the tech metals
 // glow.
 bool glowFitsLook(const QString &look)
 {
@@ -579,7 +579,7 @@ QVariantList PanelWindow::iconStyleDefinitions() const
     return m_panelRegistry.iconStyleDefinitions();
 }
 
-// Panel Studio's truth (ADREP-TASK-001): a field is offered only where it acts
+// Panel Studio's truth: a field is offered only where it acts
 // on the candidate's host, layout, renderer and theme. Every editor capability
 // has exactly one rule in the switch below, which the compiler checks; a
 // capability name the schema does not define is never offered (fail closed).
@@ -633,14 +633,14 @@ QVariantList PanelWindow::panelSettingsEditorFields(
     };
 
     // The candidate's theme projection, built once for every field that asks
-    // (ADFIX UF-08: it was built again for each 3D field of every edit).
+    // (it was built again for each 3D field of every edit).
     std::optional<std::optional<QVariantMap>> projectedTheme;
     const auto themeProjection = [&]() -> const std::optional<QVariantMap> & {
         if (!projectedTheme.has_value())
             projectedTheme = m_panelRegistry.themeRuntimeProjection(candidate);
         return *projectedTheme;
     };
-    // PD-20/21: declarations govern shape and style controls. Resolve once;
+    // Declarations govern shape and style controls. Resolve once;
     // repeated package projections would regress the Studio latency gate.
     std::optional<std::optional<QVariantMap>> projectedIconStyle;
     const auto iconStyleProjection = [&]() -> const std::optional<QVariantMap> & {
@@ -785,7 +785,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         case ArchDock::EditorCapability::ApplicationOverlays:
             // Badges and progress come from the applications on this panel,
-            // when the system reports them (PD-07).
+            // when the system reports them.
             available = applicationContent && m_overlayModel.available();
             break;
         case ArchDock::EditorCapability::LaunchFeedback:
@@ -799,7 +799,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = droppedContent;
             // A free panel opens its folders as a fan, a stack or a ring of
             // its own, each with its setting, shown while that layout is
-            // chosen; an edge panel's folders open a popup (ADREP-TASK-003).
+            // chosen; an edge panel's folders open a popup.
             static const QHash<QString, QString> shapeSettings{
                 {QStringLiteral("folderFanOpening"), QStringLiteral("fan")},
                 {QStringLiteral("folderStackLength"), QStringLiteral("stack")},
@@ -832,7 +832,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         case ArchDock::EditorCapability::DynamicPlacement:
         case ArchDock::EditorCapability::VisibilityMode:
             // Placement along a screen edge and Plasma's panel visibility
-            // belong to edge panels; a free panel has neither (OF-02, OF-06).
+            // belong to edge panels; a free panel has neither.
             available = !freeHost;
             // A bar of Arch Dock's own stands anywhere along its edge; a
             // Plasma panel is placed along it by Plasma.
@@ -842,7 +842,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         case ArchDock::EditorCapability::LengthMutation:
         case ArchDock::EditorCapability::ThicknessMutation:
             // A free panel is drawn from its layout's radius, scale and icons;
-            // a stored width or height reaches no renderer (OF-03, PD-02).
+            // a stored width or height reaches no renderer.
             available = !freeHost && controlAvailable(descriptor->editor.capability);
             break;
         case ArchDock::EditorCapability::ArbitraryXyPlacement:
@@ -852,8 +852,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             available = controlAvailable(descriptor->editor.capability);
             // An icon's motion settings with no motion chosen move nothing,
-            // so they are unseen until it has one (the owner, 2026-10-13: a
-            // setting that cannot apply is gone).
+            // so they are unseen until it has one.
             if (available && (key == QStringLiteral("animationTrigger") || key == QStringLiteral("animationSpeed")
                               || key == QStringLiteral("animationIntensity")))
                 inactive = candidate.motion.iconProfile == QStringLiteral("none");
@@ -890,7 +889,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     .contains(QStringLiteral("org.archdock.iconParameters"));
                 // The colour of the light round every icon (Icons > Glow) is
                 // this one too: offered while that glow shines, whatever the
-                // style (the owner, 2026-10-13).
+                // style.
                 const bool iconHalo = candidate.surface.parameters3D.value(QStringLiteral("iconGlow"), 0.0)
                     .toDouble() > 0.0;
                 if (available && key.startsWith(QStringLiteral("iconPedestal")))
@@ -942,9 +941,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         {
             // The look's own light: a skin's or baked platform's glow art,
             // and the bright parts of an energy look - bolts, gas, tubes,
-            // circuitry - in 2D and 3D, named for the look (the owner,
-            // 2026-10-13: "a settings on lightning glow too, same for other
-            // themes where there can be practical settings"). A look with no
+            // circuitry - in 2D and 3D, named for the look. A look with no
             // light of its own has nothing for it to scale.
             const QString look = panelLooks(candidate, tier).first().trimmed().toLower();
             const QString texture = panelLooks(candidate, tier).last().trimmed().toLower();
@@ -974,7 +971,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // offered. The whole presentation group disappears when the panel
             // has no way to collapse at all, rather than presenting a resting
             // state or a reveal handle that nothing could ever draw. A free
-            // panel has none (PD-01).
+            // panel has none.
             QStringList mechanisms;
             for (const ArchDock::CapabilityDecision &decision :
                  resolution.presentationMechanisms)
@@ -994,7 +991,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = resolution.available && collapsible;
             // With the open mechanism nothing opens or closes, so only the
             // choice of a mechanism and the resting state are shown; the
-            // settings of a mechanism wait until one is chosen (PD-01).
+            // settings of a mechanism wait until one is chosen.
             if (available && candidate.presentation.collapseMechanism == QStringLiteral("open") &&
                 key != QStringLiteral("presentationMode") && key != QStringLiteral("collapseMechanism"))
             {
@@ -1024,7 +1021,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 inactive = true;
             }
             // Padding is the margin of a skin's artwork around the icons; the
-            // other renderers draw nothing in it (OF-04, PD-03).
+            // other renderers draw nothing in it.
             if (available && key == QStringLiteral("layoutPadding"))
             {
                 available = tier == ArchDock::RendererTier::Skinned2D;
@@ -1040,7 +1037,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             available = resolution.rotation.available;
             // An open baked track (an arc) cannot turn under its artwork; any
             // other track is closed, as LayoutEngine.trackShape() reads it.
-            // Its entries still travel along it (ADREP-TASK-002), so the
+            // Its entries still travel along it, so the
             // motion settings stay and move the items only.
             const bool turns = !(available && baked &&
                 bakedTrack().value(QStringLiteral("shape")).toString() == QStringLiteral("arc"));
@@ -1065,7 +1062,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             }
             // The speeds and the trigger act while continuous motion runs,
             // each speed on what it moves; the wheel follows "Continuous
-            // motion moves" whether or not anything runs (PD-25).
+            // motion moves" whether or not anything runs.
             if (available)
             {
                 const bool continuous = candidate.layout.rotationMode != QStringLiteral("none");
@@ -1185,7 +1182,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 !candidate.surface.themeSource.trimmed().isEmpty();
             break;
         case ArchDock::EditorCapability::TileShape:
-            // PD-20: a package-declared silhouette follows the chosen shape.
+            // A package-declared silhouette follows the chosen shape.
             available = controlAvailable(QStringLiteral("icon-state-styling")) &&
                 drawsTiles && (candidate.iconStyle.tileMode == QStringLiteral("custom") || !iconStyleDrawsLayers()
                     || hasIconLayer([](const QVariantMap &layer) {
@@ -1214,7 +1211,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // none. A setting that draws nothing is kept unseen: the panel's
             // stand settings without a shape, the speed without a motion,
             // the folder items' settings without stands under them or
-            // without Own settings (the owner's 2026-10-12 requests).
+            // without Own settings.
             available = true;
             const QVariantMap &values = candidate.surface.parameters3D;
             const QString shape = values.value(QStringLiteral("pedestalShape"), QStringLiteral("none")).toString();
@@ -1300,7 +1297,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         case ArchDock::EditorCapability::Glow:
         {
             // Light round the panel, its icons or its tiles, each with its
-            // own settings on its own Appearance (the owner, 2026-10-13):
+            // own settings on its own Appearance:
             // where light round the look makes sense, and the reach and
             // colour only while it shines. An icon's picture glows in any
             // look; a tile glows where tiles are drawn.
@@ -1428,9 +1425,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     {QStringLiteral("plasma"), {"Plasma colour", "Violet", {QStringLiteral("rainbow")}}},
                     {QStringLiteral("neon"), {"Neon colour", "Cyan", {QStringLiteral("rainbow")}}},
                     {QStringLiteral("futuristic"), {"Circuit colour", "Original", {QStringLiteral("rainbow")}}},
-                    // Polished metal's faint rainbow; a lime stays a lime
-                    // (the owner, 2026-10-13: a colour that changes what a
-                    // look is "defeats the purpose").
+                    // Polished metal's faint rainbow; a lime stays a lime.
                     {QStringLiteral("metallic"), {"Metal finish", "Steel",
                         {QStringLiteral("chameleon"), QStringLiteral("iridescent")}}},
                     {QStringLiteral("plate"), {"Metal finish", "Steel",
@@ -1473,7 +1468,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         case ArchDock::EditorCapability::GlobalRenderer:
             // Running-application indicators belong to edge panels whose
-            // content shows running applications (OF-08, PD-06).
+            // content shows running applications.
             available = key != QStringLiteral("showIndicators") ||
                 (!freeHost && (content == QStringLiteral("tasks") || content == QStringLiteral("hybrid")));
             break;
@@ -1854,9 +1849,11 @@ PanelWindow::preparePanelSettingsDraftOn(
         && stored.value(QStringLiteral("dynamic")).toBool())
         request.panelValues.insert(QStringLiteral("dynamic"), false);
     // An edge panel made thicker or thinner by hand takes its icons with
-    // it, as Plasma's panel icons follow the panel's thickness: the icon
-    // size scales by the same ratio, within its range, unless the same
-    // change sets the icon size itself.
+    // it, as Plasma's panel icons follow the panel's thickness, unless the
+    // same change sets the icon size itself. Icons that fill the panel (its
+    // thickness less a margin, the default) keep filling it, so a thickness
+    // set back gives the same icons back; icons of a size chosen by hand
+    // scale by the thickness's ratio, within their range.
     const QString thicknessKey = lengthKey == QStringLiteral("height") ? QStringLiteral("width")
                                                                        : QStringLiteral("height");
     const int oldThickness = stored.value(thicknessKey).toInt();
@@ -1865,9 +1862,12 @@ PanelWindow::preparePanelSettingsDraftOn(
         && !request.panelValues.contains(QStringLiteral("iconSize")) && oldThickness > 0 && newThickness > 0
         && newThickness != oldThickness)
     {
+        const auto filling = [](int thickness) { return std::clamp(thickness - 24, 24, 128); };
         const int oldIconSize = stored.value(QStringLiteral("iconSize"), 52).toInt();
-        const int scaled = qRound(double(oldIconSize) * newThickness / oldThickness);
-        request.panelValues.insert(QStringLiteral("iconSize"), std::clamp(scaled, 24, 128));
+        const int newIconSize = oldIconSize == filling(oldThickness)
+            ? filling(newThickness)
+            : std::clamp(qRound(double(oldIconSize) * newThickness / oldThickness), 24, 128);
+        request.panelValues.insert(QStringLiteral("iconSize"), newIconSize);
     }
     if (request.panelValues.contains(QStringLiteral("segments")))
         request.panelValues.insert(QStringLiteral("segments"),
@@ -2014,13 +2014,13 @@ PanelWindow::preparePanelSettingsDraftOn(
             // presets and profiles carry values for fields that do not act on
             // this panel. A value that stays as it is changes nothing and is
             // retained; only a change to a field the panel does not offer is
-            // refused (ADREP-TASK-001 truth rules).
+            // refused.
             if (candidateValues.value(it.key(), field->defaultValue) ==
                     currentValues.value(it.key(), field->defaultValue))
             {
                 continue;
             }
-            // PD-17 restores the exact saved look, including material values
+            // Platform off restores the exact saved look, including material values
             // whose controls disappear in the flat tier. Only values equal
             // to this panel's durable snapshot can use this exception.
             const auto remembered = currentPanel.surface.parameters2D
@@ -2608,7 +2608,9 @@ QVariantMap PanelWindow::commitPanelSettingsDraft(
     ArchDock::PanelSettingsTransactionDraft draft,
     ArchDock::PanelSettingsTransactionOutcome outcome)
 {
-    if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
+    if (profileBusy())
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     // Panel Studio's Apply commits the draft the desktop shows. Another
     // change to the panel leaves that draft for Panel Studio to make again

@@ -793,7 +793,7 @@ TestCase {
         verify(grabImage(skin).alpha(300, 40) > 0)
     }
 
-    // TASK-0032 Phase C: the presentation tracks reach the declared parts.
+    // The presentation tracks reach the declared parts.
     //
     // PanelMotionController computes the geometry and tst_PanelMotionTracks
     // proves the maths. This proves the wiring: that a track actually moves the

@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import "../qml/ArchDock/Rendering/GizmoMath.js" as GizmoMath
 
-// AD3D-TASK-002: the desktop gizmo's pointer arithmetic.
+// The desktop gizmo's pointer arithmetic.
 TestCase {
     name: "GizmoMath"
 
@@ -48,7 +48,7 @@ TestCase {
         compare(GizmoMath.clamp(3, 0, 1), 1)
     }
 
-    // ADFIX UF-07: dragging the platform's body turns and tilts it.
+    // Dragging the platform's body turns and tilts it.
     function test_orbitTurnsAcrossAndTiltsUpAndDown() {
         let turned = GizmoMath.orbit(25, 10, Qt.point(40, 0), false)
         fuzzyCompare(turned.yaw, 20, 1e-9)
@@ -59,8 +59,7 @@ TestCase {
         turned = GizmoMath.orbit(25, 10, Qt.point(13, 9), true)
         compare(turned.yaw % 15, 0)
         compare(turned.pitch % 15, 0)
-        // Both turn all the way round (the owner, 2026-10-13: "freely in
-        // 360 every direction"): past the top the tilt goes on over, and both
+        // Both turn all the way round: past the top the tilt goes on over, and both
         // wrap the short way round.
         fuzzyCompare(GizmoMath.orbit(25, 0, Qt.point(0, -400), false).pitch, 125, 1e-9)
         fuzzyCompare(GizmoMath.orbit(170, 0, Qt.point(0, -80), false).pitch, -170, 1e-9)
@@ -75,7 +74,7 @@ TestCase {
         compare(GizmoMath.uniformScaleRatio(Qt.point(0, 0)), 1)
     }
 
-    // ADFIX AUD-04: an arrow seen end-on is not a silent handle.
+    // An arrow seen end-on is not a silent handle.
     function test_anEndOnArrowMovesWithUpAndDown() {
         verify(GizmoMath.axisEndOn(Qt.point(100, 100), Qt.point(104, 103)))
         verify(!GizmoMath.axisEndOn(Qt.point(100, 100), Qt.point(130, 100)))

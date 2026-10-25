@@ -181,7 +181,7 @@ function lathe(profile, segments, closed) {
         // A flat top or bottom (a segment reaching the axis) takes the
         // texture flat across it, like a label laid on a lid, instead of
         // wound to a point at its middle, which pinched a swirling texture
-        // into a dark eye (the owner's "donut" discs, 2026-10-12).
+        // into a dark eye.
         const cap = a[0] <= 1e-9 || b[0] <= 1e-9
         for (let index = 0; index < count; ++index) {
             const t0 = index / count * Math.PI * 2, t1 = (index + 1) / count * Math.PI * 2
@@ -734,7 +734,7 @@ function pedestalExtents(kind, stretch, axis, rightZ, upZ, forwardZ) {
 // path in the layout's screen degrees (y down), `sides` a polygon's count.
 // Arcs, semicircles and fans are drawn about a centre below their panel's
 // middle, which a centred 3D platform cannot follow, so they have none.
-// PD-20/22, OF-42: one bounded solid behind an upright icon. Its front is
+// One bounded solid behind an upright icon. Its front is
 // z=0 and its real depth extends backwards; UVs share the IconScene texture's
 // full-cell frame. Reuse MeshBuilder and the existing native mesh renderer.
 // The outline of a tile shape, counter-clockwise in the tile's frame
@@ -1599,7 +1599,7 @@ function standPoint(offsetX, offsetY, layoutRadius, track) {
     return [offsetX / radius * centre, offsetY / radius * centre]
 }
 
-// PD-18 / OF-31: fold the rear half about its top's horizontal diameter.
+// Fold the rear half about its top's horizontal diameter.
 // Positive is up, negative down, bounded to a right angle. Mesh vertices and
 // icon feet use this same transform, so the icons stay on the platform.
 function foldPoint(point, fold, hingeHeight) {

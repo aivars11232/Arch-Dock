@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0032 Phase A: the presentation state machine.
+// The presentation state machine.
 //
 // The transition table is pure data, so every legal edge, every illegal
 // request and every cancellation is proved here without a window, a renderer

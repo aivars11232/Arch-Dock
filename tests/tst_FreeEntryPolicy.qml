@@ -49,7 +49,7 @@ TestCase {
         verify(!FreeEntryPolicy.keepEntriesOnServiceFailure(false));
     }
 
-    // TASK-0033 Phase A: only free panels that show running applications
+    // Only free panels that show running applications
     // follow the task model; a launcher stays isolated from task churn.
     function test_onlyTaskBearingContentFollowsTheTaskModel() {
         verify(FreeEntryPolicy.followsTaskModel("tasks"));

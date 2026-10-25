@@ -1,7 +1,7 @@
 .pragma library
 
 // The panel definition an applet hands to its PanelScene. The applet and the
-// Studio truth matrix test (ADREP-TASK-001) both build it here, so what the
+// Studio truth matrix test both build it here, so what the
 // test draws is what a panel draws.
 //
 // host: { freeSurface, vertical, effectiveRendererTier, nativeScenePadding,

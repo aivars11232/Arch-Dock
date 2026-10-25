@@ -4,8 +4,8 @@ import ArchDock.Rendering 1.0
 import org.kde.plasma.core as PlasmaCore
 
 // A free panel's folder contents on a path outside the dock, in a transparent
-// window just large enough for them and the folder they unfold from
-// (ADREP-TASK-003): "Along the dock" on the dock's own curve, which follows
+// window just large enough for them and the folder they unfold from:
+// "Along the dock" on the dock's own curve, which follows
 // its shape, tilt and perspective, or a fan, an arc, a stack or a ring that
 // opens from the folder along the way it faces out of the dock
 // (LayoutEngine.folderShape()). The contents are drawn where they belong on
@@ -355,59 +355,82 @@ PlasmaCore.Dialog {
                         || top >= icon.y + reach || top + content.cellHeight * scale <= icon.y - reach
                 })
             }
-            // The curve a step out of the dock, a little further where a
-            // tilted or projected dock would bring a child onto one of its
-            // icons: every place a child stands or passes keeps clear. On a
-            // 3D panel the step lies on the panel's own plane, where it looks
-            // short on a steeply tilted panel, and the children stand clear
-            // of the panel as drawn, so the curve may move out by up to six
-            // icons.
+            // The curve steps out of the dock where a child would otherwise
+            // stand on one of its icons: every place a child stands or passes
+            // keeps clear. The step is measured on the screen, point by point
+            // along the curve: on a steeply tilted 3D panel a step on the
+            // panel's own plane looks short on its far side and long on its
+            // near side, so each point steps out on the plane until its child
+            // clears the panel as drawn, up to three icons of the screen, and
+            // the steps change gently from point to point.
             // The curve reaches as far round the dock as the children need:
             // a quarter of the way at first on a 3D panel, a third on a flat
             // or baked one, then further, up to three quarters; the rest
             // scroll in with the wheel. A curve every child keeps clear of the
-            // icons on is preferred. When none does, the nearest and shortest
-            // that keeps every child on the screen is used, and failing that
-            // the first: never the furthest, which spread the children far
-            // from a steeply tilted dock across the screen.
+            // icons on is preferred. When none does, the first that keeps
+            // every child on the screen is used, and failing that the first.
             // A reach chosen in the Studio is the curve's own span; all the
             // way round stops short of closing, so the two ends keep apart.
-            const reach = keep ? 6 * iconSize : 64, stride = keep ? Math.max(4, iconSize / 4) : 8
+            const stride = keep ? Math.max(4, iconSize / 4) : 8
+            const screenReach = 3 * iconSize, mostSteps = keep ? 96 : 16
             const chosenSpan = ({ quarter: Math.PI / 2, third: 2 * Math.PI / 3, half: Math.PI,
                                   "three-quarters": 3 * Math.PI / 2, full: 1.9 * Math.PI })[trackReach]
             const firstSpan = chosenSpan || (keep ? Math.PI / 2 : 2 * Math.PI / 3)
             const lastSpan = chosenSpan || 3 * Math.PI / 2
+            const project = function(sample) {
+                const point = toScreen(sample.x, sample.y)
+                return { x: point.x, y: point.y, scale: sample.scale }
+            }
             let layout = null, chosen = null, cleared = null, nearest = null, first = null
-            spans: for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
-                for (let extra = 0; extra <= reach + 1e-9; extra += stride) {
-                    samples = trackSamples(extra, span).map(function(sample) {
-                        const point = toScreen(sample.x, sample.y)
-                        return { x: point.x, y: point.y, scale: sample.scale }
-                    })
-                    if (samples.length < 2) return false
-                    // With a reach chosen the children spread from one end of
-                    // it to the other; more than fit keep their spacing and
-                    // the rest scroll in.
-                    let pitch = content.pitch
-                    if (chosenSpan && content.entries.length > 1) {
-                        let length = 0
-                        for (let index = 1; index < samples.length; ++index)
-                            length += LayoutEngine.trackRun(samples[index - 1], samples[index], false)
-                        pitch = Math.max(content.pitch, length / (content.entries.length - 1))
+            for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
+                // The curve at each step out, projected; a step that loses a
+                // point behind the camera ends the stepping.
+                const rows = [trackSamples(0, span).map(project)]
+                if (rows[0].length < 2) return false
+                const row = function(step) {
+                    while (rows.length <= step) {
+                        const next = trackSamples(rows.length * stride, span).map(project)
+                        if (next.length !== rows[0].length) return null
+                        rows.push(next)
                     }
-                    layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0)
-                    const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0.5)
-                    const places = layout.entries.concat(half.entries).filter(function(placed) {
-                        return placed.visibility > 0
-                    })
-                    chosen = { samples: samples, layout: layout, pitch: chosenSpan ? pitch : 0 }
-                    if (!first) first = chosen
-                    if (!nearest && places.every(onScreen)) nearest = chosen
-                    if (!places.every(clear)) continue
-                    cleared = chosen
-                    if (!layout.windowed) break spans
-                    break
+                    return rows[step]
                 }
+                const steps = rows[0].map(function(start, index) {
+                    let step = 0
+                    for (; step < mostSteps; ++step) {
+                        const points = row(step)
+                        if (!points) return Math.max(0, step - 1)
+                        const point = points[index]
+                        if (clear(point) || Math.hypot(point.x - start.x, point.y - start.y) >= screenReach) break
+                    }
+                    return Math.min(step, rows.length - 1)
+                })
+                for (let index = 1; index < steps.length; ++index)
+                    steps[index] = Math.max(steps[index], steps[index - 1] - 1)
+                for (let index = steps.length - 2; index >= 0; --index)
+                    steps[index] = Math.max(steps[index], steps[index + 1] - 1)
+                samples = steps.map(function(step, index) { return rows[Math.min(step, rows.length - 1)][index] })
+                // With a reach chosen the children spread from one end of it
+                // to the other; more than fit keep their spacing and the rest
+                // scroll in.
+                let pitch = content.pitch
+                if (chosenSpan && content.entries.length > 1) {
+                    let length = 0
+                    for (let index = 1; index < samples.length; ++index)
+                        length += LayoutEngine.trackRun(samples[index - 1], samples[index], false)
+                    pitch = Math.max(content.pitch, length / (content.entries.length - 1))
+                }
+                layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0)
+                const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0.5)
+                const places = layout.entries.concat(half.entries).filter(function(placed) {
+                    return placed.visibility > 0
+                })
+                chosen = { samples: samples, layout: layout, pitch: chosenSpan ? pitch : 0 }
+                if (!first) first = chosen
+                if (!nearest && places.every(onScreen)) nearest = chosen
+                if (!places.every(clear)) continue
+                cleared = chosen
+                if (!layout.windowed) break
             }
             chosen = cleared || nearest || first || chosen
             samples = chosen.samples
@@ -424,14 +447,11 @@ PlasmaCore.Dialog {
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {
                 return toScreen(point.x, point.y)
             }) : []
-            // On a 3D panel the shape lies on the panel's own plane round the
-            // folder, tilted as the panel is; one that cannot be seen whole
-            // there is built flat on the screen instead.
-            // A fan opens as on a flat panel, from the platform's edge beside
-            // the folder, as if the folder opened a panel of that shape that
-            // is not drawn; a ring and a grid lie on the 3D panel's plane.
-            const flatShape = folderLayout === "fan"
-            const plane = !flatShape && typeof folderPlane === "function" ? folderPlane() : null
+            // On a 3D panel every shape lies on the panel's own plane round
+            // the folder, tilted as the panel is, and keeps its distance on
+            // that plane; one that cannot be seen whole there is built flat
+            // on the screen instead.
+            const plane = typeof folderPlane === "function" ? folderPlane() : null
             shape = plane ? planeShape(plane, others, toScreen, area, keep, avoid) : null
             if (shape) {
                 samples = shape.samples

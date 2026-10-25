@@ -610,7 +610,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
     definition.layout.rotationTrigger = normalized(
         QStringLiteral("panelRotationTrigger"), definition.layout.rotationTrigger).toString();
     // A record saved before "Continuous motion moves" existed keeps the
-    // motion it had (ADREP-TASK-002, PD-25): a panel that rotated turns as a
+    // motion it had: a panel that rotated turns as a
     // whole; any other moves its items, as a new panel does.
     definition.layout.motionTarget = record.contains(QStringLiteral("panelMotionTarget"))
         ? normalized(QStringLiteral("panelMotionTarget"), definition.layout.motionTarget).toString()

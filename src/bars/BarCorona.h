@@ -24,7 +24,7 @@ namespace ArchDock::Bars
 // Plasma's plasmoidviewer (plasma-sdk) has one, whose containments are the
 // bars (org.archdock.bar), each holding Arch Dock's dock widget unless it is
 // an empty bar, and the Plasma widgets its record lists, in the record's
-// order. Its layout lives in the bar host's own file, never in the owner's
+// order. Its layout lives in the bar host's own file, never in the user's
 // Plasma layout.
 class BarCorona : public Plasma::Corona
 {

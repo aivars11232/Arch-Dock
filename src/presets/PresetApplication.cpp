@@ -143,7 +143,7 @@ bool PresetApplication::iconOnlyChange(
     compared.iconStyle.styleReference = snapshot.iconStyle.styleReference;
     compared.iconStyle.themeId = snapshot.iconStyle.themeId;
     compared.iconStyle.globalDefaults = snapshot.iconStyle.globalDefaults;
-    // PD-20/21/22: appearance and tile values belong to an icon preset.
+    // Appearance and tile values belong to an icon preset.
     // Keep size, spacing and per-entry overrides in the comparison: those
     // must not be changed by an icon preset or by this scope allowance.
     compared.iconStyle.shape = snapshot.iconStyle.shape;

@@ -295,7 +295,7 @@ def instrument_interaction_stage(stage):
 ''')
     import json
     # One picture of every opening of a folder, whatever its layout, with
-    # where the contents stand in their window (ADREP-TASK-003 evidence).
+    # Where the contents stand in their window .
     folder_shot = lambda host: '''
             property int shotSerial: 0
             property bool shotVisible: false
@@ -459,7 +459,7 @@ def instrument_interaction_stage(stage):
         onTriggered: {
             if (!root.visible || !root.inputEnabled) return;
             const center = root.mapToItem(null, root.width / 2, root.height / 2);
-            // PD-18: a perspective platform can cover an icon's centre
+            // A perspective platform can cover an icon's centre
             // while leaving its top exposed. Report an actual visible input
             // point; EIS must still produce a real MouseArea hover there.
             let inputPoint = null;
@@ -545,7 +545,7 @@ def instrument_interaction_stage(stage):
 ''')
     if os.environ.get("ARCHDOCK_RENDERING_TRAVEL") != "1":
         return
-    # ADREP-TASK-002 travel evidence: each frame that moves an entry or
+    # Travel evidence: each frame that moves an entry or
     # turns the drawn surface, each wheel the scene took, each repaint of a
     # flat surface, the resting state, and one capture per resting state.
     # Written against what both the old and the new scene expose, so the
@@ -749,7 +749,7 @@ def run_interaction_matrix(free_panel):
     screen_width = int(os.environ.get("ARCHDOCK_RENDERING_SCREEN_WIDTH") or 1280)
     screen_height = int(os.environ.get("ARCHDOCK_RENDERING_SCREEN_HEIGHT") or 720)
     host_trace = []
-    # Frame-by-frame motion records of the travel matrix (ADREP-TASK-002).
+    # Frame-by-frame motion records of the travel matrix.
     motion_trace = []
     log = (root / "logs/plasmashell.log").open()
     log_pending = ""
@@ -1053,7 +1053,7 @@ def run_interaction_matrix(free_panel):
 
     def folder_window(panel):
         # The open folder, whichever window shows it: a free panel opens Along
-        # the dock, Fan, Arc, Stack and Ring on a path (ADREP-TASK-003); Grid,
+        # the dock, Fan, Arc, Stack and Ring on a path; Grid,
         # and every layout of an edge panel, open a popup.
         track = observations.get(("folderTrack", panel, ""), {})
         popup = observations.get(("folder", panel, ""), {})
@@ -1139,6 +1139,16 @@ def run_interaction_matrix(free_panel):
 
         def folder_popup(panel):
             return folder_window(panel)
+
+        def shown_shape(layout, free=True):
+            # The shape the dock shows for a saved folder shape: a Stack opens
+            # as a fan; an Arc opens along the dock of a curved free panel and
+            # as a fan on an edge panel; the others open as named.
+            if layout == "stack":
+                return "fan"
+            if layout in ("arc", "track"):
+                return "track" if free else "fan"
+            return layout
 
         def convex_hull(points):
             # The convex outline round the points, in order.
@@ -1294,11 +1304,11 @@ def run_interaction_matrix(free_panel):
             raise AssertionError("the dock could not be centred on the screen")
 
         def run_folder_anchor_matrix():
-            # The owner's curved free panel, flat, baked and in true 3D: each
+            # A curved free panel, flat, baked and in true 3D: each
             # layout opens at the clicked folder, away from the dock, wherever
             # the folder stands on the ring, and covers no icon of the dock.
-            # Fan, Arc, Stack and Ring are the owner's own shapes there
-            # (ADREP-TASK-003); Grid is a popup, on the plane of a 3D panel
+            # Fan, Arc, Stack and Ring are the panel's own shapes there
+            #; Grid is a popup, on the plane of a 3D panel
             # like the others; Along the dock follows the dock's curve.
             panel = free_panel
             evidence = pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs"))
@@ -1335,13 +1345,22 @@ def run_interaction_matrix(free_panel):
                          for (kind, owner, _), value in list(observations.items())
                          if kind == "entry" and owner == panel]
                 # The folder itself counts: the children stand clear of it too.
-                clearance = min(math.hypot(c[0] - i[0], c[1] - i[1]) for c in children for i in icons)
+                # Measured on the panel's plane: a tilted ring is drawn as an
+                # oval whose vertical distances the tilt shortens, and the
+                # dock's own icons outline that oval, so their spread undoes
+                # the squash.
+                squash = 1.0
+                if len(icons) >= 3:
+                    xs, ys = [i[0] for i in icons], [i[1] for i in icons]
+                    squash = min(1.0, max(0.3, (max(ys) - min(ys)) / ((max(xs) - min(xs)) or 1)))
+                clearance = min(math.hypot(c[0] - i[0], (c[1] - i[1]) / squash) for c in children for i in icons)
                 gaps = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(children, children[1:])]
                 row = {"tier": tier, "position": position, "layout": "track",
                        "folder": [round(v, 1) for v in folder], "dockCentre": [round(v, 1) for v in centre],
                        "outward": [round(v, 3) for v in outward], "popup": [left, top] + state["rect"][2:],
                        "nearest": round(nearest, 1), "facing": round(facing, 3),
-                       "clearance": round(clearance, 1), "gaps": [round(g, 1) for g in gaps],
+                       "clearance": round(clearance, 1), "squash": round(squash, 3),
+                       "gaps": [round(g, 1) for g in gaps],
                        "children": [[round(v, 1) for v in c] for c in children]}
                 rows.append(row)
                 problems = []
@@ -1367,10 +1386,10 @@ def run_interaction_matrix(free_panel):
                          "folder along the dock closed")
 
             def check_shape(tier, position, layout):
-                # A free panel's own folder shape (ADREP-TASK-003): it opens
+                # A free panel's own folder shape: it opens
                 # from the folder along the way the folder faces out of the
                 # dock - the screen leaves room for it here, so it never turns
-                # - drawn as the owner defined it, and no child covers an icon
+                # - drawn as defined, and no child covers an icon
                 # of the dock.
                 state = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
                     and not folder_popup(panel).get("opening") and folder_popup(panel).get("layout") == layout
@@ -1430,11 +1449,14 @@ def run_interaction_matrix(free_panel):
                     if layout in ("fan", "arc", "grid") and out < 0:
                         problems.append("the shape does not open away from the dock")
                     if layout == "fan":
-                        # It follows the rim round the folder, a band along it.
-                        if info.get("apex") is not None:
-                            problems.append("the fan does not follow the rim")
+                        # A sector opening from beside the folder, drawn
+                        # foreshortened on the panel's plane.
+                        apex = on_screen(info["apex"]) if info.get("apex") else None
+                        row["apexFromFolder"] = round(distance(apex, folder), 1) if apex else None
+                        if apex is None or distance(apex, folder) > near:
+                            problems.append("the fan's apex is not at the folder")
                         if not state.get("outlineDrawn"):
-                            problems.append("the fan's band is not drawn")
+                            problems.append("the fan's outline is not drawn")
                     elif layout == "stack":
                         # A straight line along the panel's side, one way.
                         first, last = children[0], children[-1]
@@ -1508,7 +1530,7 @@ def run_interaction_matrix(free_panel):
                         if (mean[0] * way[0] + mean[1] * way[1]) / (math.hypot(*mean) or 1) < 0.98:
                             problems.append("the arc is not symmetric about the folder's outward direction")
                     elif layout == "stack":
-                        # Against the dock's side nearest the folder (2026-10-12):
+                        # Against the dock's side nearest the folder:
                         # a straight, axis-aligned line outside the dock, centred
                         # on it and no longer than the dock.
                         base = children[0]
@@ -1545,7 +1567,7 @@ def run_interaction_matrix(free_panel):
                         if max(radii) - min(radii) > 1.5:
                             problems.append("the children are not on one circle")
                         # A ring opens beside the dock on the side with more of
-                        # the screen, from the dock's rim there (2026-10-12).
+                        # the screen, from the dock's rim there.
                         dock_radius = distance(folder, centre)
                         if distance(middle, centre) <= dock_radius + info["radius"] - 6:
                             problems.append("the ring does not stand outside the dock")
@@ -1566,7 +1588,7 @@ def run_interaction_matrix(free_panel):
                 wait_for(lambda: not folder_popup(panel).get("visible"), layout + " folder closed")
 
             # Neighbours on the ring, so "covers no dock icon" has icons to
-            # cover (ADREP-TASK-003).
+            # cover.
             neighbours = []
             for index, icon in enumerate(("applications-system", "utilities-terminal", "system-file-manager",
                                           "preferences-system", "help-browser", "accessories-text-editor")):
@@ -1588,14 +1610,15 @@ def run_interaction_matrix(free_panel):
                     for layout in scenario_layouts:
                         configure(panel, {"folderLayout": layout})
                         click_folder()
-                        if layout == "track":
+                        shown = shown_shape(layout)
+                        if shown == "track":
                             check_track(tier, position)
                             continue
-                        if layout in ("fan", "arc", "stack", "ring") or (layout == "grid" and tier == "true3d"):
-                            check_shape(tier, position, layout)
+                        if shown in ("fan", "ring") or (shown == "grid" and tier == "true3d"):
+                            check_shape(tier, position, shown)
                             continue
                         state = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
-                            and not folder_popup(panel).get("opening") and folder_popup(panel).get("layout") == layout
+                            and not folder_popup(panel).get("opening") and folder_popup(panel).get("layout") == shown
                             and len(folder_popup(panel).get("shown", [])) >= 3 else None, "anchored folder open")
                         folder, centre = folder_and_centre()
                         width, height = state["rect"][2:]
@@ -1631,9 +1654,9 @@ def run_interaction_matrix(free_panel):
                             problems.append("the popup does not open away from the dock")
                         if min(behind) < -0.3 * icon_size:
                             problems.append("children stand behind the folder, over the dock")
-                        # Grid keeps the ADFIX popup beside the folder: on a tilted
+                        # Grid keeps the popup beside the folder: on a tilted
                         # baked or 3D ring a neighbour can stand on that side, under
-                        # the popup. Recorded, an open point of ADREP-TASK-003; on a
+                        # The popup. Recorded, an open point; on a
                         # flat panel it fails.
                         if covered and tier != "procedural2d":
                             notes.append(dict(row, note="the popup covers icons of a tilted dock"))
@@ -1668,7 +1691,7 @@ def run_interaction_matrix(free_panel):
             evidence = (pathlib.Path(os.environ.get("ARCHDOCK_SCENE_EVIDENCE_DIR") or str(root / "logs"))
                         / "folder-layouts" / phase)
             evidence.mkdir(parents=True, exist_ok=True)
-            # Neighbours on the ring, as on the owner's dock.
+            # Neighbours on the ring, as on a real dock.
             icons = ("applications-system", "utilities-terminal", "system-file-manager",
                      "preferences-system", "help-browser", "accessories-text-editor")
             uris = []
@@ -1740,8 +1763,9 @@ def run_interaction_matrix(free_panel):
                             >= changed_at.get(free_panel, 0) else None,
                             "dock drawn as it is now")
                         click_folder()
-                        state = wait_for(lambda: open_state(layout) if open_state(layout)
-                            and len(open_state(layout).get("items", {})) == count else None,
+                        shown = shown_shape(layout)
+                        state = wait_for(lambda: open_state(shown) if open_state(shown)
+                            and len(open_state(shown).get("items", {})) == count else None,
                             f"{layout} folder of {count} open at {position}")
                         window_kind = "track" if state["kind"] == "folderTrack" else "popup"
                         shot = wait_for(lambda: observations.get(("folderShot", free_panel, window_kind))
@@ -1827,7 +1851,7 @@ def run_interaction_matrix(free_panel):
                     wait_for(closed, "folder closed")
                 configure(free_panel, {"folderShowNames": True})
 
-                # Sensitivity (PD-16): what one wheel notch, an eighth of a
+                # Sensitivity: what one wheel notch, an eighth of a
                 # notch at a time, and smooth scrolling move, at the panel's
                 # Scroll sensitivity 1, 2 and 0.5.
                 fill(24)
@@ -1916,7 +1940,7 @@ def run_interaction_matrix(free_panel):
                         "height": 600 if vertical else 92})))
                     assert placed["success"], placed
                     # The edge applet lays its row out along the edge it is
-                    # on; an edge panel offers no Dock layout (ADREP-TASK-001).
+                    # on; an edge panel offers no Dock layout.
                     configure(panel, {"panelThemeId": "", "completeThemeId": "", "rendererTier": "procedural2d"})
                 else:
                     shape = "ring" if index % 2 == 0 else "arc"
@@ -1929,7 +1953,7 @@ def run_interaction_matrix(free_panel):
                 click_entry(panel, edge, 272)
                 current = wait_for(lambda: folder_popup(panel) if folder_popup(panel).get("visible")
                     and not folder_popup(panel).get("opening")
-                    and folder_popup(panel).get("layout") == layout
+                    and folder_popup(panel).get("layout") == shown_shape(layout, edge is None)
                     and len(folder_popup(panel).get("items", {})) == 5 else None, "five real folder children")
                 assert current["reducedMotion"] == panel_call("panelRendererConfiguration", "(s)", (panel,))["reducedMotion"]
                 assert current["background"] == 0 and current["colorAlpha"] == 0, current
@@ -1978,7 +2002,7 @@ def run_interaction_matrix(free_panel):
                 print(f"PASS: folder {panel}/{layout}/{edge}: native selection, private handler, guards, dismissal", flush=True)
                 # Expand folders on click, off: a click opens the folder itself
                 # in every layout, and its menu still shows the contents in the
-                # chosen layout (ADREP-TASK-003).
+                # chosen layout.
                 configure(panel, {"folderExpandOnClick": False})
                 assert panel_call("requestPanelPresentation", "(ss)", (panel, "open"))
                 wait_for(lambda: opened(panel), "folder owner open")
@@ -1993,7 +2017,8 @@ def run_interaction_matrix(free_panel):
                          and "showFolderContentsAction" in entry(panel).get("actions", {}), "folder menu open")
                 click(native_point(entry(panel)["menuSize"], entry(panel)["actions"]["showFolderContentsAction"], True))
                 wait_for(lambda: folder_popup(panel).get("visible") and not folder_popup(panel).get("opening")
-                         and folder_popup(panel).get("layout") == layout, "Show contents opens the folder in its layout")
+                         and folder_popup(panel).get("layout") == shown_shape(layout, edge is None),
+                         "Show contents opens the folder in its layout")
                 escape()
                 wait_for(lambda: not folder_popup(panel).get("visible"), "folder closed")
                 assert not marker.exists(), "Show contents launched the folder"
@@ -2015,10 +2040,10 @@ def run_interaction_matrix(free_panel):
                 and not folder_popup(panel).get("opening") and len(folder_popup(panel).get("items", {})) == 48
                 else None, "48 real folder children open")
             if panel == free_panel:
-                # A free panel's Fan is a small panel of its own (PD-11): the
+                # A free panel's Fan is a small panel of its own: the
                 # children stand on its arc, at one distance from its apex; one
                 # wheel notch moves them one place along it, and a child that
-                # leaves one end comes back at the other (PD-10, PD-16).
+                # leaves one end comes back at the other.
                 assert current["layout"] == "fan" and current["outlineDrawn"], current.get("shapeInfo")
                 verify_capture(panel, 48, True)
                 info = current["shapeInfo"]
@@ -2152,7 +2177,7 @@ def run_interaction_matrix(free_panel):
                      "corners": "capsule", "padding": 20, "spacing": 12,
                      "presentation": "closed", "motionProfile": "pulse"}
             # An edge panel lays its row out along its edge and offers no
-            # Dock layout; the free panel is made a row (ADREP-TASK-001).
+            # Dock layout; the free panel is made a row.
             configure(panel, {**({"layout": "horizontal"} if panel == free_panel else {}),
                               "rendererTier": "procedural2d",
                               "panelThemeId": "", "completeThemeId": "", "presentationMode": "open",
@@ -2291,7 +2316,7 @@ def run_interaction_matrix(free_panel):
             tier = resolution["renderer"]["effectiveTier"]
             offered = [m["id"] for m in resolution["presentationMechanisms"] if m["available"] and m["id"] != "open"]
             unoffered = [m["id"] for m in resolution["presentationMechanisms"] if not m["available"]]
-            # Contract change, ADREP-TASK-001 (owner decision PD-01): a free
+            # A free
             # panel offers no opening or closing mechanism; every one is
             # refused below. Edge panels keep theirs and must draw each.
             if panel == free_panel:
@@ -2305,7 +2330,7 @@ def run_interaction_matrix(free_panel):
                 open_painted = capture(panel, "open", scenario_start)
                 before = time.time() * 1000
                 # "Opens on" belongs to a panel that can close, so it is set
-                # with the mechanism (PD-01 hides it while the panel is open).
+                # With the mechanism (hidden while the panel is open).
                 configure(panel, {"presentationMode": "collapsed", "collapseMechanism": mechanism,
                                   "presentationTrigger": "click"})
                 settled(panel, "collapsed")
@@ -2638,7 +2663,7 @@ def run_interaction_matrix(free_panel):
         def rows(): return panel_call("dockEntriesForPanel", "(ss)", (free_panel, "launcher"))
         def observed(app): return observations.get(("entry", free_panel, app), {})
         def entry_point(app):
-            # PD-18: use the exposed part of a platform entry. Mapping the
+            # Use the exposed part of a platform entry. Mapping the
             # native window pumps new QML observations, so refresh this point
             # too when switching between differently sized flat/3D scenes.
             def latest():
@@ -2709,7 +2734,7 @@ def run_interaction_matrix(free_panel):
         for tier, theme in (("procedural2d", ""), ("baked2.5d", "ring-platform-blue"),
                             ("true3d", "mesh-platform-cyan")):
             # The turning checks below ask for the whole panel to move
-            # (ADREP-TASK-002, PD-25); the entries' travel is checked after them.
+            #; the entries' travel is checked after them.
             configure(free_panel, {"rendererTier": tier, "panelThemeId": theme, "completeThemeId": theme,
                                    "panelMotionTarget": "panel"})
             for row in rows():
@@ -2854,7 +2879,7 @@ def run_interaction_matrix(free_panel):
         after = panel_call("dockConfiguration", "(s)", (free_panel,))
         assert (after["x"], after["y"]) == (before["x"], before["y"])
         motion([1200, 500])
-        # Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel
+        # A free panel
         # has no opening or closing mechanism. Asking it to rest collapsed is
         # refused and it stays open; this replaces the hover opening and
         # closing of a collapsed free panel that was checked here.
@@ -2870,7 +2895,7 @@ def run_interaction_matrix(free_panel):
         print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; a free panel refuses to collapse and stays open", flush=True)
         # Last: a radius-300 ring grows the desktop widget, which keeps the place
         # it grew to, so no later step may depend on the panel's position.
-        # The owner's own free panels, with continuous animation off: free-9
+        # Real free panels, with continuous animation off: free-9
         # (circular, Orange in true 3D, pitch 60, radius 300) and free-4
         # (circular, flat, radius 145). The wheel turns them from an icon
         # and from the bare platform once the scene rests: a changed pitch

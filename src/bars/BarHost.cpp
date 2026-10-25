@@ -46,6 +46,7 @@ BarHost::BarHost(BarCorona *corona, const QUrl &barView, QObject *parent)
     , m_recordsFile(qEnvironmentVariable("ARCHDOCK_BARS_RECORDS_FILE"))
     , m_windowsFile(qEnvironmentVariable("ARCHDOCK_BARS_WINDOWS_FILE"))
     , m_edges(new ScreenEdgeManager(this))
+    , m_wholeCollections(std::make_unique<QmlGarbageCollector::WholeCollections>())
 {
     // Changes come in bursts (a bar's widgets growing one after another, a
     // screen and its geometry): the bars are laid out once after each.
@@ -349,6 +350,10 @@ void BarHost::applyRecords(const QList<BarRecord> &records)
         if (!bar)
         {
             bar = new BarWindow(m_corona, containment, m_barView);
+            // Plasma's shared QML engine is born with the first bar window and
+            // has read the collector policy; it leaves the environment before
+            // any widget can start a program.
+            m_wholeCollections.reset();
             connect(bar, &BarWindow::wantedLengthChanged, this, &BarHost::scheduleLayout);
             connect(bar, &BarWindow::pointerInsideChanged, this, [this] { m_evaluateTimer.start(); });
         }

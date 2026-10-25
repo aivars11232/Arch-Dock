@@ -462,7 +462,7 @@ const QVector<Descriptor> &schemaFields()
                        "radial", "vertical", "horizontal", "elastic", "physics"}, false, true,
               editor("panels-behavior", "Folder layout", "combo", {"studio", "native"},
                      "folder-content")),
-        // A free panel's folder shapes (ADREP-TASK-003, PD-11, PD-12, PD-14):
+        // A free panel's folder shapes:
         // each is shown while its layout is chosen.
         panel("folderFanOpening", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 90, "content.folderFanOpening", 40, 160, {}, false, true,
@@ -679,10 +679,9 @@ const QVector<Descriptor> &schemaFields()
         // Free-panel motion. Gated by the same capability as the static
         // layout angle, so a native panel never sees these controls, and
         // offered only for the radial layouts whose entries stand on a path.
-        // Motion lives on the Animations page only (ADREP-TASK-001, PD-08).
+        // Motion lives on the Animations page only.
         // Continuous motion runs clockwise or counter-clockwise; what it, the
-        // wheel and a drag move is chosen apart from it (ADREP-TASK-002,
-        // PD-25), each with its own speed.
+        // wheel and a drag move is chosen apart from it, each with its own speed.
         panel("panelRotationMode", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("none"),
               "layout.rotationMode", {}, {},
@@ -746,9 +745,7 @@ const QVector<Descriptor> &schemaFields()
         // fraction of the room the panel has around the platform, so a value
         // stays valid whatever size the panel is drawn at. Pitch, yaw and
         // roll turn all the way round, and the scale has no practical limit,
-        // all ways at once or sideways and up and down on its own (the owner,
-        // 2026-10-13: "freely in 360 every direction", "for scaling there
-        // shouldn't be a limit", "scale it also sideways or top or down").
+        // all ways at once or sideways and up and down on its own.
         panel("scene3DQuality", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("high"), "surface.parameters3D.quality", {}, {},
               {"low", "medium", "high"}, true, true,
@@ -836,7 +833,7 @@ const QVector<Descriptor> &schemaFields()
               0.5, "surface.parameters3D.iconLighting", 0.0, 1.0, {}, true, true,
               editor("icons-3d", "Icon lighting", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
-        // A generated platform's own shape (ADFIX-TASK-002): how wide its flat
+        // A generated platform's own shape: how wide its flat
         // top is, as half its width in the platform's radius, and how far its
         // top tilts up or down outward of the icons' line.
         panel("scene3DBand", Access::Editor, Type::Real, Normalization::RealRange,
@@ -879,7 +876,7 @@ const QVector<Descriptor> &schemaFields()
               {"theme", "none", "glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
                "floating-glass", "metallic", "futuristic", "organic", "platform", "plate", "pedestal", "river", "magma", "picture"},
               true, true, editor("panels-3d", "Texture", "combo", {"studio"}, "scene3d-quality")),
-        // Pedestals (owner's requests, 2026-10-12): the stands under the
+        // Pedestals: the stands under the
         // icons, on flat and 3D panels alike, facing the viewer with their
         // icon floating centred above. New panels have none; "auto" is the
         // renderer's own column. Ranges wide enough for small plates to tall
@@ -963,7 +960,7 @@ const QVector<Descriptor> &schemaFields()
               editor("pedestals", "Opacity", "slider", {"studio"}, "pedestals",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         // A glow is light round the stand: how strong, how far it reaches out
-        // of the stand, and in what colour (the owner, 2026-10-13); each of
+        // of the stand, and in what colour; each of
         // the panel, its icons, its tiles and its stands has its own.
         panel("pedestalGlow", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters3D.pedestalGlow", 0.0, 1.0, {}, true, true,
@@ -987,7 +984,7 @@ const QVector<Descriptor> &schemaFields()
         // The stands under the items of an opened folder: the panel's own,
         // a shape of their own, or none; with Own settings, their own size,
         // thickness, float height, material, texture, colour, opacity, glow
-        // and motion (owner's requests, 2026-10-12).
+        // and motion.
         panel("folderPedestalShape", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("same"), "surface.parameters3D.folderPedestalShape", {}, {},
               {"same", "none", "column", "plate", "disc", "ring", "saucer", "cube", "hexagon", "octagon", "star", "cone", "pyramid", "dome", "orb", "bowl", "pillar", "tiered", "goblet", "hourglass", "crystal", "halo", "projector", "projector-round"},
@@ -1073,7 +1070,7 @@ const QVector<Descriptor> &schemaFields()
               1.0, "surface.parameters3D.folderPedestalAnimationSpeed", 0.1, 5.0, {}, true, true,
               editor("pedestals-folder", "Animation speed", "slider", {"studio"}, "pedestals",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
-        // PD-17: a platform remembers the flat surface and layout it replaced.
+        // A platform remembers the flat surface and layout it replaced.
         // It is editor data so Preview/Cancel/Apply share the same transaction.
         panel("previousFlatLook", Access::Editor, Type::Map, Normalization::Map,
               QVariantMap{}, "surface.parameters2D.previousFlatLook", {}, {}, {}, true, true),
@@ -1343,8 +1340,7 @@ const QVector<Descriptor> &schemaFields()
                      "procedural-surface", {}, {{QStringLiteral("step"), 0.05},
                                                 {QStringLiteral("decimals"), 2}})),
         // No renderer draws a surface outline from this value: the layout
-        // decides a panel's shape. Panel Studio does not offer it (ADREP-TASK-001,
-        // PD-04); the saved value is kept.
+        // decides a panel's shape. Panel Studio does not offer it; the saved value is kept.
         exposedTo(panel("shape", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("pill"), "surface.shape", {}, {},
               {"pill", "rounded", "hexagon"}, false, true), {"dock-configuration"}),
@@ -1367,7 +1363,7 @@ const QVector<Descriptor> &schemaFields()
                       {QStringLiteral("decimals"), 2}})),
         // A clear-ground look - lightning's bolts, aurora's curtains - is drawn
         // on a clear ground, its dark sky behind as strong as chosen, in a
-        // palette of its own (the owner, 2026-10-13); named for the look on
+        // palette of its own; named for the look on
         // the page.
         panel("panelLookBackground", Access::Editor, Type::Real, Normalization::RealRange,
               0.5, "surface.parameters3D.panelLookBackground", 0.0, 1.0, {}, true, true,
@@ -1377,9 +1373,7 @@ const QVector<Descriptor> &schemaFields()
               0.5, "surface.parameters3D.pedestalLookBackground", 0.0, 1.0, {}, true, true,
               editor("pedestals", "Background", "slider", {"studio"}, "lightning",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
-        // A glowing look's colours (the owner, 2026-10-13: lightning in
-        // "lightning naturally colors", aurora's, and a rainbow wherever it
-        // can be applied): its own ("original"), or another palette of that
+        // A glowing look's colours: its own ("original"), or another palette of that
         // look, offered and named for the look on the page.
         panel("panelLookColour", Access::Editor, Type::String, Normalization::ChoiceLower,
               QStringLiteral("original"), "surface.parameters3D.panelLookColour", {}, {},
@@ -1400,7 +1394,7 @@ const QVector<Descriptor> &schemaFields()
               editor("panels-appearance", "Motion speed", "slider", {"studio"}, "lightning",
                      {}, {{QStringLiteral("step"), 0.05}, {QStringLiteral("decimals"), 2}})),
         // The panel's own glow: light round its shape on every renderer, how
-        // strong, how far and in what colour (the owner, 2026-10-13).
+        // strong, how far and in what colour.
         panel("panelGlow", Access::Editor, Type::Real, Normalization::RealRange,
               0.0, "surface.parameters3D.panelGlow", 0.0, 1.0, {}, true, true,
               editor("panels-glow", "Glow intensity", "slider", {"studio"}, "glow",
@@ -1513,7 +1507,7 @@ const QVector<Descriptor> &schemaFields()
         exposedTo(panel("iconShape", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("style-default"), "iconStyle.shape", {}, {},
               {"style-default", "rounded", "square", "squircle", "circle", "hexagon", "diamond"}, false, true,
-              // PD-20: every declared built-in silhouette follows this choice.
+              // Every declared built-in silhouette follows this choice.
               editor("icons-appearance", "Shape", "combo", {"studio"},
                      "tile-shape")), {"dock-configuration"}),
         panel("iconDiameter", Access::Editor, Type::Integer, Normalization::IntegerRange,

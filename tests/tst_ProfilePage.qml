@@ -111,7 +111,7 @@ TestCase {
         verify(!button(item, "recover").enabled);
     }
     function test_summaryCountsTheShownPanels() {
-        // The owner (2026-10-12): one free panel saved showed "4 panels",
+        // One free panel saved showed "4 panels",
         // counting the hidden built-in edge panels every arrangement keeps.
         const item = page({profiles: [{id: "profile-first", name: "Desk", revision: 1, panelCount: 4,
             shownPanelCount: 1}]});

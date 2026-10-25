@@ -143,8 +143,8 @@ QString PanelWindow::barHostRecordsJson() const
             continue;
         }
         const ArchDock::NativePanelPlacement &placement = *normalized.placement;
-        // Windows keep clear of a bar that is always shown, unless the owner
-        // said otherwise; one that hides keeps no room.
+        // Windows keep clear of a bar that is always shown, unless its settings
+        // say otherwise; one that hides keeps no room.
         const bool reserves = placement.reservedSpace == ArchDock::NativePanelReservedSpace::Reserve
             || (placement.reservedSpace == ArchDock::NativePanelReservedSpace::Automatic
                 && placement.visibilityMode == ArchDock::NativePanelVisibilityMode::Always);

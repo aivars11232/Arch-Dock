@@ -57,7 +57,7 @@ function modifierSettings(modifiers) {
     }
 }
 
-// Turning the platform by dragging its body (ADFIX UF-07): across the screen
+// Turning the platform by dragging its body: across the screen
 // turns it (yaw), up and down tilts it (pitch), a quarter degree per pixel
 // like the rotate rings. Ctrl snaps both to 15 degrees.
 function orbit(startPitch, startYaw, delta, snap) {
@@ -67,13 +67,12 @@ function orbit(startPitch, startYaw, delta, snap) {
         pitch = snapped(pitch, 15)
         yaw = snapped(yaw, 15)
     }
-    // All the way round both ways (the owner, 2026-10-13: "freely in 360
-    // every direction").
+    // All the way round both ways.
     return { pitch: ((pitch + 180) % 360 + 360) % 360 - 180, yaw: ((yaw + 180) % 360 + 360) % 360 - 180 }
 }
 
 // A move arrow shorter than this on screen points (nearly) at the viewer: it
-// has no direction on screen a drag could follow (ADFIX AUD-04).
+// has no direction on screen a drag could follow.
 var endOnPixels = 12
 
 function axisEndOn(origin, axisEnd) {

@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0031: the channel-to-transform mapping is pure data, so it is proved
+// The channel-to-transform mapping is pure data, so it is proved
 // here without a window, a renderer or a running animation. Direction,
 // composition and bounds are the three things a motion can get wrong.
 TestCase {

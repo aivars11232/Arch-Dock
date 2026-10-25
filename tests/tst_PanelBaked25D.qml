@@ -1204,7 +1204,7 @@ TestCase {
         verify(!scene.containsInputPoint(hole), "the ring's hole passes through")
         verify(!scene.containsInputPoint(Qt.point(1, 1)), "the corner passes through")
 
-        // ADREP-TASK-002: the wheel moves the icons along the ring track from
+        // The wheel moves the icons along the ring track from
         // that surface, in both directions, and the platform stays still.
         verify(scene.wheelTravelAvailable)
         compare(scene.wheelRotationAvailable, false, "the platform does not turn")
@@ -1284,8 +1284,8 @@ TestCase {
                        entry.entryBounds.y + entry.entryBounds.height / 2)),
                    "entry " + index + " takes input where it is drawn")
             // The popup anchor follows the entry, half an icon out along the
-            // direction away from the drawn ring's centre (ADFIX UF-02: the
-            // flat track's own normal pointed back over a tilted ring).
+            // Direction away from the drawn ring's centre (the flat track's
+            // own normal pointed back over a tilted ring).
             const anchor = tight.popupAnchors.entries[index]
             const centre = tight.bakedTrackMetrics.center
             const dx = entry.position.x + 26 - centre.x

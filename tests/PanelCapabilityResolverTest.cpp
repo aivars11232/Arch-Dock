@@ -284,7 +284,7 @@ void PanelCapabilityResolverTest::nativeEdgeRejectsRingTheme()
 
 void PanelCapabilityResolverTest::edgePanelThemesAreJudgedByTheDrawnLayout()
 {
-    // ADREP-TASK-001: an edge panel's applet lays its row out along its edge
+    // An edge panel's applet lays its row out along its edge
     // whatever Dock layout its record holds, and that field is not offered
     // there. A theme made for horizontal panels fits a bottom or top panel
     // whatever its record says, and never a left or right one.
@@ -382,7 +382,7 @@ void PanelCapabilityResolverTest::hostsDeclareTheMechanismsTheySurfaceCanActuall
         QVERIFY2(decision->available, qPrintable(mechanism));
     }
 
-    // Contract change, ADREP-TASK-001 (owner decision PD-01): a free panel
+    // A free panel
     // offers no opening or closing mechanism. It is always open, whatever its
     // theme declares.
     const auto freeHost = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
@@ -416,7 +416,7 @@ void PanelCapabilityResolverTest::aMechanismNeedsBothHostAndThemeDeclaration()
 {
     // The procedural surface can reveal along either axis, but it declares
     // no mechanical split. Host support alone cannot invent theme parts. The
-    // edge host declares split; free panels declare no mechanism (PD-01).
+    // edge host declares split; free panels declare no mechanism.
     const CapabilityResolution undeclared = PanelCapabilityResolver::resolve(
         panelFor(PanelHostKind::NativeEdge),
         PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
@@ -456,7 +456,7 @@ void PanelCapabilityResolverTest::radialIsOfferedByNoHost()
              PanelCapabilityResolver::productionHostProfile(
                  PanelHostKind::NativeEdge).id);
 
-    // Contract change, ADREP-TASK-001 (PD-01): free panels, the only host
+    // Free panels, the only host
     // that could close like an iris, offer no mechanism any more, so no host
     // offers radial.
     const auto freeHost = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
@@ -686,7 +686,7 @@ void PanelCapabilityResolverTest::dynamicGlowRequiresHostAndThemeDeclaration()
              std::optional<PanelCapability>(PanelCapability::DynamicGlow));
 }
 
-// TASK-0034 installs the baked 2.5D renderer, but only the free desktop host
+// The baked 2.5D renderer is installed, but only the free desktop host
 // can present it: a Plasma edge panel is a fixed rectangle and cannot host a
 // perspective platform. A native panel therefore falls back rather than
 // pretending the tier is unavailable everywhere.
@@ -840,7 +840,7 @@ void PanelCapabilityResolverTest::meshPartsRequireDeclaredPartsAndAnActiveMeshRe
 {
     auto host = PanelCapabilityResolver::productionHostProfile(PanelHostKind::FreeDesktop);
     host.rendererTiers.append(RendererTier::True3D);
-    // The production free host offers no mechanism (PD-01); this host
+    // The production free host offers no mechanism; this host
     // declares one so that the mesh-part rule itself is what is tested.
     host.presentationMechanisms.append(PanelPresentationMechanism::CollapseRadial);
     auto theme = themeFor(QStringLiteral("parts"), {PanelHostKind::FreeDesktop},

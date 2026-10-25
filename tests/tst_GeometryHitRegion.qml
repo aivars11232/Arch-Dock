@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0033 Phase C: the active input region of a free radial scene is the
+// The active input region of a free radial scene is the
 // band the surface draws plus the entries themselves. The empty interior and
 // the corners of the rectangle pass through.
 TestCase {
@@ -75,7 +75,7 @@ TestCase {
         verify(center.x > 0)
     }
 
-    // ---- ADREP-TASK-002: hits follow travelled entries -------------------
+    // ---- hits follow travelled entries -------------------
 
     Component {
         id: sceneComponent
@@ -161,7 +161,7 @@ TestCase {
             verify(centre.x >= rect.x && centre.x <= rect.x + rect.width
                    && centre.y >= rect.y && centre.y <= rect.y + rect.height)
             compare(item.enabled, true)
-            // PD-18: an entry's custom visibility mask must keep Qt's
+            // An entry's custom visibility mask must keep Qt's
             // original local bounds, including after its travel transform.
             compare(item.contains(Qt.point(item.width / 2, item.height / 2)), true)
             compare(item.contains(Qt.point(-1, item.height / 2)), false)

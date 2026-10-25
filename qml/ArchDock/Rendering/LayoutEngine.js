@@ -60,8 +60,8 @@ var canonicalSpacing = 8;
 // between neighbours instead and shows `capacity` of them, centred on the
 // track.
 //
-// `travel` moves every entry along the track by that many entry slots
-// (ADREP-TASK-002). The wheel, a drag or continuous motion sets it; it is
+// `travel` moves every entry along the track by that many entry slots.
+// The wheel, a drag or continuous motion sets it; it is
 // transient browsing state, never saved. Positive travel moves the entries
 // towards the end of the track, which is clockwise on every layout drawn
 // here. A closed track carries its entries round: one slot puts each entry
@@ -721,8 +721,8 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
         && !radialLayoutNames.includes(resolvedLayout);
     const orientationRadial = legacyRuntimeRadial ? 0 : radial;
     // A chosen orientation turns each icon with its path in every profile,
-    // the free applet's live one included: Panel Studio offers it there
-    // (ADREP-TASK-001, PD-08), so it has to act there.
+    // the free applet's live one included: Panel Studio offers it there,
+    // so it has to act there.
     if (orientation === "tangent")
         rotation = tangent + safeAngle;
     else if (orientation === "radial")
@@ -1258,7 +1258,7 @@ function surface(layout, rawGeometry, rawAngle, polygonSides) {
     } else if (resolvedLayout === "spiral") {
         // The path the entries stand on (entryGeometry): a fixed turn per
         // entry, outwards from a quarter of the radius, so every entry sits on
-        // the drawn line and travels along it (ADREP-TASK-002). A geometry
+        // the drawn line and travels along it. A geometry
         // that does not say how many entries it holds keeps the older figure.
         const span = Math.max(1, geometry.count - 1);
         for (let index = 0; index < samples; ++index) {
@@ -1327,8 +1327,7 @@ function lookTexture(look, palette) {
         "plasma": ["rainbow"],
         "neon": ["rainbow"],
         "futuristic": ["rainbow"],
-        // Polished, heat-tinted metal shows a faint rainbow (the owner,
-        // 2026-10-13: "chameleon"); lime stays a lime.
+        // Polished, heat-tinted metal shows a faint rainbow; lime stays a lime.
         "metallic": ["chameleon", "iridescent"],
         "plate": ["chameleon", "iridescent"],
         // Water in its moods: clear, deep, jade green, under a sunset.
@@ -1370,16 +1369,15 @@ function themeStyle(appearance, customColor, iconSize) {
             stroke: "#895cff", shadow: "#d94cff", width: 0.40, blur: 23
         },
         // Bolts in a dark storm: a white-blue light, flickering and striking
-        // anew (the owner, 2026-10-13).
+        // anew.
         "lightning": {
             stroke: "#c4d0ff", shadow: "#7d8cff", width: 0.32, blur: 26
         },
-        // Curtains of polar light in a night sky (the owner, 2026-10-13).
+        // Curtains of polar light in a night sky.
         "aurora": {
             stroke: "#68ffb0", shadow: "#7a5cff", width: 0.36, blur: 24
         },
-        // A lime's peel: a natural citrus green, lit, not glowing (the owner,
-        // 2026-10-13: lime is named for the fruit).
+        // A lime's peel: a natural citrus green, lit, not glowing.
         "lime": {
             stroke: "#86c93b", shadow: "rgba(38, 82, 16, 0.45)", width: 0.30, blur: 12
         },
@@ -2300,18 +2298,18 @@ function unitedBounds(rectangles) {
                           : { x: 0, y: 0, width: 0, height: 0 };
 }
 
-// The free-panel folder shapes other than "Along the dock" (ADREP-TASK-003),
+// The free-panel folder shapes other than "Along the dock",
 // in screen coordinates: the path the children stand on (for
 // folderTrackLayout), the outline drawn under them and the room they need.
 //
-//   fan    PD-11  a sector: its apex just outside the folder, its edges
+//   fan  a sector: its apex just outside the folder, its edges
 //                 `fanOpening` degrees apart about the outward direction,
 //                 the children on its arc.
-//   arc    PD-13  the children at one distance from the folder, facing it,
+//   arc  the children at one distance from the folder, facing it,
 //                 symmetric about the outward direction.
-//   stack  PD-12  a straight line from the folder outward, `stackLength`
+//   stack  a straight line from the folder outward, `stackLength`
 //                 children at a time.
-//   ring   PD-14  a circle beside the folder along the outward direction,
+//   ring  a circle beside the folder along the outward direction,
 //                 "small" to fit the children or "panel" at the dock's radius.
 //   mobius        a Möbius strip beside the folder along the outward
 //                 direction: a band along an ∞ with one half twist (see

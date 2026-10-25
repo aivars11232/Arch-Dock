@@ -67,8 +67,8 @@ struct IconStyleLayerDefinition
     QString kind = QStringLiteral("procedural");
     QString asset;
     QString shape = QStringLiteral("rounded-rect");
-    // PD-20/21: packages opt their silhouette into the panel's shape and
-    // can declare a layer conditional on the owner's pedestal option.
+    // Packages opt their silhouette into the panel's shape and
+    // can declare a layer conditional on the user's pedestal option.
     bool followsIconShape = false;
     QString option;
     QString color = QStringLiteral("transparent");

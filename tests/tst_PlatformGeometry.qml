@@ -3,7 +3,7 @@ import QtTest
 import ArchDock.Rendering 1.0
 import "../qml/ArchDock/Rendering/PlatformGeometry.js" as PlatformGeometry
 
-// ADFIX-TASK-002: the generated 3D geometry. A look without a 3D mesh of its
+// The generated 3D geometry. A look without a 3D mesh of its
 // own stands on a platform shaped exactly like its layout, and every icon
 // stands on a pedestal of its own.
 TestCase {
@@ -50,7 +50,7 @@ TestCase {
     }
 
     function test_tileIsABoundedSolidWithRealDepthAndBevel() {
-        // ADREP-TASK-005, OF-42: a closed volume rather than a textured plane.
+        // A closed volume rather than a textured plane.
         function volume(mesh) {
             let sum = 0
             for (let i = 0; i < mesh.indexes.length; i += 3) {
@@ -142,8 +142,7 @@ TestCase {
             const higher = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 1.6 }, 52)
             verify(higher.gap > layout.gap && higher.raise > layout.raise, shape + " floats higher with Lift")
             // On a free panel's path the stand's middle is on the path and
-            // the icon floats above it (the owner: "why are they outside
-            // the dock").
+            // the icon floats above it.
             const onPath = PlatformGeometry.pedestalLayout({ pedestalShape: shape, pedestalLift: 0.4 }, 52, true)
             fuzzyCompare(onPath.standCentre, 0, 0.01, shape + " stands on the path")
             verify(onPath.raise > layout.raise, shape + " lifts the icon above its stand on the path")

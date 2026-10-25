@@ -74,7 +74,7 @@ TestCase {
         return rows
     }
 
-    // The owner, 2026-10-13: a change low on the page threw it back to its
+    // A change low on the page threw it back to its
     // top and dropped the control in use, so the change had to be made again.
     // The Studio hands the form new rows on every change: the same settings
     // keep their controls and the place on the page, a row that comes is the

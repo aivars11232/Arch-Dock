@@ -147,7 +147,7 @@ TestCase {
         compare(summed.tracks.length, 2)
     }
 
-    // Legacy TASK-0050: a click may never be delivered as a successful launch.
+    // Legacy a click may never be delivered as a successful launch.
     function test_clickDoesNotMasqueradeAsSuccessfulLaunch() {
         const clickProfile = profile({
             id: "click-feedback",

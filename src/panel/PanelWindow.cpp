@@ -578,7 +578,7 @@ void PanelWindow::syncRegistryFromLegacySettings()
 
     // Whether a panel is shown is its own record's: the old global switches
     // (bottomPanelVisible and the like, on by default) no longer show a
-    // panel the owner hid or removed, at every start.
+    // panel the user hid or removed, at every start.
 
     for (const QString &panelId : m_panelRegistry.panelIds())
     {

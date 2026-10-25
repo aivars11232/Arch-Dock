@@ -37,7 +37,7 @@ Item {
     // A panel along an edge is drawn as a track from its first entry to its
     // last, so one with nothing on it drew nothing at all. Panel Studio shows
     // such a panel bare: laid out over a few empty places, with no icon in
-    // them (the owner, 2026-10-13).
+    // them.
     property bool showBarePanel: false
     readonly property var barePanelEntries: [
         { id: "bare-place-1", placeholder: true },

@@ -4,7 +4,7 @@ import QtQuick.Effects
 import "MotionChannels.js" as MotionChannels
 import "PlatformGeometry.js" as PlatformGeometry
 
-// A free panel's folder contents on a path (ADREP-TASK-003): "Along the dock",
+// A free panel's folder contents on a path: "Along the dock",
 // where the dock's own track continues outside it, or the fan, arc, stack and
 // ring of LayoutEngine.folderShape(). The host traces the path, and the small
 // panel drawn under it, in this item's coordinates; this item stands the
@@ -63,12 +63,12 @@ Item {
     property real outlineOpacity: 0.9
     // Where the shape stands - apex, centre, radius - for diagnostics.
     property var shapeInfo: null
-    // Steps per wheel notch, or per pitch of touchpad travel (PD-16).
+    // Steps per wheel notch, or per pitch of touchpad travel.
     property real scrollSensitivity: 1
     property point expansionOrigin: Qt.point(width / 2, height / 2)
     // An opening runs this phase from 0 to 1 over the folder animation, a
     // closing from 1 to 0; `openingProgress` is the chosen motion at that
-    // time, so a closing plays the opening backwards (PD-15).
+    // time, so a closing plays the opening backwards.
     property real openingPhase: opened ? 1 : 0
     readonly property real openingProgress: MotionChannels.folderEasing(easing, openingPhase)
     readonly property bool openingInProgress: phaseAnimation.running
@@ -122,8 +122,8 @@ Item {
         easing.type: Easing.Linear
         onFinished: if (root.closing) root.finishClosing()
     }
-    // One wheel step eases the children to their next places, as on the dock
-    // (ADREP-TASK-002); a step that arrives meanwhile retargets it.
+    // One wheel step eases the children to their next places, as on the dock;
+    // a step that arrives meanwhile retargets it.
     NumberAnimation {
         id: travelAnimation
         target: root
@@ -215,7 +215,7 @@ Item {
         travelAnimation.to = travelTarget
         travelAnimation.start()
     }
-    // Wheel input gathers into whole steps (PD-16): 120 angle units are one
+    // Wheel input gathers into whole steps: 120 angle units are one
     // notch, a touchpad's pixels count by the pitch between two children, and
     // the panel's Scroll sensitivity says how many steps that makes. As on the
     // dock, turning the wheel away moves the children on towards the end of
@@ -447,9 +447,12 @@ Item {
             required property int index
             readonly property var placed: root.track.entries[index] || ({ x: 0, y: 0, scale: 1,
                 onTrack: false, visibility: 0 })
-            // A motion that swings past its place swings the size with it.
-            readonly property real drawnScale: Math.max(0.35, Number(placed.scale) || 1)
-                * (0.3 + 0.7 * Math.max(0, Math.min(1.3, root.openingProgress)))
+            // The opening's growth: a motion that swings past its place
+            // swings the size with it.
+            readonly property real grownScale: 0.3 + 0.7 * Math.max(0, Math.min(1.3, root.openingProgress))
+            // The icon's drawn size: its depth on a tilted or projected
+            // panel, and the growth.
+            readonly property real drawnScale: Math.max(0.35, Number(placed.scale) || 1) * grownScale
             objectName: "folder-child-" + index
             // The icon's centre travels from the folder icon to its place.
             readonly property real centreX: root.expansionOrigin.x
@@ -492,8 +495,12 @@ Item {
             }
             QQC2.Label {
                 objectName: "folder-name-" + child.index
+                // The name keeps the dock's own letter size and its cell's
+                // width wherever its child stands along the depth: only the
+                // opening's growth scales it, with the child.
+                x: (parent.width - width) / 2
                 y: (root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale + 4
-                width: parent.width
+                width: root.cellWidth
                 visible: root.showNames
                 text: String(child.modelData.displayName || child.modelData.name || "")
                 textFormat: Text.PlainText
@@ -501,7 +508,7 @@ Item {
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
-                scale: child.drawnScale
+                scale: child.grownScale
                 transformOrigin: Item.Top
                 style: Text.Outline
                 styleColor: palette.base

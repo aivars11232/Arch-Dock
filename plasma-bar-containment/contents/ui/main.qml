@@ -8,7 +8,7 @@ import org.kde.plasma.plasmoid
 
 // An Arch Dock bar: the widgets it holds in a row along its screen edge (a
 // column on a side edge). The bar host sizes the bar's window, as long as
-// this row wants to be or as long as the owner set.
+// this row wants to be or as long as its settings say.
 //
 // How the bar is built, for anyone reading or changing it:
 //
@@ -60,8 +60,12 @@ ContainmentItem {
         return lengths
     }
     onGroupIdsChanged: syncGroups()
-    readonly property real iconGap: dockApplet && dockApplet.barIconGap !== undefined ? Number(dockApplet.barIconGap) : 0
-    readonly property real groupLead: dockApplet && dockApplet.barGroupLead !== undefined ? Number(dockApplet.barGroupLead) : 0
+    // The gap between the dock's icons, and the dock's own room before its
+    // first icon: a group keeps them where it follows something, or is first.
+    readonly property real iconGap: dockApplet && dockApplet.barIconGap !== undefined
+        ? Number(dockApplet.barIconGap) : 0
+    readonly property real groupLead: dockApplet && dockApplet.barGroupLead !== undefined
+        ? Number(dockApplet.barGroupLead) : 0
     // Where along the bar each group stands (its first icon), for the dock
     // to draw its icons there; a group being dragged moves with the pointer.
     readonly property var groupPlaces: {
@@ -120,8 +124,6 @@ ContainmentItem {
     }
     readonly property var widgetRoom: dockApplet && dockApplet.barWidgetRoom ? dockApplet.barWidgetRoom
         : ({ start: 0, end: 0, sideStart: 0, sideEnd: 0 })
-    readonly property var dockRoom: dockApplet && dockApplet.barDockRoom ? dockApplet.barDockRoom
-        : ({ start: 0, end: 0 })
     // The panel's ends: its start is the bar's application menu and its end
     // the system tray's button for the icons it hides (^), in any look.
     readonly property var endCaps: dockApplet && dockApplet.barEndCaps ? dockApplet.barEndCaps
@@ -800,7 +802,8 @@ ContainmentItem {
             if (!child.token || !child.visible && child !== root.launcherSlot)
                 continue
             if (child === root.launcherSlot) {
-                spans.push({ slot: child, start: -Infinity, end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
+                spans.push({ slot: child, start: -Infinity,
+                             end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
                 continue
             }
             if (!child.visible)

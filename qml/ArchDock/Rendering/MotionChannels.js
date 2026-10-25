@@ -263,7 +263,7 @@ function maximumDisplacement(profiles, intensity) {
     return largest;
 }
 
-// The four folder motions (PD-15): how far a folder has opened, 0 shut and 1
+// The four folder motions: how far a folder has opened, 0 shut and 1
 // open, at time `t` through its animation, 0 to 1. An opening runs t up and a
 // closing runs it down, so the closing plays the same motion backwards.
 // outCubic, outBack and outElastic are Qt's curves of those names; spring is

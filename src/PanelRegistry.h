@@ -325,7 +325,7 @@ private:
     // A theme package, parsed and verified once while its manifest and every
     // asset it was verified from stay the very same files. Reading one hashes
     // every asset, and the settings path asks for the same package for every
-    // field of every edit (ADFIX UF-08).
+    // field of every edit.
     [[nodiscard]] ArchDock::ThemePackageLoadResult loadThemePackage(const QString &manifestPath) const;
 
     QList<QVariantMap> m_panels;

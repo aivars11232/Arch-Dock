@@ -70,7 +70,7 @@ elif mode == 'future':
 elif mode == 'future-unchanged':
     assert config.read_bytes() == (state / 'future.conf').read_bytes()
 elif mode == 'free-collapsed':
-    # ADREP-TASK-001, PD-01: a current configuration whose only outdated
+    # A current configuration whose only outdated
     # values are a free panel saved collapsed and hidden, as earlier versions
     # allowed although nothing could hide or collapse a free panel.
     panels = json.loads(bytes(settings.value('dock/panels')))
@@ -109,7 +109,7 @@ elif mode == 'free-open':
     assert original['presentationMode'] == 'collapsed' and original['collapseMechanism'] == 'collapse-radial'
     assert original['visible'] is False
 elif mode == 'motion-legacy':
-    # ADREP-TASK-002, PD-25: free panels saved before "Continuous motion
+    # Free panels saved before "Continuous motion
     # moves", item travel speed and scroll sensitivity existed - one turning
     # clockwise, one still.
     panels = json.loads(bytes(settings.value('dock/panels')))
@@ -211,14 +211,14 @@ rm -- "$data_root/config-backups"
 mv "$state/saved-backups" "$data_root/config-backups"
 "$binary" --restore-config-backup "$original_id"
 fixture original
-# A free panel saved collapsed is shown open after the upgrade (PD-01).
+# A free panel saved collapsed is shown open after the upgrade.
 start_service
 stop_service
 fixture free-collapsed
 start_service
 fixture free-open
 stop_service
-# Saved free panels keep the motion they had (ADREP-TASK-002, PD-25).
+# Saved free panels keep the motion they had.
 fixture motion-legacy
 start_service
 fixture motion-upgraded

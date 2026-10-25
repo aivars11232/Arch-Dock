@@ -309,7 +309,7 @@ Item {
                     if (parameters[key] !== undefined && parameters[key] !== null
                             && Number.isFinite(Number(parameters[key])))
                         merged[key] = Number(parameters[key])
-                for (const key of ["transitions", "float", "hologramIcons", "hologramIconFloat", "hologramBeam",
+                for (const key of ["transitions", "float", "iconSolid", "hologramIcons", "hologramIconFloat", "hologramBeam",
                                    "hologramPanel", "hologramPedestals"])
                     if (typeof parameters[key] === "boolean") merged[key] = parameters[key]
                 for (const [key, target] of [["color", "materialColor"], ["material", "materialLook"],
@@ -352,7 +352,7 @@ Item {
                                             ["hologramPedestalGlowColor", "hologramPedestalGlowColor"]])
                     if (typeof parameters[key] === "string") merged[target] = parameters[key]
                 merged.panelPicture = root.picture
-                // All the way round (the owner, 2026-10-13: "freely in 360 every direction").
+                // All the way round.
                 if (isFinite(root.cameraPitch)) merged.cameraPitch = Math.max(-180, Math.min(180, root.cameraPitch))
                 return merged
             }),

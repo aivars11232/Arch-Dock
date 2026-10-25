@@ -259,7 +259,7 @@ QVariantMap PanelWindow::updateSceneEditDraft(const QString &panelId, const QVar
 
 // A built-in theme's values for a panel, without the values of fields that do
 // not act on the panel the theme would make: a theme cannot set what that
-// panel does not have, such as an edge panel's layout (ADREP-TASK-001).
+// panel does not have, such as an edge panel's layout.
 QVariantMap PanelWindow::themeCandidateFor(const ArchDock::PanelDefinition &candidate,
                                            const QString &themeId) const
 {
@@ -834,7 +834,7 @@ ArchDock::PresetPreviewSession::Operations PanelWindow::presetAuditionOperations
                     *prepared.iconPreset, {}, error);
             if (!frozen) return false;
             const auto frozenValues = frozen->candidatePanel.toLegacyMap();
-            // The fields that act on this candidate (ADREP-TASK-001 truth rules).
+            // The fields that act on this candidate.
             QSet<QString> active;
             for (const QVariant &value : panelSettingsEditorFields(candidate,
                      m_panelRegistry.resolvePanelCapabilities(candidate), QStringLiteral("studio")))
@@ -970,8 +970,7 @@ var result = (function() {
         .arg(plasmaScriptStringLiteral(payload)));
     // Plasma's desktop keeps a widget out of a panel's own area and on the
     // screen, so the position it settles at may differ from the one asked
-    // for (the owner's desktop, 2026-10-12: asked y 180, placed at 246 under
-    // a 66 px top panel); demanding the exact position rolled every profile
+    // for; demanding the exact position rolled every profile
     // apply, preset preview and re-host back. The size must match and the
     // geometry must hold still; the position Plasma chose is accepted.
     const auto number = [](const QVariantMap &map, const QString &key) { return map.value(key).toDouble(); };

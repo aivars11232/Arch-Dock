@@ -4,7 +4,7 @@ import QtTest
 import ArchDock.Rendering 1.0
 import "../plasma-dock-widget/contents/ui" as DockUi
 
-// TASK-0031 acceptance for the motions the master plan asks for by name.
+// Acceptance for the motions the master plan asks for by name.
 // Every case drives the production DockEntry with the shipped catalog, so a
 // preset is proved as the user would get it rather than as a fixture.
 TestCase {
@@ -441,7 +441,7 @@ TestCase {
 
     // --- launch truth -----------------------------------------------------
 
-    // The decisive TASK-0031 criterion: clicking an icon is not a successful
+    // The decisive clicking an icon is not a successful
     // launch, and neither is an activation the platform could not confirm.
     function test_clickAloneNeverRunsASuccessAnimation() {
         let captured = null

@@ -161,7 +161,7 @@ void AnimationProfileTest::targetsDistinguishEveryRequiredLayer()
     QVERIFY(resolved.contains(QStringLiteral("indicator")));
 }
 
-// Legacy TASK-0049 requires click and launch success to be separable in the
+// A legacy rule requires click and launch success to be separable in the
 // schema so a later phase cannot quietly treat a click as a launch result.
 void AnimationProfileTest::clickAndLaunchSuccessAreSeparateTriggers()
 {
@@ -417,8 +417,8 @@ void AnimationProfileTest::builtInCatalogCoversEverySelectableAnimation()
     }
 }
 
-// TASK-0031 freezes these ids. The built-in Panel and Icon Presets that
-// TASK-0040 must deliver name motion by id, so a rename here would silently
+// These ids are frozen. The built-in Panel and Icon Presets that
+// The presets must deliver name motion by id, so a rename here would silently
 // break a shipped preset. Adding an id is a deliberate act that updates this
 // list, the settings schema and the migration test together; removing or
 // renaming one is a compatibility break.
@@ -430,7 +430,7 @@ void AnimationProfileTest::builtInProfileIdsAreFrozen()
     QVERIFY(result.isValid());
 
     QStringList frozen = {
-        // Migrated by TASK-0030.
+        // Migrated from the old names.
         QStringLiteral("none"),        QStringLiteral("bounce"),
         QStringLiteral("elastic"),     QStringLiteral("spring"),
         QStringLiteral("float"),       QStringLiteral("wave"),
@@ -440,7 +440,7 @@ void AnimationProfileTest::builtInProfileIdsAreFrozen()
         QStringLiteral("idle-rotate"), QStringLiteral("swing"),
         QStringLiteral("wobble"),      QStringLiteral("wiggle"),
         QStringLiteral("shake"),       QStringLiteral("glow"),
-        // Requested motions, added by TASK-0031.
+        // Requested motions, added later.
         QStringLiteral("slow-y-turn"), QStringLiteral("jump"),
         QStringLiteral("shake-tangent"), QStringLiteral("enlarge"),
         QStringLiteral("spiral"),

@@ -637,7 +637,7 @@ panel_registry_record_snapshot() {
         'first(.[] | select(.id == $panel_id))'
 }
 
-# TASK-0033: free-panel content helpers.
+# Free-panel content helpers.
 panel_settings_revision() {
     panel_call dockConfiguration "$1" | sed -n \
         "s/.*'settingsRevision': <uint64 \\([0-9][0-9]*\\)>.*/\\1/p"
@@ -1937,7 +1937,7 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'duplicate template bootstrap'
     log_session_phase 'reused template free-panel host without duplication'
 
-    # TASK-0033 Phases A, C and D on a real free host: the record's content type
+    # On a real free host: the record's content type
     # decides what the panel shows, entries are panel-specific and ordered, the
     # order and the rotation configuration are committed as revisions, free ids
     # never reach the shared application reorder, and a native panel refuses

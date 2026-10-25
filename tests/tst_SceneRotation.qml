@@ -2,8 +2,8 @@ import QtQuick
 import QtTest
 import ArchDock.Rendering 1.0
 
-// TASK-0033 Phase C: whole-scene rotation for free radial panels, and
-// ADREP-TASK-002: entries travelling along the panel's own path.
+// Whole-scene rotation for free radial panels, and
+// Entries travelling along the panel's own path.
 //
 // The controller is proved on its own, then through PanelScene: the offset it
 // yields is added to the configured layout angle and every geometry consumer
@@ -479,7 +479,7 @@ TestCase {
         }
     }
 
-    // ---- ADREP-TASK-002: entries travel along the panel's own path -------
+    // ---- entries travel along the panel's own path -------
 
     function travelScene(overrides, properties) {
         return stillScene(Object.assign({ panelMotionTarget: "items" }, overrides || ({})),

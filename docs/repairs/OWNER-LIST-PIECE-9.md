@@ -1191,3 +1191,95 @@ drawn behind it, the others none (cosmetic, to look at).
   from loading at all, which Plasma shows as an empty applet; a right-click
   then opened the bar's menu. Then a probe aimed one pixel left of an icon
   made it look as if icons took no input; they do.
+
+## Recheck of everything, and the folder openings on tilted panels (2026-10-25, evening)
+
+The owner asked for a full recheck - the code itself human-readable, not
+only the comments - a full retest, and the update link only if all is good;
+then added the folder openings: their alignment to a panel's tilt, their
+distance, and the names' font, on flat and 3D panels, "fix only the
+problem, change no look or shape".
+
+### Comments and code
+
+- 106 files: every comment that named the owner, a task code or a date was
+  rewritten in plain words for the community; no code line changed in that
+  pass except line wraps and the unused `dockRoom` property of the bar
+  containment (checked by diff).
+- Long functions noted, not refactored: `LayoutEngine.entryGeometry` (225
+  lines), `SettingsPopup.performStudioAction` (144), `setFieldValue` (104).
+
+### Bugs found by the retest, and fixed
+
+1. **The QML garbage collector crashed** inside `panel-window-capability-test`
+   (a null read in `QV4::GCStateMachine::transition` while a string write
+   forced a sliced collection to finish; the same crash in the logs of
+   19 and 21 October). Qt 6.8+ collects in time slices; Qt's own fix for
+   QTBUG-148459 guards one spot. Both programs now run whole collections
+   (`QV4_GC_TIMELIMIT=0`, read as each engine starts, taken out of the
+   environment again so started programs do not inherit it; a user's own
+   value stays): `src/QmlGarbageCollector.h`, used in `src/main.cpp`,
+   `src/bars/BarHost.cpp` (held until the first bar window, which creates
+   Plasma's shared engine) and the test's `main`. The test then ran twice
+   through (559 s and 547 s).
+2. **The 3D icons switch did nothing on a true-3D panel** since 0.1.1-27:
+   `PanelSurfaceLoader` never carried `iconSolid` into the scene definition
+   and `PanelScene` had no `scene3DIconSolid` mapping, so the 3D scene kept
+   flat pictures whatever the switch said. The real-GPU renderer test caught
+   it (`iconDepth` stayed 0); the 23 October audit had called that test
+   stale. Both carried now; the test passes on the real card (32 of 32).
+3. **Icon size with thickness** did not restore (`studioTruthMatrix`):
+   a size that filled the thickness keeps filling it (`thickness - 24`,
+   24..128), other sizes scale as before.
+4. **Icon drops** called the dragged icon's own `reorder` rather than the
+   target's; the target's state (status entries, no input, kept still in
+   edit mode) is respected (`dock-entry-test`).
+5. **Three stale tests**: the folder matrices waited for a Stack and an Arc
+   that open as a fan and along the dock since 22 October, and compared
+   shapes by their saved names on edge panels (where an Arc opens as a fan);
+   the 3D fan check expected a rim band where the fan is a sector; the track
+   clearance is measured on the panel's plane (the ring's own drawn outline
+   gives the tilt's squash) instead of nudging a threshold. The renderer test
+   turns the 3D icons switch on before expecting solids.
+6. **Two parse mistakes in the smokes**: `run-rendering-import-smoke.sh`
+   took the last `settingsRevision` in a `dockConfiguration` reply (a nested
+   record's, 0) and got `stale-revision`; the replica runner read the Studio
+   editor's revision. Both read the reply's top-level field now.
+
+### The folder openings (the owner's pictures)
+
+Replica of the owner's free ring (circular, radius 145, icon 52, pitch 25,
+yaw 10, bowl pedestals, collective-hull decoration, holograms, names shown,
+Along the dock with reach "half") with test folders, at 25 and at 60
+degrees; evidence `OPENING-TILT-*` in the audit folder, pictures 93-94.
+
+- At 60 degrees every position put the children on the rim over the icons
+  (pictures 93, top). The diagnostic showed why: all 25 step-outs of the
+  curve (0..312 px on the panel's plane) were rejected by the keep-out,
+  because the far side of a steep ring moves only 48 px on the screen for
+  312 px on the plane, and a child's name box still ended inside the far
+  icon's square; the fallback was the nearest curve. **Fix:** each point of
+  the curve steps out on the plane until its child clears the panel as
+  drawn, measured on the screen (up to three icons of the screen), the
+  steps changing by at most one stride between neighbouring points. The
+  curve keeps its shape - the dock's own curve, offset - and its distance
+  now follows the tilt (pictures 93, bottom; at 25 degrees the children
+  stand closer than before, about one icon out).
+- The fan was built flat on the screen on a 3D panel by design; it lies on
+  the panel's plane now like the ring and the grid (picture 94, left).
+- The names scaled with each child's depth (huge on the near side, tiny on
+  the far side, overlapping); they keep the dock's letter size and their
+  cell's width, scaled only by the opening's growth; wrap stays as it was.
+- The dock instrument (`folder-instrument.py`) needed two anchors pinned
+  after today's code changes.
+
+### Open
+
+- The rare Qt Quick 3D crash (`QSGRhiLayer::grab` refreshing a 3D panel's
+  icon layer while an icon's item dies) is not fixed: the audit's route -
+  saved pictures instead of live layers - also carries hover and active tile
+  colours, the glyph highlight and every tile look into 3D, so it needs the
+  owner's eyes. It struck once in four truth-matrix runs today, as before.
+- The track clearance on a flat ring with names: children keep a cell's
+  box (108 px with names) clear, so they stand a little further out than
+  the icon alone would need.

@@ -60,8 +60,7 @@ Item {
 
     // Quality: low draws at three quarters of the size without smoothing;
     // medium at full size with multisampling; high (the default) at full
-    // size, supersampled, so edges, textures and the stands are not pixelly
-    // (the owner's 2026-10-12 report).
+    // size, supersampled, so edges, textures and the stands are not pixelly.
     readonly property string effectiveQuality:
         ["low", "medium", "high"].includes(quality) ? quality : "high"
     readonly property real resolutionScale: effectiveQuality === "low" ? 0.75 : 1
@@ -71,9 +70,7 @@ Item {
         textureLimit / Math.max(1, viewWidth, viewHeight))
     readonly property int targetWidth: Math.max(1, Math.ceil(viewWidth * boundedScale))
     readonly property int targetHeight: Math.max(1, Math.ceil(viewHeight * boundedScale))
-    // No box (the owner, 2026-10-13: "there shouldn't be any edge, same as
-    // there isn't for KDE native panels, the only edge is edge of the
-    // screen"). The view is drawn past the panel's own box by as far as the
+    // No box. The view is drawn past the panel's own box by as far as the
     // scene reaches out of it - scaled, tilted, moved, an icon magnified, the
     // handles while editing - by the same amount on opposite sides, so the
     // camera stays on the panel's centre, and its field of view widens by as
@@ -123,7 +120,7 @@ Item {
         ? String(sceneDefinition.materialColor) : ""
     // Theme on a generated platform is the flat look's own surface: its
     // translucency, metal, roughness, glow and texture, so that turning 3D on
-    // keeps the design made flat (the owner's 2026-10-12 report); a look's
+    // keeps the design made flat; a look's
     // sampled palette only colours it.
     readonly property string effectiveMaterialLook: materialLook !== "theme" ? materialLook
         : generatedSpec && !textureRequired
@@ -182,8 +179,7 @@ Item {
     function energyStrength(look) {
         return look === "lightning" ? 0.22 + 1.5 * lightningFlash : 0.35 + materialPulse * 0.45
     }
-    // Lightning (the owner, 2026-10-13: "some lightning option also add,
-    // together with animations"): at random moments it strikes - a flash
+    // Lightning: at random moments it strikes - a flash
     // that dies away in a fifth of a second, its bolts jumping to another
     // place along the band - or flickers faintly between strikes. Off under
     // reduced motion and while the panel is hidden.
@@ -417,9 +413,7 @@ Item {
     // The stand under every icon (the Pedestals page). It turns with its
     // icon to face the viewer: a horizontal stand seen a little from above,
     // the icon centred over it and floating its Lift above the stand's top,
-    // at every camera angle (the owner, 2026-10-12: "it should be horizontal
-    // not flat from my perspective, and items on them should be centered
-    // while floating on top of them"). "auto" is a column in the platform's
+    // at every camera angle. "auto" is a column in the platform's
     // material, the 3D page's Pedestal height tall, the icon on its top;
     // "none", the default, draws none.
     readonly property var materialLooks: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
@@ -500,7 +494,7 @@ Item {
         }
         // A glowing stand is only lit a little from within; its light shines
         // round it from its glow shell (standGlowMaterial), instead of the
-        // stand turning one bright colour (the owner, 2026-10-13).
+        // stand turning one bright colour.
         if (pedestalGlowAmount > 0) {
             base.emissiveColor = Qt.rgba(pedestalGlowRgb[0], pedestalGlowRgb[1], pedestalGlowRgb[2], 1)
             base.emissiveStrength = Math.max(Number(base.emissiveStrength || 0), pedestalGlowAmount * 0.3)
@@ -557,9 +551,7 @@ Item {
         ? extrudedMesh(platformMesh, 0.02 + 0.04 * panelGlowReach) : null
     // At the top of its range the panel's glow lights the shape itself as
     // well, white-hot at full intensity; below that the look stays and the
-    // light is round it (the owner, 2026-10-13, on a ring its glow had
-    // turned white: "if it's on max brightness or glow then it's okay, but
-    // if that's closer to mid, then it's not okay").
+    // light is round it.
     readonly property real panelGlowWash: panelGlowAmount > 0.75
         ? Math.pow((panelGlowAmount - 0.75) / 0.25, 2) : 0
     // Just past white: the shape looks white-hot without pouring more light
@@ -570,8 +562,7 @@ Item {
         return Qt.vector3d(rgb[0] * light, rgb[1] * light, rgb[2] * light)
     }
     // Over its faces, not its rim: at full glow the shape still shows its
-    // edge (the owner, 2026-10-13: "they can show some edge, even if it's
-    // faint ... I mean the panel edge").
+    // edge.
     readonly property var platformWashMesh: {
         if (panelGlowWash <= 0)
             return null
@@ -603,8 +594,7 @@ Item {
         return Qt.vector3d(-(box[0] + box[3]) / 2 * share, -(box[1] + box[4]) / 2 * share,
                            -(box[2] + box[5]) / 2 * share)
     }
-    // A real glow (the owner, 2026-10-13: "the glow isn't really glow, it's
-    // just intense color"): the view spreads the light of what is brighter
+    // A real glow: the view spreads the light of what is brighter
     // than white round it, over the desktop as well - a glowing stand's
     // shell, and the panel's glowing rim or energy look when Glow intensity
     // is turned past 1. Only while something glows: the glow costs a few
@@ -619,7 +609,7 @@ Item {
     // stands' and the panel's own. A view has one glow, so it reaches as far
     // as the farthest that is lit. Each further halving of the blur doubles
     // the reach: three halvings at none, seven at the full reach, six at the
-    // default the owner picked (2026-10-13). The halo reaches about the
+    // default. The halo reaches about the
     // margin given here past what glows.
     readonly property real pedestalGlowReach: bounded("pedestalGlowReach", 0.75, 0, 1)
     readonly property real panelGlowReach: bounded("panelGlowReach", 0.75, 0, 1)
@@ -741,8 +731,8 @@ Item {
     readonly property vector3d iconUp: iconFacing.times(Qt.vector3d(0, 1, 0))
     readonly property vector3d iconForward: iconFacing.times(Qt.vector3d(0, 0, 1))
     // How a stand turns (Stand facing): lying on the panel, in step with
-    // its tilt and turn, in the panel's own proportion (Panel, the default:
-    // the owner, 2026-10-13), or level and facing the viewer, seen View
+    // its tilt and turn, in the panel's own proportion (Panel, the
+    // default), or level and facing the viewer, seen View
     // angle degrees from above (Viewer). Auto lies on a panel seen from 40
     // degrees or less above its plane and stays level on one seen from 60
     // degrees up, blending between.
@@ -763,16 +753,15 @@ Item {
         return mixed.length() > 1e-6 ? mixed.normalized() : level
     }
     // Panel: each stand is fixed to the panel at its icon's place, as if it
-    // were one more layer of the panel in pieces (the owner's picture of
-    // it, 2026-10-13), so every tilt, turn, move and rotation of the panel
+    // were one more layer of the panel in pieces, so every tilt, turn, move
+    // and rotation of the panel
     // carries it. It stays a stand, not a panel.
     readonly property bool pedestalOnPanel: pedestalDrawn && pedestalPanelShare >= 0.999
     // The camera and the point it looks at, in the entries' frame. A stand
     // fixed to the panel is turned by the small angle between the camera's
     // line to the panel's centre and its line to the stand, so every stand
     // round the ring shows the panel's own orientation rather than each a
-    // slightly different side of itself (the owner, 2026-10-13: "slight
-    // dimensional orientations in each direction that are not aligned").
+    // slightly different side of itself.
     function toEntryFrame(point) {
         const offset = point.minus(sceneContent.position).times(1 / Math.max(1e-6, sceneContent.scale.x))
         const turn = root.layoutAngle * Math.PI / 180
@@ -1249,7 +1238,7 @@ Item {
     readonly property real targetScale: transformValue("scale", 1, 0.05, 20)
     // Sideways and up and down on its own, in the panel's own frame: the
     // platform and where its icons stand stretch, the icons keep their
-    // shape (the owner: "scale it also sideways or top or down").
+    // shape.
     readonly property real targetScaleX: transformValue("scaleX", 1, 0.05, 20)
     readonly property real targetScaleY: transformValue("scaleY", 1, 0.05, 20)
     readonly property real fitLimit: Math.min(width / 2 / Math.max(1, sceneExtentX),
@@ -1430,8 +1419,7 @@ Item {
 
     // Whether the platform or one of its parts is nearer than this entry's
     // glyph at the point. Stands and icons rise clear of the platform, so
-    // none is ever hidden in it (the owner, 2026-10-12: "half of it goes
-    // into another dimension"); the renderer test proves it.
+    // none is ever hidden in it; the renderer test proves it.
     function entryPointBehindPlatform(index, point) {
         const own = pictureHits(point).find(function(hit) { return hit.index === index })
         if (!own) return false
@@ -1967,8 +1955,7 @@ Item {
         // A scene that reaches behind the camera fills all it can. Otherwise
         // the reach is how far the scene reaches out of the box, less than
         // nothing while it stays inside: a ring that fits its box still
-        // needs room for its glow's light (the owner's desktop, 2026-10-13:
-        // the light ended in a straight line along the box).
+        // needs room for its glow's light.
         const limitX = Math.max(width, Screen.width), limitY = Math.max(height, Screen.height)
         overflowX = steppedOverflow(overflowX, lost ? limitX : Math.min(limitX, Math.max(-left, right - width)))
         overflowY = steppedOverflow(overflowY, lost ? limitY : Math.min(limitY, Math.max(-top, bottom - height)))
@@ -2391,9 +2378,8 @@ Item {
             antialiasingQuality: plainEnvironment.antialiasingQuality
             // Every halving of the blur up to the reach (bloomLevels), each
             // scaled up again smoothly (bicubic): a round halo with a soft
-            // edge at every quality - bilinear steps drew it square (the
-            // owner, 2026-10-13: "make it better quality"; this strength and
-            // intensity are the look the owner ticked).
+            // edge at every quality - bilinear steps drew it square;
+            // this strength and intensity are the chosen look.
             glowEnabled: true
             glowQualityHigh: root.effectiveQuality !== "low"
             glowUseBicubicUpscale: true
@@ -2611,9 +2597,7 @@ Item {
         }
         // Tilt first, then turn about the tilted view's own up: tilted 90
         // degrees the panel lies level whatever its turn, which then spins
-        // it like a turntable (the owner, 2026-10-13: "I still should be able
-        // to tilt 3D panel fully horizontal"; one node's Euler angles apply
-        // the turn after the tilt, which at 90 degrees leaned it sideways).
+        // it like a turntable.
         Node {
             objectName: "mesh-camera-rig"
             eulerRotation.x: root.shownPitch
@@ -2858,15 +2842,13 @@ Item {
                 readonly property vector3d depthShift: surfaceTurn.inverted()
                     .times(root.cameraInEntries.minus(position).times(1 - depthPush))
                 // On a bent band the stand and its icon rise to the band's
-                // highest point beneath the stand (the owner's 2026-10-12
-                // picture: front discs cut by the rim at Bend -1).
+                // highest point beneath the stand.
                 readonly property real bendRise: root.platformBendSlope > 0 && root.pedestalDrawn
                     ? root.platformBendSlope * Math.min(pedestalScale * root.pedestalShapeReach / Math.max(1e-6, root.platformScale),
                         root.resolvedBand + PlatformGeometry.outerBevel) * root.platformScale * root.platformThickness
                     : 0
                 // The stand and the icon face the viewer. Where the camera
-                // looks across the platform a part of them would reach into it
-                // (the owner's 2026-10-12 pictures: icons half in the panel),
+                // looks across the platform a part of them would reach into it,
                 // so the two move straight toward the viewer, which keeps them
                 // in place on the screen, until nothing of them, the icon
                 // magnified included, is below the platform's top.
@@ -2968,8 +2950,7 @@ Item {
                 readonly property real glow: Math.max(root.number(iconMotion, "glow", 0),
                     root.number(glyphMotion, "glow", 0), root.number(tileMotion, "glow", 0))
                 // An entry off its path is not drawn, and one leaving or coming
-                // back onto an open path fades, exactly as its 2D delegate does
-                // (ADREP-TASK-002).
+                // back onto an open path fades, exactly as its 2D delegate does.
                 readonly property real trackVisibility: rect.visibility === undefined
                     ? (rect.onTrack === false ? 0 : 1) : Math.max(0, Math.min(1, Number(rect.visibility)))
                 visible: trackVisibility > 0
@@ -3017,7 +2998,7 @@ Item {
                 // node a moment later; an icon leaving the window in that
                 // moment left a texture refreshing a freed layer, and Arch
                 // Dock crashed when Panel Studio went from a 3D free panel to
-                // the Top or Side panel (2026-10-13). Destruction is
+                // the Top or Side panel. Destruction is
                 // announced while the bindings still run: let go here.
                 Component.onDestruction: {
                     glyphTexture.sourceItem = null
@@ -3799,8 +3780,7 @@ Item {
             color: "#78c8ff"
         }
         // The key light's twin from behind: a panel turned past its edge shows
-        // its underside lit as its face is (the owner, 2026-10-13: turned
-        // "freely in 360 every direction"). It only reaches surfaces facing
+        // its underside lit as its face is. It only reaches surfaces facing
         // away from the front, so the face keeps its look.
         DirectionalLight {
             objectName: "mesh-back-light"

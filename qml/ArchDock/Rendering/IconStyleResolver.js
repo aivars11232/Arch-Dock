@@ -324,7 +324,7 @@ function iconShape(styleDefinition, settings) {
 }
 
 function parameterizedDefinition(styleDefinition, settings, shape, logicalSize) {
-    // PD-20/21: transform declared layers, never branch on a built-in ID.
+    // Transform declared layers, never branch on a built-in ID.
     // Copy before changing a layer: manifests are shared by panel previews,
     // live hosts and per-entry overrides.
     const style = copyMap(styleDefinition);

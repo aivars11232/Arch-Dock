@@ -18,12 +18,12 @@ QQC2.Pane {
     property point expansionOrigin: Qt.point(width / 2, height)
     // An opening runs this phase from 0 to 1 over the folder animation, a
     // closing from 1 to 0; `openingProgress` is the chosen motion at that
-    // time, so a closing plays the opening backwards (PD-15).
+    // time, so a closing plays the opening backwards.
     property real openingPhase: opened ? 1 : 0
     readonly property real openingProgress: MotionChannels.folderEasing(easing, openingPhase)
     readonly property bool openingInProgress: openingAnimation.running
     property bool closing: false
-    // Wheel notches, or rows of touchpad travel, per row or child (PD-16).
+    // Wheel notches, or rows of touchpad travel, per row or child.
     property real scrollSensitivity: 1
     property var iconStyleDefinition: ({})
     property int maximumWidth: 640
@@ -56,7 +56,7 @@ QQC2.Pane {
     // A compact Fan or Arc holds as many children as stand on its half circle
     // and moves the rest along it: one wheel notch is one child.
     readonly property real pathScrollStep: 20 * Math.max(1, Qt.styleHints.wheelScrollLines)
-    // How far one wheel notch scrolls (PD-16): one child along a path or a
+    // How far one wheel notch scrolls: one child along a path or a
     // stack, one row of a grid or a ring, one column sideways.
     readonly property real stackStep: Math.max(geometry.iconSize * 0.65, 6) / geometry.iconSize
     readonly property real notchHeight: geometry.followsPath ? pathScrollStep

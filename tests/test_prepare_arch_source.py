@@ -45,7 +45,7 @@ class PrepareArchSourceTest(unittest.TestCase):
         self.write("docs/CURRENT_STATE.md", b"operational record\n")
         self.write("docs/RELEASE_CHECKLIST.md", b"operational record\n")
         self.write("docs/POST_TASK_0045_CORRECTIVE_REPORT.md", b"operational corrective evidence\n")
-        # Per-task repair reports (ADREP-TASK-001) are records, not source.
+        # Per-task repair reports are records, not source.
         self.write("docs/repairs/README.md", b"repair records\n")
         self.write("docs/repairs/ADREP-TASK-001.md", b"task report\n")
         self.write("docs/repairs/nested/notes.md", b"nested record\n")

@@ -754,7 +754,7 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
         };
         profile.layouts = allLayouts();
         // A free panel stands open on the desktop: opening and closing
-        // mechanisms belong to edge panels (ADREP-TASK-001, PD-01), so no
+        // mechanisms belong to edge panels, so no
         // Studio setting, preset or request can collapse a free panel.
         profile.presentationMechanisms = {
             PanelPresentationMechanism::Open,
@@ -1077,8 +1077,8 @@ CapabilityResolution PanelCapabilityResolver::resolve(
         layoutDecision->reason != CapabilityReasonCode::HostLayoutUnsupported)
     {
         // An edge panel's applet lays its row out along the edge, whatever
-        // Dock layout the record holds, and that field is not offered there
-        // (ADREP-TASK-001). So the theme is judged by the layout actually
+        // Dock layout the record holds, and that field is not offered there.
+        // So the theme is judged by the layout actually
         // drawn; a theme that adapts to its edge fits either orientation. A
         // record holding a layout no edge host knows stays refused.
         const QString edge = definition.placement.edge;

@@ -755,7 +755,7 @@ bool normalizeFreeHostRecord(QVariantMap *panel)
     setValue(QStringLiteral("freeHostState"), normalizedState);
     setValue(QStringLiteral("screen"), qMax(0, panel->value(QStringLiteral("screen")).toInt()));
     setValue(QStringLiteral("screenId"), panel->value(QStringLiteral("screenId")).toString().trimmed());
-    // A free panel has no opening or closing mechanism (ADREP-TASK-001, PD-01):
+    // A free panel has no opening or closing mechanism:
     // one saved collapsed, or with a mechanism, is shown open. The other
     // presentation values are kept.
     setValue(QStringLiteral("presentationMode"), QStringLiteral("open"));
@@ -2636,7 +2636,7 @@ QVariantMap PanelRegistry::themeCandidateForTheme(const ArchDock::PanelDefinitio
                 ArchDock::PanelSettingsSchema::flatLookValues(snapshot.toLegacyMap()));
         } else if (!becomesPlatform && wasPlatform) {
             // A flat theme is applied over the remembered flat surface, not
-            // over the platform's layout and material overrides (PD-17).
+            // over the platform's layout and material overrides.
             QVariantMap restored = snapshot.surface.parameters2D
                 .value(QStringLiteral("previousFlatLook")).toMap();
             const auto allowed = ArchDock::PanelSettingsSchema::flatLookValues(snapshot.toLegacyMap());
@@ -3800,8 +3800,8 @@ void PanelRegistry::load()
                 compatibilityRewriteRequired = true;
             }
             // A record saved before "Continuous motion moves" existed was
-            // given the motion it had (PanelDefinition::fromLegacyMap,
-            // ADREP-TASK-002 PD-25); it is saved with it, after the backup.
+            // given the motion it had (PanelDefinition::fromLegacyMap);
+            // it is saved with it, after the backup.
             if (!sourceRecord.contains(QStringLiteral("panelMotionTarget")))
             {
                 compatibilityRewriteRequired = true;
