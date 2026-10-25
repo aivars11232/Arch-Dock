@@ -86,7 +86,7 @@ foreach(required_runtime_contract
     "entryDelegate: liveEntryDelegate"
     "entryInteractionEnabled: root.sceneInputEnabled"
     "FreeEntryPolicy.interactionEnabled(plasmaEditMode)"
-    "dockService.registered && !plasmaEditMode"
+    "dockService.registered && (!plasmaEditMode || reordersInEditMode)"
     "inputEnabled: parent.sceneInputEnabled"
     "editMode: root.plasmaEditMode"
     "invoke: root.invokeEntry"

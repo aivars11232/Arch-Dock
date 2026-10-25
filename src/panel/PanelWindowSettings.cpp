@@ -1853,6 +1853,22 @@ PanelWindow::preparePanelSettingsDraftOn(
     if (request.panelValues.contains(lengthKey) && !request.panelValues.contains(QStringLiteral("dynamic"))
         && stored.value(QStringLiteral("dynamic")).toBool())
         request.panelValues.insert(QStringLiteral("dynamic"), false);
+    // An edge panel made thicker or thinner by hand takes its icons with
+    // it, as Plasma's panel icons follow the panel's thickness: the icon
+    // size scales by the same ratio, within its range, unless the same
+    // change sets the icon size itself.
+    const QString thicknessKey = lengthKey == QStringLiteral("height") ? QStringLiteral("width")
+                                                                       : QStringLiteral("height");
+    const int oldThickness = stored.value(thicknessKey).toInt();
+    const int newThickness = request.panelValues.value(thicknessKey).toInt();
+    if (edge != QStringLiteral("free") && request.panelValues.contains(thicknessKey)
+        && !request.panelValues.contains(QStringLiteral("iconSize")) && oldThickness > 0 && newThickness > 0
+        && newThickness != oldThickness)
+    {
+        const int oldIconSize = stored.value(QStringLiteral("iconSize"), 52).toInt();
+        const int scaled = qRound(double(oldIconSize) * newThickness / oldThickness);
+        request.panelValues.insert(QStringLiteral("iconSize"), std::clamp(scaled, 24, 128));
+    }
     if (request.panelValues.contains(QStringLiteral("segments")))
         request.panelValues.insert(QStringLiteral("segments"),
             decodedSegmentValue(request.panelValues.value(QStringLiteral("segments"))));

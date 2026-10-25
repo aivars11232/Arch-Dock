@@ -9,6 +9,30 @@ import org.kde.plasma.plasmoid
 // An Arch Dock bar: the widgets it holds in a row along its screen edge (a
 // column on a side edge). The bar host sizes the bar's window, as long as
 // this row wants to be or as long as the owner set.
+//
+// How the bar is built, for anyone reading or changing it:
+//
+// - The dock (org.archdock.dock, Arch Dock's own widget) is not in the row.
+//   It fills the whole bar underneath (`chassis`) and draws the bar's look
+//   along it. Its icons stand in groups, one per segment of the dock's
+//   layout; each group has a place in the row (`appletSlot` with a
+//   `groupId`) as long as the group's icons, and the dock is told where each
+//   place stands (`groupPlaces`) and draws that group's icons there. So
+//   widgets and spacers stand between groups like on Plasma's panels.
+// - Every Plasma widget has a place in the row too (`appletSlot` with a
+//   `plasmaApplet`). A launcher first along the bar is drawn on the look's
+//   start piece (`startCap`) instead; the system tray's hidden-icons button
+//   is moved onto the end piece (`endCap`).
+// - The order along the bar is the `Arrangement` setting (widget ids and
+//   "group:<id>" tokens), then the bar's record order for anything it does
+//   not name (`sequence`). Each place keeps the free room before it from
+//   where it was dropped (`AppletGaps`); without a spacer widget the free
+//   room lies after the last place (`tailSpacer`), as on Plasma's panels.
+// - Dragging: a widget is dragged in and out of edit mode (a click stays
+//   its own); a group is dragged in edit mode by the grip in its strip.
+//   `planMove` works out where the moved place lands and `applyPlan` keeps
+//   it. In edit mode each widget also has its remove and settings buttons
+//   in the strip after it, and the bar's + outside the bar adds widgets.
 ContainmentItem {
     id: root
 

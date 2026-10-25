@@ -175,22 +175,36 @@ Item {
             Math.abs((end.x - first.x) * (point.y - first.y) - (end.y - first.y) * (point.x - first.x))
                 <= 0.5 * Math.max(1, total))
         if (straight && Number(geometry.bandWidth || 0) > 0) {
+            // The capsule's round ends lie inside this box whatever the
+            // band's depth: the line runs between the icons' centres, and a
+            // band deeper than the room before the first icon would reach
+            // past the box and be cut flat. Its ends are moved in as far as
+            // the half band they add, and meet in the middle on a box too
+            // short for both.
+            const radius = width / 2
+            const along = Math.abs(end.x - first.x) >= Math.abs(end.y - first.y) ? "x" : "y"
+            const extent = along === "x" ? root.width : root.height
+            const start = { x: first.x, y: first.y }, finish = { x: end.x, y: end.y }
+            start[along] = Math.max(start[along], radius)
+            finish[along] = Math.min(finish[along], extent - radius)
+            if (finish[along] < start[along])
+                start[along] = finish[along] = extent / 2
+            const span = Math.hypot(finish.x - start.x, finish.y - start.y)
             context.save()
-            context.translate(first.x, first.y)
-            context.rotate(Math.atan2(end.y - first.y, end.x - first.x))
+            context.translate(start.x, start.y)
+            context.rotate(Math.atan2(finish.y - start.y, finish.x - start.x))
             // The capsule's outline is fixed as it is drawn; the picture
             // follows the scale the fill is made with, so it is stretched over
             // the capsule while the round ends stay round.
-            const radius = width / 2
             context.beginPath()
             context.moveTo(0, -radius)
-            context.lineTo(total, -radius)
-            context.arc(total, 0, radius, -Math.PI / 2, Math.PI / 2, false)
+            context.lineTo(span, -radius)
+            context.arc(span, 0, radius, -Math.PI / 2, Math.PI / 2, false)
             context.lineTo(0, radius)
             context.arc(0, 0, radius, Math.PI / 2, Math.PI * 3 / 2, false)
             context.closePath()
             context.translate(-radius, -radius)
-            context.scale((total + width) / texture, width / texture)
+            context.scale((span + width) / texture, width / texture)
             context.fillStyle = context.createPattern(String(materialSource), "repeat")
             context.fill()
             context.restore()

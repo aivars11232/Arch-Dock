@@ -4,10 +4,14 @@
 # Each command is the one CMakeLists.txt registers for the CTest of that name.
 name: Source gates
 
+# Run when a release tag is pushed, on a pull request, or by hand (Actions >
+# Source gates > Run workflow): not on every push to main, where work in
+# progress would fail it at every step.
 on:
   push:
-    branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

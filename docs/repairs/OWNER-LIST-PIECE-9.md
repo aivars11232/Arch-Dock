@@ -1115,3 +1115,25 @@ resizing, their ends above all.
 Not checked: skinned themes and decorations at these sizes (they keep
 their ends by the same room rule, from the skin's content region); the
 owner's profiles.
+
+### Added the same afternoon (owner: "Endings are still cut off", icons)
+
+- The thick bars' ends were still flat: the look's band is a capsule drawn
+  along the line between the icons' centres, half a band beyond each end,
+  and a band deeper than the room before the first icon reached past the
+  surface box and was cut flat (`PanelProcedural2D.qml`). The capsule's
+  ends now move in as far as the half band they add, so the round ends
+  always lie inside the box; the box itself grows with the ends as above.
+- Icons follow the thickness, as Plasma's panel icons do: an edge panel
+  made thicker or thinner by hand scales its icon size by the same ratio
+  (24–128 px), unless the same change sets the icon size itself.
+- Checked privately: right bar 300 thick, fitting and at 400 and 900:
+  full round ends, icons at 128 px; bottom bar 1400 wide at 120 and 56
+  thick: icons 82 and 38 px, ends whole
+  (`89-thick-bars-keep-their-ends.png`,
+  `90-bottom-bar-resizes-icons-follow.png`). Not done: the faint centre
+  line along a very thick band (the open "light line" item).
+- CI: the source gate `ValidatePlasmaTemplate.cmake` still looked for the
+  dock's old input rule and failed every push; brought up to date. The
+  workflow now runs on release tags, pull requests and by hand, not on
+  every push to main (owner: failure mail at every push).
