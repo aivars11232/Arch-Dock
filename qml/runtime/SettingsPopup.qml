@@ -1610,6 +1610,22 @@ Window {
         ].filter(function(row) { return row.kind !== "none" && (row.kind !== "themeSamples" || row.themes.length > 0); });
     }
 
+    // Size: Fit content (as Plasma's panel settings call it), the length
+    // (the width along a top or bottom panel, the height along a side one)
+    // while not fitting, and the thickness. A fitted panel is as long as
+    // what it holds and would take no length.
+    function panelSizeRows() {
+        const rows = schemaSectionRows("panels-size", qsTr("Size"), qsTr("Panel dimensions."));
+        const edge = String(panelValue("edge", "bottom"));
+        const lengthKey = edge === "left" || edge === "right" ? "height" : "width";
+        const fitting = Boolean(panelValue("dynamic", false));
+        return rows.filter(function(row) {
+            if (row.key === "dynamic")
+                row.description = qsTr("The panel is as long as what it holds. Off, it is as long as set here.");
+            return !(fitting && row.key === lengthKey);
+        });
+    }
+
     function panelBehaviorRows() {
         const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."))
             .filter(function(row) { return row.key !== "showTooltips"; });
@@ -1956,7 +1972,7 @@ Window {
             if (subTabIndex === 0)
                 return panelGeneralRows();
             if (subTabIndex === 1)
-                return schemaSectionRows("panels-size", qsTr("Size"), qsTr("Panel dimensions."));
+                return panelSizeRows();
             if (subTabIndex === 2)
                 return panelAppearanceRows();
             if (subTabIndex === 3)

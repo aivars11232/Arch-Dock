@@ -1844,6 +1844,15 @@ PanelWindow::preparePanelSettingsDraftOn(
     request.panelId = panelId;
     request.expectedRevision = expectedRevision;
     request.panelValues = panelValues;
+    // A length set by hand ends fitting to content, as Plasma's panel takes
+    // a custom length: fitted, the panel would take no length.
+    const QVariantMap stored = currentPanel.toLegacyMap();
+    const QString edge = stored.value(QStringLiteral("edge")).toString();
+    const QString lengthKey = edge == QStringLiteral("left") || edge == QStringLiteral("right")
+        ? QStringLiteral("height") : QStringLiteral("width");
+    if (request.panelValues.contains(lengthKey) && !request.panelValues.contains(QStringLiteral("dynamic"))
+        && stored.value(QStringLiteral("dynamic")).toBool())
+        request.panelValues.insert(QStringLiteral("dynamic"), false);
     if (request.panelValues.contains(QStringLiteral("segments")))
         request.panelValues.insert(QStringLiteral("segments"),
             decodedSegmentValue(request.panelValues.value(QStringLiteral("segments"))));

@@ -1070,3 +1070,48 @@ between groups (added as a widget it is laid out the same way).
   places are handed to the dock a moment after they change.
 - With segments the bar's look vanished: the bar-wide surface was off for
   segmented scenes. It stays on along a bar.
+
+## Owner list — panels that did not resize, ends cut off (2026-10-25)
+
+The owner: resizing panels on any edge did not resize them, the panel was
+cut off, and side panels' ends were cut off; looks and themes must survive
+resizing, their ends above all.
+
+### Found in a private session
+
+- A bottom bar followed its width and height settings (900 → 1400, 76 → 120
+  → 56) with its look stretched whole (`90-bottom-bar-resizes.png`).
+- A side bar did not: height 500 and 900 both left a 332 px bar. Its record
+  had `dynamic` on, which Panel Studio showed as a "Dynamic" switch on the
+  Behavior page: a dynamic panel fits its content and takes no length, while
+  the Size page still offered the length as if it applied.
+- A bar fitting its content measured only its icons, so the look's rounded
+  ends had no room and were cut (the side bar's bottom end).
+
+### What Arch Dock does now
+
+- **Fit content** (the `dynamic` switch, kept) stands on the Size page,
+  first, as Plasma's panel settings call it, with a plain description. While
+  it is on, the length field (Width along a top or bottom panel, Height
+  along a side one) is hidden, as a setting that cannot apply; the
+  thickness stays.
+- **A length set by hand ends fitting to content** on every path (Studio,
+  profiles, D-Bus): a fitted panel would take no length.
+- **The end pieces keep their room**: the first and last group of icons
+  stand clear of the look's ends (the round ends of a band, a skin's end
+  pieces), fitting or not; a length shorter than the icons with their ends
+  is raised to it, so nothing is cut.
+
+### Checked in a private KWin and Plasma session
+
+- Left bar: new, it fits with rounded ends (400 px); height 500 → 500,
+  900 → 900; width 120 → 120 thick (`88-side-bar-length-and-ends.png`).
+- Right bar 300 thick: fitting, 624 px with both ends whole; height 400
+  (less than its content) → 624; height 900 → 900. Bottom bar 500 × 200:
+  524 wide, both ends whole (`89-thick-bars-keep-their-ends.png`).
+- Studio tests (schema, navigation, themes, preview contract, capability):
+  all passed.
+
+Not checked: skinned themes and decorations at these sizes (they keep
+their ends by the same room rule, from the skin's content region); the
+owner's profiles.

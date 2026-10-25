@@ -513,7 +513,7 @@ const QVector<Descriptor> &schemaFields()
                      "alignment")), {"native-placement"}),
         exposedTo(panel("dynamic", Access::Editor, Type::Boolean, Normalization::Boolean, false,
               "placement.dynamic", {}, {}, {}, false, true,
-              editor("panels-behavior", "Dynamic", "switch", {"studio"},
+              editor("panels-size", "Fit content", "switch", {"studio"},
                      "dynamic-placement")), {"native-placement"}),
         exposedTo(panel("width", Access::Editor, Type::Integer, Normalization::IntegerRange, 720,
               "placement.width", 48, 4096, {}, false, true,

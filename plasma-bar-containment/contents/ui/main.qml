@@ -129,7 +129,7 @@ ContainmentItem {
     // before a group that follows something, as Plasma's task manager
     // starts one gap after the application menu.
     function leadOf(slot, first, capHeld) {
-        const room = slot.group && first && !capHeld ? root.dockRoom : root.widgetRoom
+        const room = root.widgetRoom
         let lead = first ? Math.max(Number(room.start || 0), capHeld ? Number(root.endCaps.start || 0) + root.editStrip : 0) : 0
         if (slot.group && (!first || capHeld))
             lead += root.iconGap
@@ -590,11 +590,11 @@ ContainmentItem {
             // Something stands before it: a widget or group, or the menu on
             // the look's start.
             readonly property bool widgetBefore: root.firstSlot !== slot || root.launcherSlot !== null
-            // Inside the panel the dock draws: clear of its ends, and a
-            // widget clear of its sides. A group of icons first along the bar
-            // keeps the room the dock asks for itself. The tray's button on
-            // the panel's end keeps its room there.
-            readonly property var room: group && !widgetBefore ? root.dockRoom : root.widgetRoom
+            // Inside the panel the dock draws: clear of its ends (a group of
+            // icons too: its place is as long as its icons, with no padding
+            // of the dock's own), and a widget clear of its sides. The tray's
+            // button on the panel's end keeps its room there.
+            readonly property var room: root.widgetRoom
             readonly property real roomAfter: root.lastSlot !== slot ? 0
                 : Math.max(Number(room.end || 0), root.trayApplet ? Number(root.endCaps.end || 0) : 0)
             readonly property real roomSideStart: group ? 0 : Number(room.sideStart || 0)
