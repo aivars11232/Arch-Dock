@@ -1148,3 +1148,46 @@ A group first along the bar now keeps at least the dock's own room before
 its first icon, and the scene is never placed before its place's start.
 Zoomed ends of the 1400 px bar at 76, 120 and 56 px: all round
 (`91-thin-bar-ends-zoomed.png`; strips 88 and 90 remade from this run).
+
+## Owner list — a folder icon's Icons menu (2026-10-25)
+
+The owner's Plasma Folder View offers, on a right-click, an Icons submenu
+with Sort By, Icon Size and Show Previews; Arch Dock's folder icon offered
+Show contents, Open Panel Studio, Icon Properties and Unpin.
+
+### What Arch Dock does now
+
+- A folder icon's menu has **Icons** after Show contents: **Sort By**
+  (Name, Type, Date, Size; Descending; Folders First), **Icon Size** (Tiny
+  to Huge, Plasma's seven) and **Show Previews**, each ticked as set.
+- The choices are the folder's own, kept in its icon's override (the
+  `folderView` map in the override's `extensions`), so no record field was
+  added; `setPanelFolderView` writes them, and every entry carries its
+  `folderView` to the dock.
+- The opening sorts its contents in the backend (`panelFolderSnapshot`),
+  folders first unless told otherwise; children now carry their date and
+  size for that. The children's icon size follows the folder's choice in
+  the popup and in the on-path openings.
+- Previews are made by KIO's PreviewJob (`requestFolderPreviews`) into the
+  cache (`folder-previews/`, keyed by the file's address, date and size),
+  and the opening asks for its contents again a few times after opening,
+  so they appear as they are made.
+
+### Checked in a private KWin and Plasma session
+
+A bar with a wallpaper folder pinned (`92-folder-icons-menu-size-previews.png`):
+the folder's menu with Icons; Icons > Icon Size with Small-Medium ticked;
+Huge and Show Previews chosen; Show contents: the three wallpapers as real
+thumbnails at the huge size, with names. Saved: `folderView: {iconSize:
+huge, previews: true}`. Bar, Studio and folder content tests: 9/9.
+
+Not checked: Sort By through the menu (sorted in the backend, the same
+path); the owner's profiles. Seen: one of the three previews got a tile
+drawn behind it, the others none (cosmetic, to look at).
+
+### Mistakes on the way
+
+- A doubled `iconSize` binding on the on-path host stopped the dock widget
+  from loading at all, which Plasma shows as an empty applet; a right-click
+  then opened the bar's menu. Then a probe aimed one pixel left of an icon
+  made it look as if icons took no input; they do.

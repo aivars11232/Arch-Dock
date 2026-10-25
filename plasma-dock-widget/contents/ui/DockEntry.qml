@@ -64,6 +64,8 @@ Item {
     required property bool acceptDrops
     required property var invoke
     required property var reorder
+    // How a folder's opening shows its contents (Icons in the menu).
+    property var setFolderView: function(appId, values) {}
     required property var pinUrls
     required property var setHoveredIndex
     required property var openPanelStudio
@@ -554,6 +556,71 @@ Item {
         }
     }
 
+    QQC2.Menu {
+        id: iconsMenu
+        title: qsTr("Icons")
+        popupType: QQC2.Popup.Window
+        readonly property var view: root.entry.folderView || ({})
+        function choose(values) { root.setFolderView(String(root.entry.appId), values); }
+        QQC2.Menu {
+            id: sortMenu
+            title: qsTr("Sort By")
+            popupType: QQC2.Popup.Window
+            Instantiator {
+                model: [{ key: "name", text: qsTr("Name") }, { key: "type", text: qsTr("Type") },
+                        { key: "date", text: qsTr("Date") }, { key: "size", text: qsTr("Size") }]
+                delegate: QQC2.MenuItem {
+                    required property var modelData
+                    text: modelData.text
+                    checkable: true
+                    checked: String(iconsMenu.view.sort || "name") === modelData.key
+                    onTriggered: iconsMenu.choose({ sort: modelData.key })
+                }
+                onObjectAdded: (index, object) => sortMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => sortMenu.removeItem(object)
+            }
+            QQC2.MenuSeparator {}
+            QQC2.MenuItem {
+                text: qsTr("Descending")
+                checkable: true
+                checked: iconsMenu.view.descending === true
+                onTriggered: iconsMenu.choose({ descending: iconsMenu.view.descending !== true })
+            }
+            QQC2.MenuItem {
+                text: qsTr("Folders First")
+                checkable: true
+                checked: iconsMenu.view.foldersFirst !== false
+                onTriggered: iconsMenu.choose({ foldersFirst: iconsMenu.view.foldersFirst === false })
+            }
+        }
+        QQC2.Menu {
+            id: sizeMenu
+            title: qsTr("Icon Size")
+            popupType: QQC2.Popup.Window
+            Instantiator {
+                model: [{ key: "tiny", text: qsTr("Tiny") }, { key: "very-small", text: qsTr("Very Small") },
+                        { key: "small", text: qsTr("Small") }, { key: "small-medium", text: qsTr("Small-Medium") },
+                        { key: "medium", text: qsTr("Medium") }, { key: "large", text: qsTr("Large") },
+                        { key: "huge", text: qsTr("Huge") }]
+                delegate: QQC2.MenuItem {
+                    required property var modelData
+                    text: modelData.text
+                    checkable: true
+                    checked: String(iconsMenu.view.iconSize || "small-medium") === modelData.key
+                    onTriggered: iconsMenu.choose({ iconSize: modelData.key })
+                }
+                onObjectAdded: (index, object) => sizeMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => sizeMenu.removeItem(object)
+            }
+        }
+        QQC2.MenuItem {
+            text: qsTr("Show Previews")
+            checkable: true
+            checked: iconsMenu.view.previews === true
+            onTriggered: iconsMenu.choose({ previews: iconsMenu.view.previews !== true })
+        }
+    }
+
     Item {
         id: dragProxy
         width: 1
@@ -676,6 +743,18 @@ Item {
             visible: root.entry.isFolder === true
             enabled: root.contextInteractionAllowed
             onTriggered: root.requestFolderExpansion()
+        }
+        // A folder's Icons submenu, after Show contents, as Plasma's Folder
+        // View has it: how the opening sorts and sizes its contents, and
+        // whether it shows previews.
+        Component.onCompleted: {
+            for (let index = 0; index < contextMenu.count; ++index) {
+                if (contextMenu.itemAt(index).objectName !== "showFolderContentsAction")
+                    continue;
+                contextMenu.insertMenu(index + 1, iconsMenu);
+                contextMenu.itemAt(index + 1).visible = Qt.binding(() => root.entry.isFolder === true);
+                break;
+            }
         }
         QQC2.MenuItem {
             objectName: "showWindowPreviewAction"

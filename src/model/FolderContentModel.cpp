@@ -77,7 +77,9 @@ QVariantMap FolderContentModel::snapshot(const QUrl &folderUrl)
                 ? KFileItem(QUrl::fromLocalFile(file.absoluteFilePath())).iconName()
                 : mimeDatabase.mimeTypeForFile(file, QMimeDatabase::MatchExtension).iconName()},
             {QStringLiteral("selectable"), blocked.isEmpty()},
-            {QStringLiteral("blockedReason"), blocked}});
+            {QStringLiteral("blockedReason"), blocked},
+            {QStringLiteral("modified"), file.lastModified().toMSecsSinceEpoch()},
+            {QStringLiteral("size"), file.size()}});
     }
     const QFileInfo after(folderUrl.toLocalFile());
     if (!after.isDir() || !after.isReadable() || !after.isExecutable()

@@ -17,6 +17,8 @@ PlasmaCore.Dialog {
     property string folderEasing: "outBack"
     property bool reducedMotion: false
     property bool showNames: true
+    // The children's icon size, as the folder icon's menu set it.
+    property int childIconSize: 48
     property var iconStyleDefinition: ({})
     property real scrollSensitivity: 1
     property string panelEdge: "bottom"
@@ -141,6 +143,7 @@ PlasmaCore.Dialog {
         easing: root.folderEasing
         reducedMotion: root.reducedMotion
         showNames: root.showNames
+        childIconSize: root.childIconSize
         iconStyleDefinition: root.iconStyleDefinition
         scrollSensitivity: root.scrollSensitivity
         opened: root.visible

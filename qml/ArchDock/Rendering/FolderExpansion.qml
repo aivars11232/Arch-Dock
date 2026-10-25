@@ -13,6 +13,8 @@ QQC2.Pane {
     property bool reducedMotion: false
     property bool opened: true
     property bool showNames: true
+    // The children's icon size, as the folder icon's menu set it.
+    property int childIconSize: 48
     property point expansionOrigin: Qt.point(width / 2, height)
     // An opening runs this phase from 0 to 1 over the folder animation, a
     // closing from 1 to 0; `openingProgress` is the chosen motion at that
@@ -36,7 +38,7 @@ QQC2.Pane {
     property real expansionLean: 0
     readonly property var entries: (snapshot.entries || []).slice(0, 48)
     readonly property var geometry: LayoutEngine.expansionGeometry(
-        layout, entries.length, 48, 6, 140, Math.ceil(Math.sqrt(entries.length)), {
+        layout, entries.length, childIconSize, 6, 140, Math.ceil(Math.sqrt(entries.length)), {
             maximumWidth: Math.max(56, maximumWidth - padding * 2),
             maximumHeight: Math.max(56, maximumHeight - padding * 2),
             labelWidth: showNames ? 108 : 0,

@@ -276,7 +276,17 @@ public slots:
     bool setPanelEntryOrder(const QString &panelId, const QStringList &entryIds);
     [[nodiscard]] QStringList panelEntryOrder(const QString &panelId) const;
     QVariantList dockFolderEntries(const QString &appId) const;
+    // The panel's entry for a folder icon, or nothing.
+    QVariantMap panelFolderEntry(const QString &panelId, const QString &appId) const;
     QVariantMap panelFolderSnapshot(const QString &panelId, const QString &appId) const;
+    // How a folder's opening shows its contents (its icon's menu, Icons):
+    // "sort" (name, type, date, size), "descending", "foldersFirst",
+    // "iconSize" (tiny to huge) and "previews", kept in the folder icon's
+    // own override. Only the keys given change.
+    QVariantMap setPanelFolderView(const QString &panelId, const QString &appId, const QVariantMap &values);
+    // Makes the thumbnails a folder's opening shows as previews, in the
+    // cache; the opening asks for its contents again a moment later.
+    bool requestFolderPreviews(const QString &panelId, const QString &appId);
     QVariantMap openPanelFolderChild(const QString &panelId, const QString &appId,
                                     const QString &childId);
     bool openDockUrl(const QString &url);

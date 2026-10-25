@@ -12,7 +12,12 @@
 
 #include <KDesktopFile>
 #include <KIO/OpenUrlJob>
+#include <KIO/PreviewJob>
 #include <KFileItem>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QPixmap>
+#include <QStandardPaths>
 #include <QDebug>
 #include <QFileInfo>
 #include <QHash>
@@ -243,6 +248,12 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
         entry.insert(
             QStringLiteral("iconOverrideApplied"),
             resolution.value(QStringLiteral("overrideApplied")));
+        // How a folder's opening shows its contents, from the icon's own
+        // override (see setPanelFolderView).
+        entry.insert(QStringLiteral("folderView"),
+            resolution.value(QStringLiteral("override")).toMap()
+                .value(QStringLiteral("extensions")).toMap()
+                .value(QStringLiteral("folderView")).toMap());
         entry.insert(
             QStringLiteral("resolvedGlyph"),
             resolution.value(QStringLiteral("resolvedGlyph")));
@@ -986,18 +997,156 @@ QUrl PanelWindow::panelFolderUrl(const QString &panelId, const QString &appId) c
     return {};
 }
 
+namespace
+{
+// Where a child's thumbnail is kept: by its address, date and size, so a
+// changed file gets a new one.
+QString folderPreviewPath(const QVariantMap &child)
+{
+    const QByteArray key = QCryptographicHash::hash(
+        (child.value(QStringLiteral("url")).toString() + QLatin1Char('|')
+         + QString::number(child.value(QStringLiteral("modified")).toLongLong()) + QLatin1Char('|')
+         + QString::number(child.value(QStringLiteral("size")).toLongLong())).toUtf8(),
+        QCryptographicHash::Sha1).toHex();
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/folder-previews/") + QString::fromLatin1(key) + QStringLiteral(".png");
+}
+
+QString childSuffix(const QVariantMap &child)
+{
+    const QString name = child.value(QStringLiteral("name")).toString();
+    const int dot = name.lastIndexOf(QLatin1Char('.'));
+    return dot > 0 ? name.mid(dot + 1).toLower() : QString{};
+}
+}
+
+QVariantMap PanelWindow::panelFolderEntry(const QString &panelId, const QString &appId) const
+{
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition)
+        return {};
+    for (const auto &value : dockEntriesForPanel(panelId, definition->content.type))
+        if (value.toMap().value(QStringLiteral("appId")).toString() == appId)
+            return value.toMap();
+    return {};
+}
+
 QVariantMap PanelWindow::panelFolderSnapshot(const QString &panelId, const QString &appId) const
 {
     const QUrl folder = panelFolderUrl(panelId, appId);
     QVariantMap result = ArchDock::FolderContentModel::snapshot(folder);
     if (folder.isEmpty())
         result[QStringLiteral("errorCode")] = QStringLiteral("folder-entry-unavailable");
+    // In the order the folder's icon asks for (Icons > Sort By), folders
+    // first unless told otherwise, and with the children's thumbnails for
+    // pictures when it asks for previews and they are made already.
+    const QVariantMap view = panelFolderEntry(panelId, appId).value(QStringLiteral("folderView")).toMap();
+    const QString sort = view.value(QStringLiteral("sort"), QStringLiteral("name")).toString();
+    const bool descending = view.value(QStringLiteral("descending")).toBool();
+    const bool foldersFirst = view.value(QStringLiteral("foldersFirst"), true).toBool();
+    const bool previews = view.value(QStringLiteral("previews")).toBool();
+    QVariantList entries = result.value(QStringLiteral("entries")).toList();
+    std::stable_sort(entries.begin(), entries.end(), [&](const QVariant &a, const QVariant &b)
+    {
+        const QVariantMap left = a.toMap(), right = b.toMap();
+        const bool leftFolder = left.value(QStringLiteral("isDirectory")).toBool();
+        const bool rightFolder = right.value(QStringLiteral("isDirectory")).toBool();
+        if (foldersFirst && leftFolder != rightFolder)
+            return leftFolder;
+        int order = 0;
+        if (sort == QStringLiteral("type"))
+            order = QString::compare(childSuffix(left), childSuffix(right));
+        else if (sort == QStringLiteral("date"))
+            order = left.value(QStringLiteral("modified")).toLongLong() < right.value(QStringLiteral("modified")).toLongLong() ? -1
+                : left.value(QStringLiteral("modified")).toLongLong() > right.value(QStringLiteral("modified")).toLongLong() ? 1 : 0;
+        else if (sort == QStringLiteral("size"))
+            order = left.value(QStringLiteral("size")).toLongLong() < right.value(QStringLiteral("size")).toLongLong() ? -1
+                : left.value(QStringLiteral("size")).toLongLong() > right.value(QStringLiteral("size")).toLongLong() ? 1 : 0;
+        if (order == 0)
+            order = left.value(QStringLiteral("name")).toString().toLower()
+                .localeAwareCompare(right.value(QStringLiteral("name")).toString().toLower());
+        return descending ? order > 0 : order < 0;
+    });
+    int pending = 0;
+    if (previews)
+        for (QVariant &value : entries)
+        {
+            QVariantMap child = value.toMap();
+            if (child.value(QStringLiteral("isDirectory")).toBool() || !child.value(QStringLiteral("selectable")).toBool())
+                continue;
+            const QString path = folderPreviewPath(child);
+            if (QFileInfo::exists(path))
+            {
+                child.insert(QStringLiteral("iconName"), path);
+                child.insert(QStringLiteral("preview"), true);
+            }
+            else
+                ++pending;
+            value = child;
+        }
+    result.insert(QStringLiteral("entries"), entries);
+    result.insert(QStringLiteral("previewsPending"), pending);
+    result.insert(QStringLiteral("folderView"), view);
     result.insert(QStringLiteral("panelId"), panelId);
     result.insert(QStringLiteral("appId"), appId);
     // Where the other free panels are drawn: the folder's opening keeps
     // clear of them.
     result.insert(QStringLiteral("freePanelAreas"), freePanelAreas(panelId));
     return result;
+}
+
+QVariantMap PanelWindow::setPanelFolderView(const QString &panelId, const QString &appId, const QVariantMap &values)
+{
+    const QVariantMap entry = panelFolderEntry(panelId, appId);
+    const QString identity = entry.value(QStringLiteral("stableIdentity")).toString();
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (identity.isEmpty() || !definition)
+        return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("entry-not-found")}};
+    // Into the icon's own override, beside whatever else it holds.
+    QVariantMap override = entry.value(QStringLiteral("iconOverride")).toMap();
+    QVariantMap extensions = override.value(QStringLiteral("extensions")).toMap();
+    QVariantMap view = extensions.value(QStringLiteral("folderView")).toMap();
+    for (auto it = values.cbegin(); it != values.cend(); ++it)
+        view.insert(it.key(), it.value());
+    extensions.insert(QStringLiteral("folderView"), view);
+    override.insert(QStringLiteral("extensions"), extensions);
+    return commitIconOverrideTransaction(panelId, definition->settingsRevision, identity, override, false);
+}
+
+bool PanelWindow::requestFolderPreviews(const QString &panelId, const QString &appId)
+{
+    const QUrl folder = panelFolderUrl(panelId, appId);
+    if (folder.isEmpty())
+        return false;
+    const QVariantList entries = ArchDock::FolderContentModel::snapshot(folder).value(QStringLiteral("entries")).toList();
+    KFileItemList items;
+    QHash<QUrl, QString> paths;
+    for (const QVariant &value : entries)
+    {
+        const QVariantMap child = value.toMap();
+        if (child.value(QStringLiteral("isDirectory")).toBool() || !child.value(QStringLiteral("selectable")).toBool())
+            continue;
+        const QString path = folderPreviewPath(child);
+        if (QFileInfo::exists(path))
+            continue;
+        const QUrl url(child.value(QStringLiteral("url")).toString());
+        items.append(KFileItem(url));
+        paths.insert(url, path);
+    }
+    if (items.isEmpty())
+        return true;
+    QDir().mkpath(QFileInfo(paths.cbegin().value()).absolutePath());
+    // KIO makes the thumbnails as Dolphin's previews are made; each is kept
+    // as it comes, and the opening asks for its contents again meanwhile.
+    KIO::PreviewJob *job = KIO::filePreview(items, QSize(256, 256));
+    connect(job, &KIO::PreviewJob::gotPreview, this, [paths](const KFileItem &item, const QPixmap &pixmap)
+    {
+        const QString path = paths.value(item.url());
+        if (!path.isEmpty())
+            pixmap.save(path, "PNG");
+    });
+    job->start();
+    return true;
 }
 
 QVariantMap PanelWindow::openPanelFolderChild(const QString &panelId, const QString &appId,

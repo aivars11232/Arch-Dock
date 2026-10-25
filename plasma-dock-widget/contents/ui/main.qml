@@ -762,6 +762,13 @@ PlasmoidItem {
                  panelId.length > 0 ? [panelId] : []);
     }
 
+    // How a folder's opening shows its contents, chosen in the folder icon's
+    // menu (Icons): Arch Dock keeps it in the icon's own override.
+    function setFolderView(appId, values) {
+        if (!dockService.registered || panelId.length === 0)
+            return;
+        callDock("setPanelFolderView", [panelId, String(appId), values], refreshEntries);
+    }
     function openIconProperties(entry) {
         const candidate = entry || ({});
         const identity = String(candidate.stableIdentity || "");
@@ -1108,6 +1115,33 @@ PlasmoidItem {
                     || (folderLayout === "grid" && panelScene.folderPlaneReady))
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
+            // The folder's opening as its icon asks (Icons in its menu): the
+            // children's icon size by its name, and previews.
+            readonly property var folderView: folderEntry && folderEntry.folderView ? folderEntry.folderView : ({})
+            readonly property int folderChildSize: ({ "tiny": 16, "very-small": 22, "small": 32, "small-medium": 48,
+                "medium": 64, "large": 96, "huge": 128 })[String(folderView.iconSize || "small-medium")] || 48
+            // Previews come as KIO makes them: the opening asks for its
+            // contents again a few times after it opened.
+            Timer {
+                id: previewRefresh
+                property int request: -1
+                property int left: 0
+                interval: 1500
+                onTriggered: {
+                    if (request !== representation.folderRequest || representation.folderEntryIndex < 0)
+                        return
+                    root.callDock("panelFolderSnapshot", [root.panelId, representation.folderAppId], function(reply) {
+                        if (previewRefresh.request !== representation.folderRequest)
+                            return
+                        const value = root.normalizeReply(reply)
+                        const snapshot = Array.isArray(value) && value.length === 1 ? value[0] : value
+                        const host = representation.folderOnPath && !folderExpansion.requested ? folderTrack : folderExpansion
+                        host.snapshot = snapshot
+                        if (Number(snapshot.previewsPending || 0) > 0 && --previewRefresh.left > 0)
+                            previewRefresh.restart()
+                    })
+                }
+            }
             function hideFolderExpansion() {
                 ++folderRequest
                 folderPending = false
@@ -1132,6 +1166,12 @@ PlasmoidItem {
                         folderExpansion.openFolder()
                     }
                     representation.folderPending = false
+                    if (Number(snapshot.previewsPending || 0) > 0) {
+                        root.callDock("requestFolderPreviews", [root.panelId, representation.folderAppId])
+                        previewRefresh.request = request
+                        previewRefresh.left = 3
+                        previewRefresh.restart()
+                    }
                 }
                 root.callDock("panelFolderSnapshot", [root.panelId, folderAppId], function(reply) {
                     const value = root.normalizeReply(reply)
@@ -1168,6 +1208,7 @@ PlasmoidItem {
                 folderEasing: String(root.configuration.folderEasing || "outBack")
                 reducedMotion: Boolean(root.configuration.reducedMotion)
                 showNames: root.configuration.folderShowNames !== false
+                childIconSize: representation.folderChildSize
                 iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
                 scrollSensitivity: panelScene.folderScrollSensitivity
                 panelEdge: root.freeSurface ? "free" : String(root.configuration.edge || "bottom")
@@ -1221,7 +1262,9 @@ PlasmoidItem {
                 customColor: panelScene.customColor
                 panelOpacity: panelScene.panelOpacity
                 scrollSensitivity: panelScene.folderScrollSensitivity
-                iconSize: panelScene.layoutGeometry.iconSize
+                // As large as the dock's icons, unless the folder's menu set a size.
+                iconSize: representation.folderView.iconSize ? representation.folderChildSize
+                    : panelScene.layoutGeometry.iconSize
                 folderTitle: String(representation.folderEntry.displayName || "")
                 folderSpeed: Number(root.configuration.folderSpeed || 260)
                 folderEasing: String(root.configuration.folderEasing || "outBack")
@@ -1709,6 +1752,7 @@ PlasmoidItem {
             acceptDrops: root.configuration.acceptDrops
             invoke: root.invokeEntry
             reorder: root.reorderEntry
+            setFolderView: root.setFolderView
             pinUrls: root.pinDroppedUrls
             setHoveredIndex: function(value) { root.hoveredIndex = value }
             setEntryGuard: root.setEntryGuard

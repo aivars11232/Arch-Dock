@@ -229,11 +229,12 @@ ContainmentItem {
     implicitHeight: row.implicitHeight
 
     // The dock draws the bar's look along the whole bar and as deep as it,
-    // under the widgets; its icons stand in the groups laid out in the row.
+    // under the widgets (declared before the row, which stacks above it; a
+    // place below zero would take it out of the pointer's reach); its icons
+    // stand in the groups laid out in the row.
     Item {
         id: chassis
         anchors.fill: parent
-        z: -1
     }
 
     GridLayout {
