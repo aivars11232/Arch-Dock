@@ -78,6 +78,10 @@ PlasmoidItem {
     // each group's first icon stands, by group id.
     readonly property var barGroups: barScene ? barScene.barGroups : []
     readonly property real barIconGap: barScene ? Number(barScene.layoutGeometry.spacing || 0) : 0
+    // How far the first icon stands inside the scene: the room a group first
+    // along the bar keeps before it, so that the scene starts at the bar's
+    // start and the look's end lands on the bar's end, not past it.
+    readonly property real barGroupLead: barScene ? Number(barScene.barGroupsStart || 0) : 0
     property var barGroupPlaces: ({})
     // How far the scene moves from the middle of its place in a bar: so that
     // its first group of icons starts where the bar put that group, or, until
@@ -92,7 +96,9 @@ PlasmoidItem {
         }
         if (!isFinite(first))
             return -Math.max(0, room - own) / 2
-        return first - lead - (room - own) / 2
+        // Never before the start of the place: the look's end would reach
+        // past the bar and be cut.
+        return Math.max(0, first - lead) - (room - own) / 2
     }
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property bool bootstrapPending: panelId.length === 0

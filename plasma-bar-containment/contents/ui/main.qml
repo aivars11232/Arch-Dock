@@ -61,6 +61,7 @@ ContainmentItem {
     }
     onGroupIdsChanged: syncGroups()
     readonly property real iconGap: dockApplet && dockApplet.barIconGap !== undefined ? Number(dockApplet.barIconGap) : 0
+    readonly property real groupLead: dockApplet && dockApplet.barGroupLead !== undefined ? Number(dockApplet.barGroupLead) : 0
     // Where along the bar each group stands (its first icon), for the dock
     // to draw its icons there; a group being dragged moves with the pointer.
     readonly property var groupPlaces: {
@@ -149,12 +150,16 @@ ContainmentItem {
     // Edit mode: the strip after a widget that holds its buttons.
     readonly property real editStrip: editing ? 22 : 0
     // The fixed room before a widget or group: at the bar's start if it is
-    // first (clear of the panel's end and the menu on it), and one icon gap
-    // before a group that follows something, as Plasma's task manager
-    // starts one gap after the application menu.
+    // first (clear of the panel's end and the menu on it; for a group of
+    // icons at least the dock's own room before its first icon, so the dock
+    // starts at the bar's start and its look ends on the bar's end), and one
+    // icon gap before a group that follows something, as Plasma's task
+    // manager starts one gap after the application menu.
     function leadOf(slot, first, capHeld) {
         const room = root.widgetRoom
         let lead = first ? Math.max(Number(room.start || 0), capHeld ? Number(root.endCaps.start || 0) + root.editStrip : 0) : 0
+        if (slot.group && first && !capHeld)
+            lead = Math.max(lead, root.groupLead)
         if (slot.group && (!first || capHeld))
             lead += root.iconGap
         return lead

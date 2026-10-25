@@ -1137,3 +1137,14 @@ owner's profiles.
   dock's old input rule and failed every push; brought up to date. The
   workflow now runs on release tags, pull requests and by hand, not on
   every push to main (owner: failure mail at every push).
+
+### Added later (owner: the thin bars' left ends were still cut)
+
+Measured with a trace: the first group's place began half a band in
+(34 px), but the dock's scene puts its first icon its own padding in
+(47 px), so the scene stood 13 px before the bar's start and the band's
+end, which lands on the scene's start by design, was cut by the window.
+A group first along the bar now keeps at least the dock's own room before
+its first icon, and the scene is never placed before its place's start.
+Zoomed ends of the 1400 px bar at 76, 120 and 56 px: all round
+(`91-thin-bar-ends-zoomed.png`; strips 88 and 90 remade from this run).
