@@ -88,7 +88,7 @@ keeps them, Cancel drops them.
 
 ## Requirements
 
-Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6.11 or newer, KDE
+Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6.8 or newer, KDE
 Frameworks 6 or newer. True 3D needs Qt Quick 3D and a working GPU driver; without
 them panels fall back to flat drawing. See
 [known limitations](docs/KNOWN_LIMITATIONS.md).
