@@ -4,130 +4,125 @@
   <img src="data/icons/hicolor/256x256.png" alt="Arch Dock logo" width="160">
 </p>
 
-Arch Dock provides managed dock panels for **Arch Linux, KDE Plasma 6 and
-Wayland**. Native edge panels use Plasma containments; free panels use
-desktop-hosted Plasma applets. The service and both hosts share the same
-renderer and settings schema.
+Arch Dock is a dock and panel system for **Arch Linux with KDE Plasma 6 on
+Wayland**. It gives you panels of three kinds, all designed in one place
+(Panel Studio) and drawn by one renderer:
 
-The application version is **0.1.1**. The current Arch package candidate and
-its verification status are recorded in [current state](docs/CURRENT_STATE.md).
-Its proposed **v0.1.1** tag
-and publication require separate authorization. The
-[historical v0.1.0 prerelease](https://github.com/aivars11232/Arch-Dock/releases/tag/v0.1.0)
-and its six assets remain unchanged, with the tag fixed at
-`c3b3a0b7771b313c45f843f49a503b45b0d1ada0`.
+- **Bars** on a screen edge, Arch Dock's own windows that stand side by side
+  on the same edge and hold Plasma's widgets (clock, launcher, system tray,
+  spacers…) next to the dock's icons.
+- **Edge panels** held by Plasma, where you want Plasma to own the panel.
+- **Free panels** anywhere on the desktop: rings, arcs, circles, grids, a
+  Möbius strip; turned and scaled as you like, flat or in real 3D.
 
-Original Arch Dock work is licensed **GPL-3.0-or-later** under [LICENSE](LICENSE),
-unless a component states a separate license. Existing MIT components retain
-MIT; unknown-rights references remain non-installable and outside relicensing.
-Physical acceptance remains incomplete. [Current state](docs/CURRENT_STATE.md)
-and the [release checklist](docs/RELEASE_CHECKLIST.md) record candidate checks
-and the remaining publication and physical boundaries.
+Version **0.1.1** (release 47). Original Arch Dock work is licensed
+**GPL-3.0-or-later** ([LICENSE](LICENSE)); the few MIT components keep MIT.
 
-## Features
+## Install
 
-- Launcher, task and hybrid panels, with managed native/free lifecycle and
-  ownership-checked recovery and removal.
-- Separate libraries of exactly **15 built-in Panel Presets** and
-  **15 built-in Icon Presets**, rendered through the shared preview.
-- Transactional desktop audition: Apply, Cancel/Revert, Save as Custom and
-  defaults for future panels. Installed built-ins remain immutable.
-- Procedural and skinned 2D, baked 2.5D on supported free hosts, and optional
-  true 3D with capability checks and a safe fallback.
-- Fifteen textured panel materials with tint and opacity, the glowing looks
-  with palettes of their own. Studio lists flat and platform looks
-  separately; Platform presentation off restores the saved flat look. Native
-  3D platforms offer material editing and bending, with icons anchored to the
-  surface and input limited by visible depth.
-- Six icon styles with six selectable shapes, adjustable diameter and logo
-  size, outline and colours, and an optional Dark Orb pedestal. Original
-  application glyphs are retained. Built-in and My Icon Presets save their
-  complete appearance alongside motion.
-- Custom and styled tiles with thirteen textures, thickness and glyph
-  placement. Native 3D tiles add solid depth, bevel, material and elevation;
-  tiles travel with upright glyphs along the panel's path.
-- Per-icon overrides, reduced-motion-aware animation, panel presentation,
-  grouped-window actions, folder expansion, segments, overlays and status
-  modules.
-- Persistent profiles, explicit multi-panel apply/rollback, optional KDE
-  global shortcuts, and bounded configuration backups and recovery.
-
-Available controls follow the selected host, theme and installed capabilities.
-For example, a native edge containment offers linear layouts and 2D rendering;
-free hosts provide ring/arc layouts and the additional renderer tiers.
-See [known limitations](docs/KNOWN_LIMITATIONS.md) for platform and dependency
-boundaries.
-
-## Arranging a panel
-
-- **Icons and widgets:** drag one along its panel to a new place, in edit
-  mode or not; on a bar a widget stays just where you let go. A click still
-  opens the app or the widget.
-- **Edit mode:** right-click an Arch Dock bar and choose **Enter Edit Mode**.
-  Panel Studio opens for that bar, and each widget shows its remove (✕) and
-  settings (⚙) buttons. **Exit Edit Mode** in the same menu ends it.
-- **Adding:** in edit mode, the **+** beside the bar adds a **Spacer**, a
-  **Margins Separator** or **Widgets…** (Plasma's widget list for that bar:
-  drag a widget onto the bar, or click it to add it at the end).
-- **Removing a panel:** right-click it and choose **Remove Panel**.
-
-## Install and start
-
-On Arch Linux with KDE Plasma 6, install the newest package in one step;
+On Arch Linux with KDE Plasma 6, one command installs the newest package;
 pacman fetches what it needs from the Arch repositories:
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-46/arch-dock-0.1.1-46-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-47/arch-dock-0.1.1-47-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 
-To update later, run the same two lines with the newer package from the
-[releases page](https://github.com/aivars11232/Arch-Dock/releases). To build
-the package yourself, use the checksum-pinned route in
-[the installation guide](docs/INSTALL.md#arch-package). It lists dependencies,
-source export, native makepkg, upgrade, recovery and uninstall commands.
+Then open **Arch Dock** from the application menu: Panel Studio appears,
+and a panel is a few clicks away. To update, run the same two lines with
+the newer package from the [releases page](https://github.com/aivars11232/Arch-Dock/releases).
+Building the package yourself, starting and stopping, recovery and
+uninstalling are in [the installation guide](docs/INSTALL.md).
 
-After installation, open **Arch Dock** from the application menu, which
-always shows Panel Studio, or run:
+## What it does
 
-```bash
-arch-dock --settings
-```
+**Looks.** Nineteen looks for a panel (glass, crystal, neon, aurora,
+metallic, organic, river, magma, picture…), with 243 real texture pictures
+for the material looks (CC0 photographs of real materials, not drawn noise), glow with its own reach
+and intensity, your own picture as "panelpaper", and relief. **261 panel
+decorations** in families such as gems, stone, precious metals, nature,
+magic, alien, sci-fi, starships and energy, every one recolourable (main
+and light colours, palettes, picture hue and strength, metal). Sixteen
+built-in themes, 15 panel presets and 15 icon presets; your own presets and
+profiles save whole arrangements.
 
-Direct session D-Bus activation is the normal startup mechanism. Repeated
-launches forward to the existing service owner. Installation does not enable
-or start a systemd unit automatically.
+**3D.** Panels drawn as real 3D (Qt Quick 3D) with free turning and
+scaling, materials and bending; the dock's icons as solids modelled from
+each icon's own picture (rings become tori, round icons globes, others
+bevelled prisms), with their own lighting; glass bubble tiles; stands and
+pedestals; holograms; icons mirrored in water on the river look. Icons
+always face you.
 
-To stop Arch Dock, right-click its application menu entry and choose
-**Quit Arch Dock**, or run `arch-dock --quit`. It stays stopped until you start
-it again or log in again. See [starting and stopping](docs/INSTALL.md).
+**Icons.** Six icon styles, six shapes, tiles with thirteen textures,
+per-icon properties (your own picture and label), running and attention
+markers, badges and progress, window previews, and folder icons whose
+contents open as a fan, arc, ring, stack, grid or Möbius strip along the
+dock, sorted and sized as you choose (Icons in the folder's menu), with
+previews.
 
-Before removing the package, cancel any audition and remove managed panels
-through Arch Dock's ownership-checked removal actions. Package removal
-preserves user configuration, presets and backups; it does not edit personal
-Plasma panel records. See [uninstall](docs/INSTALL.md#uninstall).
+**Bars.** Enter Edit Mode from a bar's right-click menu: Panel Studio
+opens for that bar and every widget shows its remove and settings buttons.
+Drag widgets, icons and whole groups of icons anywhere along the bar; a
+**+** beside the bar adds a Spacer, a Margins Separator or any Plasma
+widget. A bar fits its content or takes the length you set; thicker bars
+grow their icons.
 
-## Build and verification
+**Panel Studio.** One window per panel: General, Size, Appearance,
+Behavior, Segments, Presets, Animations, Hologram, Widgets and 3D pages for
+the panel; Icons, Icon Tiles and Pedestals; Profiles; and seven UI themes
+for the Studio itself. Changes show on the desktop at once; Apply or OK
+keeps them, Cancel drops them.
 
-[The installation guide](docs/INSTALL.md#build-and-disposable-installation)
-describes a fresh build and disposable staging. The project uses CMake, Qt 6,
-KDE Frameworks 6 and CTest. Build with one job on a 16 GB machine and run tests
-serially. Private Wayland tests require the additional dependencies documented
-in [the lifecycle guide](docs/plasma-lifecycle.md#controlled-validation).
+## Everyday use
 
-[The platform matrix](docs/PLATFORM_MATRIX.md) separates observed private
-Wayland behavior from physical-display and other-hardware checks. Tests must
-use their disposable sessions rather than the owner's active desktop.
+- **Panels:** right-click an Arch Dock panel for **Configure Arch Dock…**,
+  **Enter Edit Mode** (bars) and **Remove Panel**. New panels come from
+  Panel Studio opened on its own, which starts on its new-panel page.
+- **Icons:** drag an icon along its panel to a new place, in edit mode or
+  not; a click still opens the application. Right-click for its menu.
+- **Widgets on bars:** drag them anywhere along the bar; in edit mode use
+  the ✕ and ⚙ beside each one, and the **+** outside the bar to add more.
+- **Stopping:** right-click the Arch Dock entry in the application menu and
+  choose **Quit Arch Dock**, or run `arch-dock --quit`. It stays stopped
+  until you start it again or log in again.
 
-## Documentation and licensing
+## Requirements
 
-- [Current implementation state](docs/CURRENT_STATE.md) is the status and
-  verification authority.
-- [Architecture plan](docs/MASTER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md)
-  defines requirements and the consolidated task sequence.
-- [Preset specification](docs/PRESET_SYSTEM_SPEC.md) defines catalog and
-  audition semantics; [profile documentation](docs/PROFILE_PACKAGE.md)
-  describes durable arrangements and transactions.
-- [Changelog](CHANGELOG.md) records the release candidate's implemented scope.
-- [Package licensing matrix and notices](packaging/LICENSING.md) define the
-  GPL-3.0-or-later default, preserved MIT components and excluded references.
+Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6.11 or newer, KDE
+Frameworks 6 or newer. True 3D needs Qt Quick 3D and a working GPU driver; without
+them panels fall back to flat drawing. See
+[known limitations](docs/KNOWN_LIMITATIONS.md).
+
+## Building and contributing
+
+The project uses CMake, Qt 6, KDE Frameworks 6 and CTest; build with few
+jobs (`-j4` at most on 16 GB) and run tests one at a time. The sources:
+
+- `src/` — the service (`arch-dock`), the bar program (`arch-dock-bars`),
+  the settings schema and the panel model;
+- `qml/ArchDock/Rendering/` — the shared renderer (layouts, looks, 3D,
+  folder openings, decorations, materials);
+- `plasma-dock-widget/`, `plasma-bar-containment/`, `plasma-bar-shell/` —
+  the Plasma widget, the bar containment and its shell;
+- `qml/runtime/` — Panel Studio; `data/` — themes, presets, icon styles;
+- `tests/` — unit tests, QML tests and private-session smoke tests.
+
+Code comments explain the why in plain words; please keep them that way.
+[The installation guide](docs/INSTALL.md) describes a fresh build and a
+disposable staging install; [the lifecycle guide](docs/plasma-lifecycle.md)
+describes the private Wayland sessions the tests use, so nothing touches
+your own desktop.
+
+## Documentation
+
+- [Installation guide](docs/INSTALL.md) — package, start and stop, bars,
+  upgrades, recovery, uninstall.
+- [Known limitations](docs/KNOWN_LIMITATIONS.md) — platform boundaries.
+- [Changelog](CHANGELOG.md) — what each release changed.
+- [Preset packages](docs/PRESET_PACKAGE.md), [theme packages](docs/THEME_PACKAGE_V2.md),
+  [profiles](docs/PROFILE_PACKAGE.md), [icon style packages](docs/ICON_STYLE_PACKAGE.md)
+  — the file formats.
+- [Current state](docs/CURRENT_STATE.md) and the [repair reports](docs/repairs/)
+  — the project's own working notes and test evidence.
+- [Licensing matrix](packaging/LICENSING.md) — the GPL-3.0-or-later default
+  and the preserved MIT components.

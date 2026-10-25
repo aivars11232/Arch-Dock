@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.1-41 to 0.1.1-47 — released 2026-10-23 to 2026-10-25
+
+Published as GitHub pre-releases with a one-line install (see README).
+
+- **Bars have their own edit mode.** Enter Edit Mode in a bar's menu opens
+  Panel Studio for the bar and shows each widget's remove (✕) and settings
+  (⚙) buttons; right-clicks never end it. The + outside the bar opens
+  Plasma's Add New menu (Spacer, Margins Separator, Widgets…); Widgets…
+  shows Plasma's widget list for the bar without putting Plasma's desktop
+  in edit mode.
+- **Everything on a bar moves.** Widgets are dragged to any free place, in
+  edit mode or not; the dock's icons stand in groups (one per segment) laid
+  out among the widgets, so widgets and spacers go between groups; a group
+  is dragged by its grip in edit mode. Icons move by dragging on every
+  panel, landing before the icon nearest the pointer.
+- **Remove Panel** in every Arch Dock panel's right-click menu; Add panel…
+  left it (new panels come from Panel Studio opened on its own).
+- **Sizes.** Fit content is on the Size page (the length field hides while
+  it is on); a length set by hand ends fitting; a bar is never shorter than
+  its icons with the look's ends; thick bars keep full round ends; icons
+  follow the thickness.
+- **Folder icons** gained an Icons menu: Sort By, Icon Size, Show Previews
+  (thumbnails made by KIO), kept per folder.
+- A launcher on a bar always shows its icon; the bar host is replaced after
+  an update; CI runs on release tags and pull requests, not every push.
+
 ## 0.1.1 candidate — unreleased, 2026-10-05
 
 Application version: `0.1.1`; the current Arch package candidate and verification

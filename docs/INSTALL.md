@@ -2,8 +2,22 @@
 
 Arch Dock targets Arch Linux, KDE Plasma 6 and Wayland. The application,
 Plasma applets, KWin watcher, shared QML renderer and resource catalogs must
-be installed together. The supported Arch package route is the checksum-pinned
-local source archive and PKGBUILD described below.
+be installed together.
+
+## The simple way: the released package
+
+```bash
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-47/arch-dock-0.1.1-47-x86_64.pkg.tar.zst
+systemctl --user restart plasma-plasmashell.service
+```
+
+pacman installs the dependencies from the Arch repositories. Every release
+on the [releases page](https://github.com/aivars11232/Arch-Dock/releases)
+carries the package, its source archive, the PKGBUILD and SHA256SUMS; to
+update, install the newer package the same way. The rest of this guide
+describes building the package yourself from the checksum-pinned source
+archive and PKGBUILD, and everything about starting, stopping, upgrading,
+recovery and uninstalling.
 
 ## Session startup
 
