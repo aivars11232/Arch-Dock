@@ -73,28 +73,26 @@ PlasmoidItem {
     readonly property var barDockRoom: barScene ? barScene.barDockRoom : ({ start: 0, end: 0 })
     readonly property var barEndCaps: barScene ? barScene.barEndCaps : ({ start: 0, end: 0 })
     readonly property real barSurfaceLightness: barScene ? barScene.surfaceLightness : -1
-    // Set by the bar: something stands before this dock along it (a widget,
-    // or the application menu the bar's look makes of its start). The icons
-    // then start one icon gap after it, as Plasma's task manager starts
-    // right after the application menu.
-    property bool barWidgetBefore: false
-    // How far the scene moves from the middle of its place in a bar: to the
-    // start of it, and on to one icon gap after what stands before it.
-    function barSceneShift(room, own, lead, gap) {
-        const shift = -Math.max(0, room - own) / 2
-        return barWidgetBefore ? shift - Math.max(0, lead - gap) : shift
-    }
-    // Where the scene's icons start along it: its icon nearest the scene's
-    // start, which need not be its first entry (an icon off its path has no
-    // place).
-    function sceneLead(rects, vertical, fallback) {
-        let lead = Infinity
-        for (const rect of rects || []) {
-            const at = Number(vertical ? rect.y : rect.x)
-            if (at > -1000 && at < lead)
-                lead = at
+    // Read by the bar: the groups of this dock's icons it lays out among its
+    // widgets, and the gap between icons. Set by the bar: where along it
+    // each group's first icon stands, by group id.
+    readonly property var barGroups: barScene ? barScene.barGroups : []
+    readonly property real barIconGap: barScene ? Number(barScene.layoutGeometry.spacing || 0) : 0
+    property var barGroupPlaces: ({})
+    // How far the scene moves from the middle of its place in a bar: so that
+    // its first group of icons starts where the bar put that group, or, until
+    // the bar says, at the start of the place. `lead` is where that group
+    // starts inside the scene.
+    function barSceneOffset(room, own, lead) {
+        let first = Infinity
+        for (const group of barGroups) {
+            const place = Number((barGroupPlaces || ({}))[group.id])
+            if (isFinite(place) && place < first)
+                first = place
         }
-        return Number.isFinite(lead) ? lead : fallback
+        if (!isFinite(first))
+            return -Math.max(0, room - own) / 2
+        return first - lead - (room - own) / 2
     }
     readonly property string configuredPanelType: Plasmoid.configuration.panelType || "hybrid"
     readonly property bool bootstrapPending: panelId.length === 0
@@ -1476,16 +1474,16 @@ PlasmoidItem {
                     // An edge panel's decoration may reach farther at one end;
                     // in a bar it spans the whole bar already, and the bar's
                     // reach is measured from where the scene stands. In a bar
-                    // the icons start right after the widget before them, as
-                    // Plasma's task manager starts after the application menu.
+                    // its groups of icons stand where the bar laid them out
+                    // among its widgets.
                     anchors.horizontalCenterOffset: root.freeSurface ? 0
-                        : root.drawsBarSurface ? (root.vertical ? 0 : root.barSceneShift(parent.width, width,
-                            root.sceneLead(entryRects, false, layoutPadding), Number(layoutGeometry.spacing || 0)))
+                        : root.drawsBarSurface ? (root.vertical ? 0 : root.barSceneOffset(parent.width, width, barGroupsStart))
                         : Number(decorationAlongRoom.offsetX || 0)
                     anchors.verticalCenterOffset: root.freeSurface ? 0
-                        : root.drawsBarSurface ? (root.vertical ? root.barSceneShift(parent.height, height,
-                            root.sceneLead(entryRects, true, layoutPadding), Number(layoutGeometry.spacing || 0)) : 0)
+                        : root.drawsBarSurface ? (root.vertical ? root.barSceneOffset(parent.height, height, barGroupsStart) : 0)
                         : Number(decorationAlongRoom.offsetY || 0)
+                    barVertical: root.vertical
+                    segmentPlaces: root.drawsBarSurface ? (root.barGroupPlaces || ({})) : ({})
                     // Along a bar holding other widgets, from where the bar
                     // starts to where it ends (not from the window the dock
                     // overflows into, which is no bar).

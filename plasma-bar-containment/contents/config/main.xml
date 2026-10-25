@@ -11,11 +11,17 @@
         <entry name="AppletOrder" type="String">
             <default></default>
         </entry>
-        <!-- The free room each widget keeps on its side away from the dock
-             (before it ahead of the dock, after it behind the dock), so it
-             stands where it was dropped: "appletId:pixels" joined by ";".
-             The bar writes it when a widget is moved in edit mode. -->
+        <!-- The free room each widget or group of icons keeps before it, so
+             it stands where it was dropped: "token:pixels" joined by ";",
+             the token an applet id or "group:<id>". Written by the bar. -->
         <entry name="AppletGaps" type="String">
+            <default></default>
+        </entry>
+        <!-- The widgets and the dock's groups of icons in their order along
+             the bar, as arranged by dragging: applet ids and "group:<id>"
+             joined by ";". Written by the bar; what it does not name follows
+             the record's order. -->
+        <entry name="Arrangement" type="String">
             <default></default>
         </entry>
     </group>

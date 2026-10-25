@@ -708,7 +708,10 @@ Item {
     readonly property var segmentLayout: segmentedScene ? LayoutEngine.segmentGeometry(
         segmentDefinitions, orderedEntries, layoutPath, iconSize, iconSpacing,
         layoutScale * barIconFit, layoutPadding, verticalLayout, layoutAngle,
-        pathOrientation, geometryCompatibilityProfile, placementEdge) : null
+        pathOrientation, geometryCompatibilityProfile, placementEdge, segmentPlaces) : null
+    // A bar lays this scene's segments out among its widgets: where along
+    // the bar each segment's first icon stands, by segment id.
+    property var segmentPlaces: ({})
     readonly property var segmentSurfaces: segmentRepeater
     // Consumers ask for the segment layout itself. Asking whether the scene is
     // segmented and then reading the layout fails for one evaluation whenever
@@ -1309,15 +1312,63 @@ Item {
     // In an Arch Dock bar: told by the bar's depth alone, which nothing in
     // this scene's own size feeds back into.
     readonly property bool inBar: surfaceSpanThickness > 0
+    // Along a side bar the bar runs down the screen.
+    property bool barVertical: false
+    // The groups of icons a bar lays out among its widgets, each as far as
+    // its icons reach along the bar: one per segment, or one for all the
+    // icons; and where the first of them starts inside this scene.
+    // The lengths come from the segments laid out on their own, not where
+    // the bar put them: the bar sizes the groups' places from them, and
+    // puts the groups by those places, so the places must not feed back.
+    readonly property var barGroups: {
+        if (!inBar) return []
+        if (!segmentedScene)
+            return [{ id: "main", length: rectsExtent(entryRects, null) }]
+        const packed = LayoutEngine.segmentGeometry(
+            segmentDefinitions, orderedEntries, layoutPath, iconSize, iconSpacing,
+            layoutScale * barIconFit, layoutPadding, verticalLayout, layoutAngle,
+            pathOrientation, geometryCompatibilityProfile, placementEdge)
+        return packed.segments.map(function(run) {
+            return { id: run.id, length: rectsExtent(packed.entries.map(function(output) {
+                return output ? output.entryBounds : null }), run.indices) }
+        })
+    }
+    // How far the icons in `rects` (those at `indices`, or all) reach along
+    // the bar, from the first to the end of the last.
+    function rectsExtent(rects, indices) {
+        let start = Infinity, end = -Infinity
+        const chosen = indices || rects.map(function(rect, index) { return index })
+        for (const index of chosen) {
+            const rect = rects[index]
+            if (!rect || rect.x < -1000) continue
+            const from = Number(barVertical ? rect.y : rect.x)
+            start = Math.min(start, from)
+            end = Math.max(end, from + Number(barVertical ? rect.height : rect.width))
+        }
+        return end > start ? end - start : 0
+    }
+    // Where the first group's first icon stands inside this scene, as the
+    // scene is drawn now.
+    readonly property real barGroupsStart: {
+        let start = Infinity
+        for (const rect of entryRects) {
+            if (!rect || rect.x < -1000) continue
+            start = Math.min(start, Number(barVertical ? rect.y : rect.x))
+        }
+        return isFinite(start) ? start : layoutPadding
+    }
     // How far a decoration reaches past the panel. A bar's panel spans the
     // whole bar and holds the decoration's ends: no reach adds to the scene
     // there, which would otherwise feed the bar-wide surface back into its
     // own size.
     readonly property var sceneDecorationReach: inBar
         ? ({ left: 0, top: 0, right: 0, bottom: 0 }) : surfaceLoader.decorationReach
+    // Along a bar the surface spans the bar in segments too: the segments
+    // are the groups of icons the bar lays out among its widgets, under the
+    // one look drawn along the whole bar.
     readonly property bool surfaceSpanned: (surfaceSpanBefore > 0 || surfaceSpanAfter > 0 || surfaceSpanThickness > 0)
         && ["horizontal", "vertical", "adaptive"].includes(layoutPath)
-        && !segmentedScene && !bakedMetadataUsable && resolvedRendererTier !== "true3d"
+        && (!segmentedScene || inBar) && !bakedMetadataUsable && resolvedRendererTier !== "true3d"
     // A skin along a bar is drawn whole, its ends and rims as deep as the
     // bar, its middle stretched between them; the icons stand in its content
     // region, drawn smaller where they would not fit it.
@@ -1981,7 +2032,7 @@ Item {
         y: root.surfaceBox.y
         width: root.surfaceBox.width
         height: root.surfaceBox.height
-        visible: !root.segmentedScene
+        visible: !root.segmentedScene || root.surfaceSpanned
         requestedRendererTier: root.resolvedRendererTier
         themeId: root.themeId
         themeSource: root.themeSource
@@ -2141,7 +2192,10 @@ Item {
             panelOpacity: root.panelOpacity
             reducedMotion: root.reducedMotion
             concealed: !root.entriesAnimatable
-            visible: root.collapseProgress < 1
+            // Under the look drawn along a bar, a segment shows a band of its
+            // own only where it was given a background of its own.
+            visible: root.collapseProgress < 1 && (!root.surfaceSpanned
+                || ![undefined, "inherited"].includes(run.definition.background))
             opacity: 1 - root.collapseProgress
         }
     }

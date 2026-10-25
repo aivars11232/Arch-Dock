@@ -792,15 +792,29 @@ function entryGeometry(layout, index, count, rawGeometry, angle, polygonSides,
 // Compose independently padded runs using the same metrics and entry outputs
 // as an ordinary panel. Entries already carry backend-validated segment IDs.
 function segmentGeometry(segments, entries, layout, size, spacing, scale,
-                         padding, vertical, angle, orientation, profile, edge) {
+                         padding, vertical, angle, orientation, profile, edge,
+                         places) {
+    // `places`: where along the panel each segment's first icon stands, by
+    // segment id, from a bar that lays the segments out among its widgets.
+    // The segments it names stand there, in that order; the rest follow one
+    // another after them, as all do without it.
+    const placed = places && typeof places === "object" ? places : {};
+    const placeOf = function(segment) {
+        const value = Number(placed[String(segment.id)]);
+        return isFinite(value) ? value : Infinity;
+    };
     const records = (segments || []).slice(0, 16).sort(function(a, b) {
+        const first = placeOf(a), second = placeOf(b);
+        if (first !== second) return first < second ? -1 : 1;
         return Number(a.order || 0) - Number(b.order || 0);
     });
     const runs = [];
     const outputs = [];
-    let length = 0;
+    let extent = 0;
     let thickness = 0;
     const gap = Math.max(0, finite(spacing, 8));
+    let base = Infinity;
+    let baseInner = 0;
     for (const segment of records) {
         const indices = [];
         for (let i = 0; i < entries.length; ++i)
@@ -810,16 +824,26 @@ function segmentGeometry(segments, entries, layout, size, spacing, scale,
             Number(segment.spacing) >= 0 ? segment.spacing : spacing, scale,
             0, 1, Number(segment.padding) >= 0 ? segment.padding : padding,
             vertical, angle, 6);
+        // Where its first icon stands inside it.
+        const lead = indices.length > 0
+            ? entryGeometry(layout, 0, indices.length, local, angle, 6, orientation, profile, edge) : null;
+        const inner = lead ? Number((vertical ? lead.y : lead.x) || 0) : 0;
+        const place = placeOf(segment);
+        let along = extent > 0 ? extent + gap : 0;
+        if (isFinite(place)) {
+            if (!isFinite(base)) { base = place; baseInner = inner; }
+            along = Math.max(0, place - base + baseInner - inner);
+        }
         runs.push({ id: String(segment.id), definition: segment, geometry: local,
-            indices: indices, x: vertical ? 0 : length, y: vertical ? length : 0,
+            indices: indices, x: vertical ? 0 : along, y: vertical ? along : 0,
             width: local.width, height: local.height });
-        length += (vertical ? local.height : local.width) + gap;
+        extent = Math.max(extent, along + (vertical ? local.height : local.width));
         thickness = Math.max(thickness, vertical ? local.width : local.height);
     }
     const combined = metrics(layout, entries.length, size, spacing, scale,
         0, 1, padding, vertical, 0, 6);
-    combined.width = Math.max(1, vertical ? thickness : length - gap);
-    combined.height = Math.max(1, vertical ? length - gap : thickness);
+    combined.width = Math.max(1, vertical ? thickness : extent);
+    combined.height = Math.max(1, vertical ? extent : thickness);
     for (const run of runs) {
         if (vertical) run.x = (thickness - run.width) / 2;
         else run.y = (thickness - run.height) / 2;

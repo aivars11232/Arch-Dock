@@ -22,17 +22,70 @@ ContainmentItem {
     // stand: so far in from the bar's ends and from its long sides. The
     // widget at each end keeps that room there; the dock keeps the room it
     // asks for itself.
-    readonly property Item dockSlot: {
-        for (const child of row.children)
-            if (child.dock)
-                return child
-        return null
+    property Item dockApplet: null
+    property var dockPlasmaApplet: null
+    // The dock's icons in groups (one per segment of the dock's layout), each
+    // laid out along the bar among the widgets like one of them, so widgets
+    // and spacers stand between them.
+    readonly property var dockGroups: dockApplet && dockApplet.barGroups ? dockApplet.barGroups : []
+    readonly property var groupIds: dockGroups.map(group => String(group.id))
+    readonly property var groupLengths: {
+        const lengths = {}
+        for (const group of dockGroups)
+            lengths[String(group.id)] = Math.max(0, Number(group.length || 0))
+        return lengths
     }
-    readonly property Item dockApplet: dockSlot ? dockSlot.applet : null
-    // The free room each widget keeps on its side away from the dock, so it
-    // stands where it was dropped along the bar.
+    onGroupIdsChanged: syncGroups()
+    readonly property real iconGap: dockApplet && dockApplet.barIconGap !== undefined ? Number(dockApplet.barIconGap) : 0
+    // Where along the bar each group stands (its first icon), for the dock
+    // to draw its icons there; a group being dragged moves with the pointer.
+    readonly property var groupPlaces: {
+        const places = {}
+        for (const child of row.children)
+            if (child.group && child.visible)
+                places[child.groupId] = (root.vertical ? child.y : child.x) + child.dragShift
+        return places
+    }
+    Binding {
+        when: root.dockApplet !== null
+        target: root.dockApplet
+        property: "barSurfaceThickness"
+        value: root.vertical ? root.width : root.height
+        restoreMode: Binding.RestoreNone
+    }
+    // Handed to the dock a moment after they change: bound live, the dock's
+    // layout would be asked for them while it is being worked out from them.
+    onGroupPlacesChanged: Qt.callLater(root.pushGroupPlaces)
+    onDockAppletChanged: Qt.callLater(root.pushGroupPlaces)
+    function pushGroupPlaces() {
+        if (root.dockApplet)
+            root.dockApplet.barGroupPlaces = root.groupPlaces
+    }
+    // The widgets and the dock's groups of icons in their order along the
+    // bar: as arranged by dragging, then the bar's record for the rest (the
+    // dock's groups in the dock's place there).
+    readonly property var arrangement: String(Plasmoid.configuration.Arrangement || "")
+        .split(";").filter(token => token.length > 0)
+    readonly property var sequence: {
+        const tokens = arrangement.slice()
+        const dockId = dockPlasmaApplet ? String(dockPlasmaApplet.id) : ""
+        for (const id of appletOrder) {
+            if (id === dockId) {
+                for (const group of groupIds)
+                    if (!tokens.includes("group:" + group))
+                        tokens.push("group:" + group)
+            } else if (!tokens.includes(id))
+                tokens.push(id)
+        }
+        return tokens
+    }
+    // The free room each widget or group keeps before it, so it stands where
+    // it was dropped along the bar. Room kept before anything was arranged
+    // was measured another way and is let go.
     readonly property var appletGaps: {
         const gaps = {}
+        if (arrangement.length === 0)
+            return gaps
         for (const entry of String(Plasmoid.configuration.AppletGaps || "").split(";")) {
             const parts = entry.split(":")
             if (parts.length === 2 && Number(parts[1]) > 0)
@@ -65,12 +118,31 @@ ContainmentItem {
             return null
         let first = null
         for (const child of row.children)
-            if (child.plasmaApplet && (!first || child.place < first.place))
+            if (child.token && (!first || child.place < first.place))
                 first = child
-        return first && launcherPlugins.includes(String(first.plasmaApplet.pluginName)) ? first : null
+        return first && first.plasmaApplet && launcherPlugins.includes(String(first.plasmaApplet.pluginName)) ? first : null
     }
     // Edit mode: the strip after a widget that holds its buttons.
     readonly property real editStrip: editing ? 22 : 0
+    // The fixed room before a widget or group: at the bar's start if it is
+    // first (clear of the panel's end and the menu on it), and one icon gap
+    // before a group that follows something, as Plasma's task manager
+    // starts one gap after the application menu.
+    function leadOf(slot, first, capHeld) {
+        const room = slot.group && first && !capHeld ? root.dockRoom : root.widgetRoom
+        let lead = first ? Math.max(Number(room.start || 0), capHeld ? Number(root.endCaps.start || 0) + root.editStrip : 0) : 0
+        if (slot.group && (!first || capHeld))
+            lead += root.iconGap
+        return lead
+    }
+    // A spacer widget takes the bar's free room; without one it lies after
+    // the last widget, as on Plasma's panels.
+    readonly property bool hasSpacer: {
+        for (const child of row.children)
+            if (child.token && child.visible && child.fillsAlong)
+                return true
+        return false
+    }
     readonly property Item traySlot: endCaps.end > 0 ? slotWith(["org.kde.plasma.systemtray"]) : null
     // The first and last widgets along the row; the menu on the look's
     // start is out of it.
@@ -127,12 +199,29 @@ ContainmentItem {
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
 
+    // The dock draws the bar's look along the whole bar and as deep as it,
+    // under the widgets; its icons stand in the groups laid out in the row.
+    Item {
+        id: chassis
+        anchors.fill: parent
+        z: -1
+    }
+
     GridLayout {
         id: row
         anchors.fill: parent
         flow: root.vertical ? GridLayout.TopToBottom : GridLayout.LeftToRight
         rowSpacing: 0
         columnSpacing: 0
+
+        Item {
+            id: tailSpacer
+            visible: !root.hasSpacer
+            Layout.column: root.vertical ? 0 : 9998
+            Layout.row: root.vertical ? 9998 : 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
 
         // Edit mode: the place of the bar's + after its widgets, when its
         // window has no room for it outside the bar.
@@ -334,8 +423,8 @@ ContainmentItem {
 
     // A widget's place in the bar: as long along the bar as the widget asks,
     // and as thick across it as the panel's inside whatever the widget's own
-    // minimum there, as a Plasma panel holds its widgets. Arch Dock's dock
-    // takes the bar's whole length and centres its drawing in it.
+    // minimum there, as a Plasma panel holds its widgets. A group of the
+    // dock's icons has a place of its own the same way.
     Component {
         id: appletSlot
 
@@ -344,12 +433,15 @@ ContainmentItem {
 
             property var plasmaApplet: null
             property Item applet: null
-            property bool dock: false
-            // The dock draws the bar's look, the panel the bar's widgets and
-            // its own icons stand inside, along the whole bar and as deep as
-            // it: it is told how far the bar reaches before and after it, and
-            // how deep the bar is, and lies under the other widgets.
-            z: dock ? -1 : root.movingSlot === slot ? 10 : 0
+            // A group of the dock's icons: the dock draws them in this place
+            // along the bar; the place itself shows nothing.
+            property string groupId: ""
+            readonly property bool group: groupId.length > 0
+            readonly property real groupLength: group ? Number(root.groupLengths[groupId] || 0) : 0
+            property bool dying: false
+            // What the bar's arrangement names it by.
+            readonly property string token: group ? "group:" + groupId : plasmaApplet ? String(plasmaApplet.id) : ""
+            z: root.movingSlot === slot ? 10 : 0
             // Edit mode: a widget is dragged along the bar, following the
             // pointer as on Plasma's panels, and stands where it is let go;
             // its own menu (the right button) stays.
@@ -361,7 +453,7 @@ ContainmentItem {
             MouseArea {
                 anchors.fill: parent
                 z: 1000
-                enabled: root.editing && !slot.dock
+                enabled: root.editing && !slot.group
                 acceptedButtons: Qt.LeftButton
                 cursorShape: enabled ? Qt.SizeAllCursor : Qt.ArrowCursor
                 onPressed: function(mouse) { root.beginMove(slot, mapToItem(root, mouse.x, mouse.y)) }
@@ -374,7 +466,7 @@ ContainmentItem {
             // bar takes the drag over from it.
             DragHandler {
                 target: null
-                enabled: !root.editing && !slot.dock
+                enabled: !root.editing && !slot.group
                 acceptedButtons: Qt.LeftButton
                 grabPermissions: PointerHandler.CanTakeOverFromItems | PointerHandler.CanTakeOverFromHandlersOfDifferentType
                 function point(scene) { return root.mapFromItem(null, scene.x, scene.y) }
@@ -387,6 +479,33 @@ ContainmentItem {
                 onCentroidChanged: {
                     if (active)
                         root.dragMove(slot, point(centroid.scenePosition))
+                }
+            }
+            // Edit mode: a group of icons is dragged along the bar by the grip
+            // in its strip, its icons keeping the pointer for themselves.
+            Rectangle {
+                z: 1001
+                visible: root.editing && slot.group
+                width: 18
+                height: 18
+                radius: 9
+                x: root.vertical ? parent.width / 2 - 9 : parent.width + 2
+                y: root.vertical ? parent.height + 2 : parent.height / 2 - 9
+                color: Kirigami.Theme.highlightColor
+                Kirigami.Icon {
+                    anchors.fill: parent
+                    anchors.margins: 3
+                    source: "transform-move"
+                    isMask: true
+                    color: "white"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.SizeAllCursor
+                    onPressed: function(mouse) { root.beginMove(slot, mapToItem(root, mouse.x, mouse.y)) }
+                    onPositionChanged: function(mouse) { root.dragMove(slot, mapToItem(root, mouse.x, mouse.y)) }
+                    onReleased: function(mouse) { root.endMove(slot, mapToItem(root, mouse.x, mouse.y)) }
+                    onCanceled: root.cancelMove()
                 }
             }
             // Edit mode: a spacer shows where it is, and its end is dragged to
@@ -437,7 +556,7 @@ ContainmentItem {
             // In the widget's strip, below its remove button (beside it on a
             // side bar).
             EditButton {
-                visible: root.editing && !slot.dock && slot.settingsAction !== null && slot.settingsAction.enabled
+                visible: root.editing && !slot.group && slot.settingsAction !== null && slot.settingsAction.enabled
                 x: root.vertical ? parent.width / 2 + 2 : parent.width + 2
                 y: root.vertical ? parent.height + 2 : parent.height / 2 + 2
                 color: Kirigami.Theme.highlightColor
@@ -447,77 +566,47 @@ ContainmentItem {
             // Edit mode: takes the widget out of the bar. In the widget's
             // strip, above its settings button (before it on a side bar).
             EditButton {
-                visible: root.editing && !slot.dock
+                visible: root.editing && !slot.group
                 x: root.vertical ? parent.width / 2 - 20 : parent.width + 2
                 y: root.vertical ? parent.height + 2 : parent.height / 2 - 20
                 color: Kirigami.Theme.negativeTextColor
                 iconName: "window-close"
                 onClicked: root.removeSlot(slot)
             }
-            Binding {
-                when: slot.dock && slot.applet !== null
-                target: slot.applet
-                property: "barSurfaceBefore"
-                value: root.vertical ? slot.y : slot.x
-                restoreMode: Binding.RestoreNone
-            }
-            Binding {
-                when: slot.dock && slot.applet !== null
-                target: slot.applet
-                property: "barSurfaceAfter"
-                value: root.vertical ? row.height - slot.y - slot.height : row.width - slot.x - slot.width
-                restoreMode: Binding.RestoreNone
-            }
-            Binding {
-                when: slot.dock && slot.applet !== null
-                target: slot.applet
-                property: "barSurfaceThickness"
-                value: root.vertical ? row.width : row.height
-                restoreMode: Binding.RestoreNone
-            }
-            // Its place along the bar: where the bar's order puts it, else
-            // after every widget the order names, in the order they came.
+            // Its place along the bar: where the bar's arrangement puts it,
+            // else after everything the arrangement names, in the order
+            // they came.
             property int arrival: 0
             readonly property int place: {
-                const index = plasmaApplet ? root.appletOrder.indexOf(String(plasmaApplet.id)) : -1
-                return index >= 0 ? index : root.appletOrder.length + arrival
+                const index = root.sequence.indexOf(slot.token)
+                return index >= 0 ? index : root.sequence.length + arrival
             }
             Layout.column: root.vertical ? 0 : place
             Layout.row: root.vertical ? place : 0
-            // The application menu on the look's start is out of the row.
-            visible: root.launcherSlot !== slot
+            // The application menu on the look's start is out of the row, and
+            // so is a group with no icons.
+            visible: !dying && root.launcherSlot !== slot && (!group || groupLength > 0)
             onVisibleChanged: root.seat(slot)
-            // Something stands before the dock: a widget, or the menu on the
-            // look's start. Its icons then start right after it.
+            // Something stands before it: a widget or group, or the menu on
+            // the look's start.
             readonly property bool widgetBefore: root.firstSlot !== slot || root.launcherSlot !== null
-            Binding {
-                when: slot.dock && slot.applet !== null
-                target: slot.applet
-                property: "barWidgetBefore"
-                value: slot.widgetBefore
-                restoreMode: Binding.RestoreNone
-            }
             // Inside the panel the dock draws: clear of its ends, and a
-            // widget clear of its sides. A dock first along the bar keeps the
-            // room it asks for itself.
-            readonly property var room: dock && !widgetBefore ? root.dockRoom : root.widgetRoom
-            // The menu and the tray's button on the panel's ends keep their
-            // room there.
-            readonly property real roomBefore: root.firstSlot !== slot ? 0
-                : Math.max(Number(room.start || 0), root.launcherSlot ? Number(root.endCaps.start || 0) + root.editStrip : 0)
+            // widget clear of its sides. A group of icons first along the bar
+            // keeps the room the dock asks for itself. The tray's button on
+            // the panel's end keeps its room there.
+            readonly property var room: group && !widgetBefore ? root.dockRoom : root.widgetRoom
             readonly property real roomAfter: root.lastSlot !== slot ? 0
                 : Math.max(Number(room.end || 0), root.trayApplet ? Number(root.endCaps.end || 0) : 0)
-            readonly property real roomSideStart: dock ? 0 : Number(room.sideStart || 0)
-            readonly property real roomSideEnd: dock ? 0 : Number(room.sideEnd || 0)
+            readonly property real roomSideStart: group ? 0 : Number(room.sideStart || 0)
+            readonly property real roomSideEnd: group ? 0 : Number(room.sideEnd || 0)
             // Edit mode: a strip beside each widget (after it along the
             // bar) holds its buttons, so they never cover the widget.
-            readonly property real editRoom: dock ? 0 : root.editStrip
-            // The free room it keeps where it was dropped: before it ahead of
-            // the dock, after it behind the dock, which takes what is left.
-            readonly property bool behindDock: !dock && root.dockSlot !== null && place > root.dockSlot.place
-            readonly property real gap: dock || !plasmaApplet ? 0 : Number(root.appletGaps[String(plasmaApplet.id)] || 0)
-            readonly property real lead: roomBefore + (behindDock ? 0 : gap)
-            readonly property real trail: roomAfter + editRoom + (behindDock ? gap : 0)
+            readonly property real editRoom: root.editStrip
+            // Before it: the fixed room there, and the free room it keeps
+            // from where it was dropped.
+            readonly property real gap: Number(root.appletGaps[token] || 0)
+            readonly property real lead: root.leadOf(slot, root.firstSlot === slot, root.launcherSlot !== null) + gap
+            readonly property real trail: roomAfter + editRoom
             Layout.leftMargin: root.vertical ? roomSideStart : lead
             Layout.rightMargin: root.vertical ? roomSideEnd : trail
             Layout.topMargin: root.vertical ? lead : roomSideStart
@@ -529,12 +618,16 @@ ContainmentItem {
             // never show, whatever icon it is set to.
             readonly property real across: Math.max(0, (root.vertical ? row.width : row.height) - roomSideStart - roomSideEnd)
             readonly property real minimumAlong: {
-                if (!hints || dock)
+                if (group)
+                    return groupLength
+                if (!hints)
                     return 0
                 const minimum = root.vertical ? hints.minimumHeight : hints.minimumWidth
                 return fillsAlong ? Math.max(0, minimum) : minimum > 0 ? minimum : across
             }
             readonly property real preferredAlong: {
+                if (group)
+                    return groupLength
                 if (!hints)
                     return 0
                 const preferred = root.vertical ? hints.preferredHeight : hints.preferredWidth
@@ -542,16 +635,14 @@ ContainmentItem {
                 const minimum = root.vertical ? hints.minimumHeight : hints.minimumWidth
                 // A widget that fills (a flexible spacer) takes the room the
                 // bar has, as on Plasma's panels: it never makes the bar longer.
-                if (!dock && fillsAlong)
+                if (fillsAlong)
                     return Math.max(0, minimum)
-                if (dock)
-                    return Math.max(0, minimum, preferred >= 0 ? preferred : own)
                 return Math.max(minimumAlong, preferred > 0 ? preferred : own)
             }
-            readonly property real maximumAlong: !hints || dock ? Infinity
+            readonly property real maximumAlong: group ? groupLength : !hints ? Infinity
                 : (root.vertical ? hints.maximumHeight : hints.maximumWidth)
-            readonly property bool fillsAlong: dock
-                || (hints !== null && (root.vertical ? hints.fillHeight : hints.fillWidth))
+            readonly property bool fillsAlong: !group && hints !== null
+                && (root.vertical ? hints.fillHeight : hints.fillWidth)
 
             Layout.minimumWidth: root.vertical ? 0 : minimumAlong
             Layout.preferredWidth: root.vertical ? -1 : preferredAlong
@@ -571,14 +662,38 @@ ContainmentItem {
         return null
     }
 
+    // One place in the row for each of the dock's groups of icons.
+    function syncGroups() {
+        for (const child of row.children)
+            if (child.group && !child.dying && !root.groupIds.includes(child.groupId)) {
+                child.dying = true
+                child.destroy()
+            }
+        for (const id of root.groupIds) {
+            let found = false
+            for (const child of row.children)
+                if (child.group && !child.dying && child.groupId === id)
+                    found = true
+            if (!found)
+                appletSlot.createObject(row, { groupId: id, arrival: root.arrivals++ })
+        }
+    }
+
     function place(applet) {
         const item = root.itemFor(applet)
         if (!item || root.slotOf(applet))
             return
+        if (applet.pluginName === "org.archdock.dock") {
+            item.parent = chassis
+            item.anchors.fill = chassis
+            item.visible = true
+            root.dockPlasmaApplet = applet
+            root.dockApplet = item
+            return
+        }
         const slot = appletSlot.createObject(row, {
             plasmaApplet: applet,
             applet: item,
-            dock: applet.pluginName === "org.archdock.dock",
             arrival: root.arrivals++
         })
         item.parent = slot
@@ -627,6 +742,11 @@ ContainmentItem {
         }
         function onAppletAdded(applet, geometry) { root.place(applet) }
         function onAppletRemoved(applet) {
+            if (applet === root.dockPlasmaApplet) {
+                root.dockApplet = null
+                root.dockPlasmaApplet = null
+                return
+            }
             const slot = root.slotOf(applet)
             if (slot)
                 slot.destroy()
@@ -647,7 +767,7 @@ ContainmentItem {
         const along = root.vertical ? point.y : point.x
         const spans = []
         for (const child of row.children) {
-            if (!child.plasmaApplet)
+            if (!child.token || !child.visible && child !== root.launcherSlot)
                 continue
             if (child === root.launcherSlot) {
                 spans.push({ slot: child, start: -Infinity, end: root.vertical ? startCap.y + startCap.height : startCap.x + startCap.width })
@@ -667,9 +787,13 @@ ContainmentItem {
         const after = index < spans.length ? spans[index].start : (root.vertical ? root.height : root.width)
         // The place in the bar's record: the record's order is not the
         // drawn one (the application menu is drawn on the start cap
-        // wherever it stands), so it is the record's place of the widget
-        // drawn next, or the record's end.
-        const next = index < spans.length ? root.appletOrder.indexOf(String(spans[index].slot.plasmaApplet.id)) : -1
+        // wherever it stands, and the dock's groups stand for the dock), so
+        // it is the record's place of the widget drawn next, or the
+        // record's end.
+        let next = -1
+        for (let k = index; k < spans.length && next < 0; ++k)
+            if (spans[k].slot.plasmaApplet)
+                next = root.appletOrder.indexOf(String(spans[k].slot.plasmaApplet.id))
         return { index: next >= 0 ? next : root.appletOrder.length,
                  at: index === 0 && spans.length > 0 && isFinite(spans[0].start)
                      ? spans[0].start : index === spans.length ? before : (before + after) / 2 }
@@ -681,16 +805,15 @@ ContainmentItem {
         launcherSlot ? Number(endCaps.start || 0) + editStrip : 0)
     readonly property real alongEnd: (vertical ? row.height : row.width)
         - Math.max(Number(widgetRoom.end || 0), trayApplet ? Number(endCaps.end || 0) : 0)
-    // The bar's widgets but `moving` where they stand along it, each with
-    // its edit strip, and the dock as far as its icons reach.
+    // The bar's widgets and groups of icons but `moving` where they stand
+    // along it, each with its edit strip.
     function drawnSpans(moving) {
         const spans = []
         for (const child of row.children) {
-            if (!child.plasmaApplet || child === moving || child === root.launcherSlot || !child.visible)
+            if (!child.token || child === moving || child === root.launcherSlot || !child.visible)
                 continue
             const start = root.vertical ? child.y : child.x
-            const length = child.dock ? child.preferredAlong
-                : (root.vertical ? child.height : child.width) + child.editRoom
+            const length = (root.vertical ? child.height : child.width) + child.editRoom
             spans.push({ slot: child, start: start, end: start + length })
         }
         return spans.sort((a, b) => a.start - b.start)
@@ -732,11 +855,12 @@ ContainmentItem {
         root.movePlan = null
     }
     function removeSlot(slot) {
-        if (!slot || !Plasmoid.corona || typeof Plasmoid.corona.removeWidget !== "function")
+        if (!slot || !slot.plasmaApplet || !Plasmoid.corona || typeof Plasmoid.corona.removeWidget !== "function")
             return
-        const id = String(slot.plasmaApplet.id)
+        const token = slot.token
         Plasmoid.configuration.AppletGaps = String(Plasmoid.configuration.AppletGaps || "").split(";")
-            .filter(entry => entry.length > 0 && entry.split(":")[0] !== id).join(";")
+            .filter(entry => entry.length > 0 && entry.split(":")[0] !== token).join(";")
+        Plasmoid.configuration.Arrangement = root.arrangement.filter(other => other !== token).join(";")
         Plasmoid.configuration.writeConfig()
         Plasmoid.corona.removeWidget(Plasmoid, slot.plasmaApplet)
     }
@@ -763,19 +887,15 @@ ContainmentItem {
             start = Math.max(before, Math.min(after - size, start))
         }
         if (fits(start)) {
-            // Each widget's free room from where they all stand: ahead of the
-            // dock to what is before it, behind the dock to what is after it.
+            // Everything's free room from where they all stand: what is left
+            // before it past the fixed room there.
             const sequence = spans.concat([{ slot: moving, start: start, end: start + size }])
                 .sort((a, b) => a.start - b.start)
-            const dock = sequence.findIndex(span => span.slot.dock)
+            const capHeld = root.launcherSlot !== null && root.launcherSlot !== moving
             const gaps = {}
             sequence.forEach((span, k) => {
-                if (span.slot.dock)
-                    return
-                const gap = dock >= 0 && k > dock
-                    ? (k + 1 < sequence.length ? sequence[k + 1].start : root.alongEnd) - span.end
-                    : span.start - (k > 0 ? sequence[k - 1].end : root.alongStart)
-                gaps[String(span.slot.plasmaApplet.id)] = Math.max(0, Math.round(gap))
+                const before = k > 0 ? sequence[k - 1].end : 0
+                gaps[span.slot.token] = Math.max(0, Math.round(span.start - before - root.leadOf(span.slot, k === 0, capHeld)))
             })
             return { free: true, sequence: sequence.map(span => span.slot), gaps: gaps,
                      at: start, length: size - moving.editRoom }
@@ -786,29 +906,44 @@ ContainmentItem {
         const sequence = spans.map(span => span.slot)
         sequence.splice(index, 0, moving)
         const gaps = Object.assign({}, root.appletGaps)
-        gaps[String(moving.plasmaApplet.id)] = 0
+        gaps[moving.token] = 0
         return { free: false, sequence: sequence, gaps: gaps,
                  at: index < spans.length ? spans[index].start
                      : spans.length > 0 ? spans[spans.length - 1].end : root.alongStart }
     }
-    // Keeps where a moved widget landed: every widget's free room, and the
-    // widget's place in the bar's record, before the record's place of the
-    // widget drawn next (the record holds the application menu drawn on
-    // the start cap too).
+    // Keeps where a moved widget or group landed: the arrangement along the
+    // bar, everything's free room, and a widget's place in the bar's record,
+    // before the record's place of the widget drawn next (the record holds
+    // the dock once, and the application menu drawn on the start cap).
     function applyPlan(moving, plan) {
-        if (!plan || !moving.plasmaApplet)
+        if (!plan)
             return
+        // The menu on the start cap stays first; what the plan left out keeps
+        // its place after the rest.
+        const tokens = []
+        if (root.launcherSlot && root.launcherSlot !== moving)
+            tokens.push(root.launcherSlot.token)
+        for (const slot of plan.sequence)
+            if (!tokens.includes(slot.token))
+                tokens.push(slot.token)
+        for (const token of root.sequence)
+            if (!tokens.includes(token))
+                tokens.push(token)
         const entries = []
-        for (const slot of plan.sequence) {
-            const id = String(slot.plasmaApplet.id)
-            if (Number(plan.gaps[id] || 0) > 0)
-                entries.push(id + ":" + Math.round(plan.gaps[id]))
-        }
+        for (const token of tokens)
+            if (Number(plan.gaps[token] || 0) > 0)
+                entries.push(token + ":" + Math.round(plan.gaps[token]))
+        Plasmoid.configuration.Arrangement = tokens.join(";")
         Plasmoid.configuration.AppletGaps = entries.join(";")
         Plasmoid.configuration.writeConfig()
+        if (!moving.plasmaApplet)
+            return
         const id = String(moving.plasmaApplet.id)
         const position = plan.sequence.indexOf(moving)
-        const next = position + 1 < plan.sequence.length ? plan.sequence[position + 1] : null
+        let next = null
+        for (let k = position + 1; k < plan.sequence.length && !next; ++k)
+            if (plan.sequence[k].plasmaApplet)
+                next = plan.sequence[k]
         const order = root.appletOrder.filter(other => String(other) !== id)
         const nextIndex = next ? order.indexOf(String(next.plasmaApplet.id)) : -1
         const index = nextIndex >= 0 ? nextIndex : order.length
