@@ -311,7 +311,7 @@ PlasmoidItem {
         acceptDrops: true,
         magnification: 1.65,
         magnificationEnabled: true,
-        magnificationRadius: 2.4,
+        magnificationRadius: 1.0,
         magnificationFalloff: "linear",
         showReflections: false,
         showIndicators: true,
@@ -1707,7 +1707,7 @@ PlasmoidItem {
             magnification: root.magnification
             magnificationEnabled: root.configuration.magnificationEnabled
             magnificationRadius: Number(
-                root.configuration.magnificationRadius || 2.4)
+                root.configuration.magnificationRadius || 1.0)
             magnificationFalloff: String(
                 root.configuration.magnificationFalloff || "linear")
             hoveredIndex: root.hoveredIndex

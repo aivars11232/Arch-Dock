@@ -184,11 +184,13 @@ PlasmaCore.Dialog {
             const options = {
                 folder: from, outward: way, fromEdge: true,
                 iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
+                standFoot: content.standFoot,
                 gap: 6, count: content.entries.length, fanOpening: fanOpening,
                 stackLength: stackLength, stackSpan: 0, ringSize: ringSize, panelRadius: plane.radius,
                 obstacles: others, planeObstacles: plane.icons || [], obstacleSize: iconSize,
                 keepOut: keep, keepOutMargin: keepOutMargin, avoid: avoid, screen: area, screenMargin: margin,
                 outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur, outlineWidth: outlineStyle.lineWidth,
+                standsOnPath: ["fan", "arc", "ring"].includes(folderLayout),
                 largestScale: folderSeen ? folderSeen.scale : 0,
                 project: project }
             for (const key in extra || {}) options[key] = extra[key]
@@ -372,7 +374,10 @@ PlasmaCore.Dialog {
             // A reach chosen in the Studio is the curve's own span; all the
             // way round stops short of closing, so the two ends keep apart.
             const stride = keep ? Math.max(4, iconSize / 4) : 8
-            const screenReach = 3 * iconSize, mostSteps = keep ? 96 : 16
+            // On a 3D panel a point may step out up to three icons of the screen;
+            // a flat or baked panel keeps the step within 64 px, where a near miss
+            // beats a curve whose ends flare away from the dock.
+            const screenReach = keep ? 3 * iconSize : 64, mostSteps = keep ? 96 : 16
             const chosenSpan = ({ quarter: Math.PI / 2, third: 2 * Math.PI / 3, half: Math.PI,
                                   "three-quarters": 3 * Math.PI / 2, full: 1.9 * Math.PI })[trackReach]
             const firstSpan = chosenSpan || (keep ? Math.PI / 2 : 2 * Math.PI / 3)
@@ -405,11 +410,29 @@ PlasmaCore.Dialog {
                     }
                     return Math.min(step, rows.length - 1)
                 })
+                // Gentle, and back at the dock within a child's pitch: between
+                // neighbouring points the step changes by no more than 1.2
+                // times their own distance apart, so the curve bends without
+                // a kink and a far side stepped out does not lift the rest of
+                // the curve off the dock; the points between two steps are
+                // taken between the two rows.
+                let spacing = 0
+                for (let index = 1; index < rows[0].length; ++index)
+                    spacing += Math.hypot(rows[0][index].x - rows[0][index - 1].x, rows[0][index].y - rows[0][index - 1].y)
+                spacing /= Math.max(1, rows[0].length - 1)
+                const perPoint = Math.max(0.05, 1.2 * spacing / stride)
                 for (let index = 1; index < steps.length; ++index)
-                    steps[index] = Math.max(steps[index], steps[index - 1] - 1)
+                    steps[index] = Math.max(steps[index], steps[index - 1] - perPoint)
                 for (let index = steps.length - 2; index >= 0; --index)
-                    steps[index] = Math.max(steps[index], steps[index + 1] - 1)
-                samples = steps.map(function(step, index) { return rows[Math.min(step, rows.length - 1)][index] })
+                    steps[index] = Math.max(steps[index], steps[index + 1] - perPoint)
+                samples = steps.map(function(step, index) {
+                    const last = rows.length - 1
+                    const below = Math.min(last, Math.floor(step)), above = Math.min(last, below + 1)
+                    const part = Math.min(1, Math.max(0, step - below))
+                    const a = rows[below][index], b = rows[above][index]
+                    return { x: a.x + (b.x - a.x) * part, y: a.y + (b.y - a.y) * part,
+                             scale: a.scale + (b.scale - a.scale) * part }
+                })
                 // With a reach chosen the children spread from one end of it
                 // to the other; more than fit keep their spacing and the rest
                 // scroll in.
@@ -447,11 +470,14 @@ PlasmaCore.Dialog {
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {
                 return toScreen(point.x, point.y)
             }) : []
-            // On a 3D panel every shape lies on the panel's own plane round
-            // the folder, tilted as the panel is, and keeps its distance on
-            // that plane; one that cannot be seen whole there is built flat
-            // on the screen instead.
-            const plane = typeof folderPlane === "function" ? folderPlane() : null
+            // On a 3D panel the shape lies on the panel's own plane round the
+            // folder, tilted as the panel is; one that cannot be seen whole
+            // there is built flat on the screen instead.
+            // A fan opens as on a flat panel, from the platform's edge beside
+            // the folder, as if the folder opened a panel of that shape that
+            // is not drawn; a ring and a grid lie on the 3D panel's plane.
+            const flatShape = folderLayout === "fan"
+            const plane = !flatShape && typeof folderPlane === "function" ? folderPlane() : null
             shape = plane ? planeShape(plane, others, toScreen, area, keep, avoid) : null
             if (shape) {
                 samples = shape.samples
@@ -533,10 +559,12 @@ PlasmaCore.Dialog {
                     return LayoutEngine.folderShape(folderLayout, {
                         folder: from, outward: way || facing, fromEdge: fromEdge,
                         iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
+                        standFoot: content.standFoot,
                         gap: 6, count: content.entries.length, fanOpening: fanOpening,
                         stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
                         obstacles: others, obstacleSize: iconSize, avoid: avoid, screen: area, screenMargin: margin,
-                        outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur })
+                        outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur,
+                        standsOnPath: ["fan", "arc", "ring"].includes(folderLayout) })
                 }
                 const besideAt = function(sideways) {
                     const from = { x: dock.x + sideways * panelRadius, y: dock.y }
@@ -625,6 +653,7 @@ PlasmaCore.Dialog {
         pathCapacity: root.screenShape !== null ? Number(root.screenShape.capacity || 0) : 0
         pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : root.trackPitch
         measureAsDrawn: root.screenShape !== null && root.screenShape.projected === true
+        standsOnPath: root.screenShape !== null && root.screenShape.standsOnPath === true
         ringLimits: root.screenShape !== null && root.screenShape.ringCapacities ? root.screenShape.ringCapacities : []
         lobedPath: root.screenShape !== null && root.screenShape.lobes === true
         gridCells: root.screenShape !== null && root.screenShape.grid ? ({

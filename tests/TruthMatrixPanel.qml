@@ -152,7 +152,7 @@ Item {
             magnification: root.magnification // applet
             magnificationEnabled: root.configuration.magnificationEnabled // applet
             magnificationRadius: Number( // applet
-                root.configuration.magnificationRadius || 2.4) // applet
+                root.configuration.magnificationRadius || 1.0) // applet
             magnificationFalloff: String( // applet
                 root.configuration.magnificationFalloff || "linear") // applet
             hoveredIndex: root.hoveredIndex // applet

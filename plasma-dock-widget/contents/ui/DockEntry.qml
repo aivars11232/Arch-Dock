@@ -125,9 +125,10 @@ Item {
     onEntryChanged: updateTabFocus()
     Component.onCompleted: updateTabFocus()
 
-    // How far magnification reaches and how it decays. Defaults are the
-    // historical curve, so a panel that configures neither behaves as before.
-    property real magnificationRadius: 2.4
+    // How far magnification reaches and how it decays: one icon by default,
+    // so a hover moves the hovered icon alone; a wider reach spreads it to
+    // the neighbours.
+    property real magnificationRadius: 1.0
     property string magnificationFalloff: "linear"
     readonly property int indexDistance: hoveredIndex < 0 ? 99 : Math.abs(hoveredIndex - entryIndex)
     readonly property real influence: !magnificationEnabled || hoveredIndex < 0

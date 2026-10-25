@@ -44,9 +44,27 @@ def private_kwin_or_exit():
     if not pid.isdigit():
         sys.exit("eis-pointer: ARCHDOCK_PRIVATE_KWIN_PID names no process")
     proc = pathlib.Path("/proc") / pid
-    if pathlib.Path(os.readlink(proc / "exe")).name != "kwin_wayland":
+    try:
+        name = pathlib.Path(os.readlink(proc / "exe")).name
+    except PermissionError:
+        # A KWin installed with capabilities keeps its exe link to itself;
+        # its name is still readable.
+        name = (proc / "comm").read_text().strip()
+    if name != "kwin_wayland":
         sys.exit("eis-pointer: that process is not KWin")
-    environment = dict(part.split(b"=", 1) for part in (proc / "environ").read_bytes().split(b"\0") if b"=" in part)
+    try:
+        environment = dict(part.split(b"=", 1) for part in (proc / "environ").read_bytes().split(b"\0") if b"=" in part)
+    except PermissionError:
+        # Its environment is private too; its command line names the socket
+        # it serves, which must be this test's own, in this test's own
+        # runtime folder.
+        arguments = (proc / "cmdline").read_bytes().split(b"\0")
+        socket = arguments[arguments.index(b"--socket") + 1].decode() if b"--socket" in arguments else ""
+        display = os.environ.get("WAYLAND_DISPLAY", "")
+        runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+        if not socket or socket != display or not runtime or not (pathlib.Path(runtime) / display).is_socket():
+            sys.exit("eis-pointer: that KWin does not serve this test's own display")
+        return
     for key in ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "WAYLAND_DISPLAY"):
         if environment.get(key.encode()) != os.environ.get(key, "").encode():
             sys.exit("eis-pointer: that KWin is not this test's own (%s differs)" % key)

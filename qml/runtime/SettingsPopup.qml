@@ -1982,6 +1982,13 @@ Window {
                 return iconAppearanceRows();
             if (subTabIndex === 1) {
                 const rows = schemaSectionRows("icons-behavior", qsTr("Behavior"), qsTr("Icon motion and magnification."));
+                // The falloff shapes how the neighbours join a hover; with a
+                // reach of one icon or less no neighbour does, so it is not
+                // offered then.
+                if (Number(panelValue("magnificationRadius", 1)) <= 1)
+                    for (let index = rows.length - 1; index >= 0; --index)
+                        if (rows[index] && rows[index].key === "magnificationFalloff")
+                            rows.splice(index, 1);
                 // A label on hovering an icon (and the window previews of an
                 // application with windows): an icon's behaviour, so here.
                 const tooltips = fieldDescriptor("showTooltips", "settings");

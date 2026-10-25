@@ -82,6 +82,7 @@ private slots:
     void legacyRecordConvertsWithDeterministicDefaults();
     void contentOrderIsCanonicalAndDerived();
     void settingsRevisionRoundTripsWithoutSchemaBump();
+    void oldDefaultMagnificationReachFollowsTheNewDefault();
     void currentFieldsAndExtensionsRoundTripWithoutLoss();
     void iconStyleSelectionOwnsItsLegacyMirror();
     void iconOverridesRoundTripAsTypedRecords();
@@ -371,6 +372,34 @@ void PanelModelTest::contentOrderIsCanonicalAndDerived()
     QCOMPARE(PanelDefinition::fromLegacyMap(persisted, &errorMessage)->layout, kept->layout);
     QCOMPARE(derived->layout.travelSpeed, 0.5);
     QCOMPARE(derived->layout.scrollSensitivity, 1.0);
+}
+
+void PanelModelTest::oldDefaultMagnificationReachFollowsTheNewDefault()
+{
+    // A record that kept the old default reach (2.4 icons, the neighbours
+    // reacting to a hover) comes up with the new one (the hovered icon
+    // alone), whatever its version; a reach chosen by hand stays.
+    QVariantMap record{
+        {QStringLiteral("schemaVersion"), 2},
+        {QStringLiteral("id"), QStringLiteral("bottom")},
+        {QStringLiteral("name"), QStringLiteral("Bottom panel")},
+        {QStringLiteral("edge"), QStringLiteral("bottom")},
+        {QStringLiteral("magnificationRadius"), 2.4},
+    };
+    const auto kept = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(kept.has_value());
+    QCOMPARE(kept->motion.magnifyRadius, 1.0);
+
+    record.insert(QStringLiteral("magnificationRadius"), 3.0);
+    const auto chosen = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(chosen.has_value());
+    QCOMPARE(chosen->motion.magnifyRadius, 3.0);
+
+    record.insert(QStringLiteral("schemaVersion"), PanelDefinition::CurrentSchemaVersion);
+    record.insert(QStringLiteral("magnificationRadius"), 2.4);
+    const auto current = PanelDefinition::fromLegacyMap(record);
+    QVERIFY(current.has_value());
+    QCOMPARE(current->motion.magnifyRadius, 1.0);
 }
 
 void PanelModelTest::settingsRevisionRoundTripsWithoutSchemaBump()

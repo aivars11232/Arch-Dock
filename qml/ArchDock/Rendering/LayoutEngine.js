@@ -2334,7 +2334,17 @@ function unitedBounds(rectangles) {
 // measured at its scale. The samples (each with its
 // `scale`), the outline, the bounds and the apex or centre come back on the
 // screen, so the shape keeps the panel's tilt.
+// A folder's shape as planned below, with whether its children stand with
+// their stands' bases on its drawn band stamped on it, whichever way the
+// planning returns (the ring builds its candidates of its own).
 function folderShape(shape, options) {
+    const planned = folderShapePlanned(shape, options);
+    if (planned && typeof planned === "object")
+        planned.standsOnPath = Boolean(options && options.standsOnPath === true);
+    return planned;
+}
+
+function folderShapePlanned(shape, options) {
     const value = options || {};
     const kind = ["fan", "arc", "stack", "ring", "grid", "mobius"].includes(shape) ? shape : "fan";
     // A Möbius band opens where a ring does and shows as many at once as a
@@ -2354,6 +2364,12 @@ function folderShape(shape, options) {
     const gap = clamp(finite(value.gap, 6), 0, 64);
     const count = clamp(Math.floor(finite(value.count, 0)), 0, 48);
     const named = cellWidth > size + 0.5 || cellHeight > size + 0.5;
+    // On a drawn band (a fan's arc, an arc, a ring) a child stands with
+    // its stand's base on its point, the icon above; elsewhere its icon's
+    // middle is on the point.
+    const standsOnPath = value.standsOnPath === true;
+    // The stand's base below a child's cell top (the icon's middle without a stand).
+    const standFoot = clamp(finite(value.standFoot, size / 2), 0, cellHeight);
     // Neighbours on a curve stand a name's diagonal apart, so no two names
     // touch whichever way the curve runs; icons alone keep the dock's pitch.
     const curvePitch = named ? Math.hypot(cellWidth, cellHeight) + gap : size + 14;
@@ -2410,7 +2426,8 @@ function folderShape(shape, options) {
     // A child's cell on the screen; null where it is out of sight.
     function cell(point) {
         const p = seen(point);
-        return p ? { x: p.x - cellWidth * p.scale / 2, y: p.y - size * p.scale / 2,
+        return p ? { x: p.x - cellWidth * p.scale / 2,
+                     y: p.y - (standsOnPath ? standFoot : size / 2) * p.scale,
                      width: cellWidth * p.scale, height: cellHeight * p.scale } : null;
     }
     // Where the dock's icons stand on a plane, and how close a child may
@@ -2584,7 +2601,7 @@ function folderShape(shape, options) {
     // `fewer` children than it would show at once, where the screen is short.
     function build(direction, fewer) {
         const result = { shape: kind, direction: direction, closed: false, start: "centre",
-                         pitch: curvePitch, capacity: 0, outline: null };
+                         pitch: curvePitch, capacity: 0, outline: null, standsOnPath: standsOnPath };
         if (kind === "fan") {
             const opening = clamp(finite(value.fanOpening, 90), 40, 160) * Math.PI / 180;
             const apex = fromEdge ? { x: folder.x, y: folder.y }

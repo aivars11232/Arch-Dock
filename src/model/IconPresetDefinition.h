@@ -35,7 +35,7 @@ struct IconPresetMotion
     QString trigger = QStringLiteral("hover");
     qreal speed = 1.0;
     qreal intensity = 1.0;
-    qreal magnificationRadius = 2.4;
+    qreal magnificationRadius = 1.0;
     QString magnificationFalloff = QStringLiteral("linear");
 
     [[nodiscard]] QVariantMap toVariantMap() const;

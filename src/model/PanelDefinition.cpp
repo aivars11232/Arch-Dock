@@ -328,7 +328,7 @@ PanelDefinition PanelDefinition::defaults(const QString &id,
 }
 
 std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
-    const QVariantMap &record,
+    QVariantMap record,
     QString *errorMessage)
 {
     if (record.isEmpty())
@@ -344,6 +344,18 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
             errorMessage,
             QStringLiteral("unsupported panel schema version: %1").arg(sourceVersion));
         return std::nullopt;
+    }
+
+    // Records written before the hover reached the hovered icon alone carry
+    // the magnification's old default reach (2.4 icons: the neighbours
+    // reacted too) as a value of their own, since defaults are saved. A
+    // stored 2.4 is read as the new default (1.0): it was never chosen by
+    // hand, and the version is not raised for one value, as a raised version
+    // makes every record legacy and sends the registry through a backup and
+    // rewrite on its next load.
+    if (qFuzzyCompare(record.value(QStringLiteral("magnificationRadius"), 1.0).toDouble(), 2.4))
+    {
+        record.insert(QStringLiteral("magnificationRadius"), 1.0);
     }
 
     const QString id = record.value(QStringLiteral("id")).toString().trimmed();

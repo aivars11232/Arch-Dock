@@ -365,7 +365,7 @@ struct PanelMotionDefinition
     // How far the hovered icon's magnification reaches, in entry positions,
     // and the shape of its decay. Visual influence only: the layout and every
     // hit area stay exactly where they were.
-    qreal magnifyRadius = 2.4;
+    qreal magnifyRadius = 1.0;
     QString magnifyFalloff = QStringLiteral("linear");
     bool physicsEnabled = false;
     QString panelProfile;
@@ -401,7 +401,7 @@ public:
                                                   const QString &edge,
                                                   bool builtIn);
     [[nodiscard]] static std::optional<PanelDefinition> fromLegacyMap(
-        const QVariantMap &record,
+        QVariantMap record,
         QString *errorMessage = nullptr);
     [[nodiscard]] PanelDefinition normalized() const;
     [[nodiscard]] bool isValid(QString *errorMessage = nullptr) const;

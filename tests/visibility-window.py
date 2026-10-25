@@ -340,7 +340,10 @@ def instrument_interaction_stage(stage):
                 for (let index = 0; index < content.entries.length; ++index) {
                     const child = content.children.find(item => item.objectName === "folder-child-" + index);
                     if (!child) continue;
-                    const point = child.mapToItem(null, child.width / 2, content.iconSize * child.drawnScale / 2);
+                    // Where the child stands on its path: its stand's base on a drawn
+                    // band, its icon's middle elsewhere.
+                    const foot = content.standsOnPath ? content.standFoot : content.iconSize / 2;
+                    const point = child.mapToItem(null, child.width / 2, foot * child.drawnScale);
                     items[child.objectName] = [point.x, point.y];
                     if (child.placed.onTrack && child.opacity > 0.99) shown.push(child.objectName);
                     const label = child.children.find(item => item.objectName === "folder-name-" + index);

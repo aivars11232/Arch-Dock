@@ -17,11 +17,17 @@
   the dock point by point as seen on the screen: on a steeply tilted 3D
   ring the far side stepped out on the panel's plane but hardly moved on
   the screen, so every curve failed the clearance test and the children
-  were put back on the rim, over the icons. The fan lies on a 3D panel's
-  plane like the ring and the grid (it was built flat on the screen), so it
-  tilts with the panel. The children's names keep the dock's own letter
-  size wherever they stand along the depth, instead of swelling on the near
-  side and shrinking on the far side.
+  were put back on the rim, over the icons. On a drawn band (a fan's arc,
+  an arc, a ring) each child stands with its stand's base on the band and
+  the icon above it, at every tilt. The children's names keep the dock's
+  own letter size wherever they stand along the depth, instead of swelling
+  on the near side and shrinking on the far side.
+- **A hover moves the hovered icon alone.** The magnification's reach is
+  1 icon by default (it was 2.4, so two neighbours on each side grew, lit
+  up and their pedestals glowed with every hover); a stored reach of 2.4,
+  the old default saved into every panel, is read as the new one.
+  "Magnification reach" in Icons > Behavior still spreads it to the
+  neighbours on request.
 - **Icon size with thickness, both ways.** An icon size that filled the
   thickness keeps filling it when the thickness changes back; other sizes
   scale with the thickness as before, within 24 to 128.

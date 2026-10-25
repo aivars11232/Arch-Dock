@@ -179,10 +179,11 @@ function turnCompression(rotateY) {
 // layout underneath it. Physical rearrangement is a separate capability and is
 // deliberately not wired to this.
 //
-// `linear` with a radius of 2.4 is the historical curve and stays the default.
+// `linear` with a reach of one icon is the default: a hover moves the
+// hovered icon alone; a wider reach spreads it to the neighbours.
 function magnificationInfluence(indexDistance, radius, falloff) {
     var distance = Math.abs(number(indexDistance, 0));
-    var reach = Math.max(0.0001, number(radius, 2.4));
+    var reach = Math.max(0.0001, number(radius, 1.0));
     if (distance >= reach)
         return 0;
     var progress = distance / reach;

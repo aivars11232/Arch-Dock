@@ -1265,8 +1265,18 @@ degrees; evidence `OPENING-TILT-*` in the audit folder, pictures 93-94.
   curve keeps its shape - the dock's own curve, offset - and its distance
   now follows the tilt (pictures 93, bottom; at 25 degrees the children
   stand closer than before, about one icon out).
-- The fan was built flat on the screen on a 3D panel by design; it lies on
-  the panel's plane now like the ring and the grid (picture 94, left).
+- The fan was tried on the panel's plane like the ring and the grid; seen
+  nearly edge-on at 60 degrees it read as a new shape (the owner's "?") and
+  the clearance pushed its apex away from the folder, so it stands upright
+  on the screen as before. The ring opening's band ran between the
+  children's icons and their stands at 60 degrees (the owner's X): on a
+  drawn band a child now stands with its stand's base on the band.
+- A hover reached the neighbours (magnification reach 2.4 icons): the reach
+  is one icon by default and a stored 2.4 (the old default, saved into
+  every record) is read as the new one; the setting stays for a spreading
+  dock. A schema version bump was tried first and withdrawn: it sends every
+  record through the registry's backup-and-rewrite on load, which blocked
+  the whole registry in the private session.
 - The names scaled with each child's depth (huge on the near side, tiny on
   the far side, overlapping); they keep the dock's letter size and their
   cell's width, scaled only by the opening's growth; wrap stays as it was.

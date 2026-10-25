@@ -1646,7 +1646,7 @@ const QVector<Descriptor> &schemaFields()
                                                 {QStringLiteral("decimals"), 1}})),
                   {"dock-configuration"}),
         exposedTo(panel("magnificationRadius", Access::Editor, Type::Real,
-              Normalization::RealRange, 2.4, "motion.magnifyRadius", 0.5, 6.0, {},
+              Normalization::RealRange, 1.0, "motion.magnifyRadius", 0.5, 6.0, {},
               false, true,
               editor("icons-behavior", "Magnification reach", "slider",
                      {"studio"}, "icon-state-styling", {},

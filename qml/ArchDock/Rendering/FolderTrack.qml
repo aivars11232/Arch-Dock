@@ -58,6 +58,9 @@ Item {
     // The small panel under the children, { points, closed } in this item's
     // coordinates, drawn in the panel's look (LayoutEngine.themeStyle()).
     property var outline: null
+    // On a drawn band each child's stand has its base on the band and the
+    // icon stands above it; elsewhere the icon's middle is on the path.
+    property bool standsOnPath: false
     property bool outlineFilled: false
     property var outlineStyle: null
     property real outlineOpacity: 0.9
@@ -84,6 +87,11 @@ Item {
     readonly property var standLayout: PlatformGeometry.pedestalLayout(pedestalSettings, iconSize)
     readonly property real cellWidth: Math.max(showNames ? 108 : iconSize, standLayout.width)
     readonly property real cellHeight: iconSize + standLayout.above + standLayout.below
+    // The stand's base below the cell's top: on a free panel's path the
+    // icon is raised inside its cell and the stand sits about the cell's
+    // middle, so the base is not the cell's bottom. Without a stand it is
+    // the icon's middle.
+    readonly property real standFoot: cellHeight / 2 + standLayout.standCentre + standLayout.height / 2
         + (showNames ? nameMetrics.height * 2 + 4 : 0)
     // Neighbours along the dock's curve: a name's width apart, or an icon
     // and a gap.
@@ -461,7 +469,7 @@ Item {
                 + (placed.y - root.expansionOrigin.y) * root.openingProgress
             x: centreX - width / 2
             // The icon's cell centred on its place; the raised icon above it.
-            y: centreY - (root.iconSize / 2 + root.standLayout.above) * drawnScale
+            y: centreY - (root.standsOnPath ? root.standFoot : root.iconSize / 2 + root.standLayout.above) * drawnScale
             width: root.cellWidth * drawnScale
             height: root.cellHeight * drawnScale
             opacity: placed.visibility * Math.max(0, Math.min(1, root.openingProgress * 1.5))
