@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1-48 — 2026-10-25
+## 0.1.1-48 — 2026-10-26
 
 - **Crash protection.** Arch Dock's two programs (`arch-dock`, `arch-dock-bars`)
   run the QML garbage collector to completion in one go instead of in time

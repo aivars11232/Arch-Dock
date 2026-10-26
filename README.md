@@ -15,7 +15,7 @@ Wayland**. It gives you panels of three kinds, all designed in one place
 - **Free panels** anywhere on the desktop: rings, arcs, circles, grids, a
   Möbius strip; turned and scaled as you like, flat or in real 3D.
 
-Version **0.1.1** (release 47). Original Arch Dock work is licensed
+Version **0.1.1** (release 48). Original Arch Dock work is licensed
 **GPL-3.0-or-later** ([LICENSE](LICENSE)); the few MIT components keep MIT.
 
 ## Install
@@ -24,7 +24,7 @@ On Arch Linux with KDE Plasma 6, one command installs the newest package;
 pacman fetches what it needs from the Arch repositories:
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-47/arch-dock-0.1.1-47-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-48/arch-dock-0.1.1-48-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 

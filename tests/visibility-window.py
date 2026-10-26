@@ -335,6 +335,7 @@ def instrument_interaction_stage(stage):
                 if (!root.observedActive) return;
                 takeShot();
                 const items = {};
+                const icons = {};
                 const names = {};
                 const shown = [];
                 for (let index = 0; index < content.entries.length; ++index) {
@@ -345,6 +346,10 @@ def instrument_interaction_stage(stage):
                     const foot = content.standsOnPath ? content.standFoot : content.iconSize / 2;
                     const point = child.mapToItem(null, child.width / 2, foot * child.drawnScale);
                     items[child.objectName] = [point.x, point.y];
+                    // The icon's middle, for a click.
+                    const iconPoint = child.mapToItem(null, child.width / 2,
+                        (content.standLayout.above + content.iconSize / 2) * child.drawnScale);
+                    icons[child.objectName] = [iconPoint.x, iconPoint.y];
                     if (child.placed.onTrack && child.opacity > 0.99) shown.push(child.objectName);
                     const label = child.children.find(item => item.objectName === "folder-name-" + index);
                     if (label && label.visible) names[label.objectName] = label.text;
@@ -373,7 +378,7 @@ def instrument_interaction_stage(stage):
                     showNames: root.showNames, names: names,
                     origin: [content.expansionOrigin.x, content.expansionOrigin.y],
                     selected: content.selectedChildId, snapshot: root.snapshot, pitch: content.pitch,
-                    capacity: content.track.capacity, items: items, shown: shown,
+                    capacity: content.track.capacity, items: items, icons: icons, shown: shown,
                     rect: [root.x, root.y, root.width, root.height]}));
             }
         }
@@ -1181,12 +1186,15 @@ def run_interaction_matrix(free_panel):
                     inside = not inside
             return inside
 
-        def folder_point(panel, child_name=None):
+        def folder_point(panel, child_name=None, icon=False):
+            # Where a child stands (its stand's base on a band), or with
+            # `icon` its icon's middle, where a click lands on it.
             def target():
                 current = folder_popup(panel)
                 if not current.get("visible") or (child_name and child_name not in current["items"]):
                     return None
-                return current["rect"][2:], current["items"][child_name] if child_name else [0, 0]
+                points = current.get("icons") if icon and child_name and child_name in (current.get("icons") or {}) else current["items"]
+                return current["rect"][2:], points[child_name] if child_name else [0, 0]
             return native_point([], [], current_target=target)
 
         def verify_capture(panel, count, names):
@@ -1373,7 +1381,18 @@ def run_interaction_matrix(free_panel):
                          else icon_size + 16 + state["pitch"] / 2 + 10)
                 if nearest > start:
                     problems.append("the contents do not start at the folder")
-                if facing < 0.3:
+                # The children's middle lies outward of the folder, unless the
+                # curve wraps the dock: a curve that keeps clear only by
+                # reaching half-way round stands beside the folder on both
+                # sides, and its middle falls back towards the dock's centre.
+                # Angles on the ring itself: a tilted ring's drawn oval is unsquashed first.
+                turns = [math.atan2((c[1] - centre[1]) / squash, c[0] - centre[0]) for c in children]
+                # The smallest arc holding every child: all the way round
+                # less the widest empty gap between neighbours.
+                ordered = sorted(turns)
+                arc_gaps = [b - a for a, b in zip(ordered, ordered[1:])] + [ordered[0] + 2 * math.pi - ordered[-1]] if ordered else []
+                spread = 2 * math.pi - max(arc_gaps) if arc_gaps else 0
+                if facing < 0.3 and spread < 2.4:
                     problems.append("the contents do not stand outside the dock")
                 if clearance < icon_size * 0.9:
                     problems.append("a child overlaps an icon of the dock")
@@ -1977,7 +1996,7 @@ def run_interaction_matrix(free_panel):
                     wait_for(lambda: folder_popup(panel).get("selected") == selected["id"], "keyboard child selection")
                     key(28)
                 else:
-                    click(folder_point(panel, "folder-child-0"))
+                    click(folder_point(panel, "folder-child-0", icon=True))
                 wait_for(lambda: marker.exists(), "controlled document handler opened selected child")
                 assert marker.read_text() in (selected["url"], str(folder / selected["name"])), marker.read_text()
                 marker.unlink()

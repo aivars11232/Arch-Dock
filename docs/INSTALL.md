@@ -7,7 +7,7 @@ be installed together.
 ## The simple way: the released package
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-47/arch-dock-0.1.1-47-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-48/arch-dock-0.1.1-48-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 
