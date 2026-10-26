@@ -1451,14 +1451,21 @@ std::optional<QVariantMap> PanelRegistry::genericScene3D(
     // arc and the Möbius strip, each drawn along the layout's own path so
     // every icon stands on it. Arcs, semicircles and fans curve about a
     // centre below their panel's middle, which a centred platform cannot
-    // follow; they stay flat.
+    // follow; they stay flat. An edge panel's row always runs along its
+    // edge, whatever layout its record holds, so it stands on a straight
+    // platform along that edge - unless it wears a skin, artwork made for a
+    // flat panel, which has no 3D form.
     static const QStringList platformLayouts{
         QStringLiteral("circular"), QStringLiteral("ring"), QStringLiteral("ellipse"),
         QStringLiteral("radial"), QStringLiteral("polygon"), QStringLiteral("triangle"),
         QStringLiteral("square"), QStringLiteral("pentagon"), QStringLiteral("hexagon"),
         QStringLiteral("octagon"), QStringLiteral("star"), QStringLiteral("mobius")};
-    if (definition.host.kind != ArchDock::PanelHostKind::FreeDesktop ||
-        !platformLayouts.contains(definition.layout.pathType) ||
+    const bool skin = look.value(QStringLiteral("capabilities")).toMap()
+        .value(QStringLiteral("rendererTiers")).toList().contains(QStringLiteral("skinned2d"));
+    const bool hasGeneratedPlatform = (definition.host.kind == ArchDock::PanelHostKind::NativeEdge && !skin)
+        || (definition.host.kind == ArchDock::PanelHostKind::FreeDesktop
+            && platformLayouts.contains(definition.layout.pathType));
+    if (!hasGeneratedPlatform ||
         look.contains(QStringLiteral("scene3D")) ||
         !definition.surface.themePackageManifest.trimmed().isEmpty() ||
         !definition.surface.themeAsset.trimmed().isEmpty() ||

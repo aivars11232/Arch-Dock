@@ -127,6 +127,10 @@ Item {
     // On a Plasma-held edge panel, how thick the panel is across its edge,
     // which the decoration fits inside; 0 elsewhere.
     property real decorationPanelThickness: 0
+    // How thick an edge panel is across its edge - a Plasma panel's or a
+    // bar's own depth - which its 3D platform fills; 0 for a free panel.
+    // This scene is deeper (room for magnification) and centred across it.
+    property real edgePanelThickness: 0
     // The icons' places at rest, in the scene's pixels, for a 3D panel's
     // decoration (PanelScene.restEntryCentres).
     property var restEntryCentres: []
@@ -382,6 +386,10 @@ Item {
             decorationSpeed: Qt.binding(function() { return root.decorationSpeed }),
             layoutTrackRadius: Qt.binding(function() { return Number(root.geometry.radius || 0) }),
             iconCellSize: Qt.binding(function() { return Number(root.geometry.iconSize || 52) }),
+            // An edge panel's screen edge, which its straight platform tilts
+            // away from, and its thickness; empty and 0 for a free panel.
+            screenEdge: Qt.binding(function() { return root.decorationEdge }),
+            panelThickness: Qt.binding(function() { return root.edgePanelThickness }),
             appearance: Qt.binding(function() { return root.appearance }),
             customColor: Qt.binding(function() { return root.customColor }),
             entryVisuals: Qt.binding(function() { return root.entryVisuals }),

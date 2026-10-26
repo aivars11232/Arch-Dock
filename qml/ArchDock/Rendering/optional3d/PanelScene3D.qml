@@ -87,9 +87,13 @@ Item {
     readonly property rect drawnBounds: Qt.rect(-overflowX, -overflowY, viewWidth, viewHeight)
     // The panel's field of view, and the camera's, which shows the panel's
     // box through that field with the margins around it.
-    readonly property real panelFieldOfView: bounded("fieldOfView", 40, 20, 70)
-    readonly property real viewFieldOfView: Math.atan(Math.tan(panelFieldOfView * Math.PI / 360)
-        * viewHeight / Math.max(1, height)) * 360 / Math.PI
+    readonly property real panelFieldOfView: edgePanel ? 40 : bounded("fieldOfView", 40, 20, 70)
+    // An edge panel's field of view spans its thickness, so a left or right
+    // panel is seen as a top or bottom one is.
+    readonly property real viewFieldOfView: edgePanel
+        ? Math.atan(viewHeight / 2 / cameraDistance) * 360 / Math.PI
+        : Math.atan(Math.tan(panelFieldOfView * Math.PI / 360)
+            * viewHeight / Math.max(1, height)) * 360 / Math.PI
     // A look whose theme ships no 3D mesh stands on a platform generated from
     // the panel's own layout (`sceneDefinition.generated`), in the look's own
     // colours: the palette sampled from its artwork when it is drawn from
@@ -97,6 +101,62 @@ Item {
     property real layoutTrackRadius: 0
     // The icon cell's size in the same pixels as the track radius.
     property real iconCellSize: 52
+    // The screen edge an edge panel stands on (Plasma's panel or an Arch
+    // Dock bar), empty for a free panel. An edge panel stands on a straight
+    // platform as large as the panel, tilted about the screen's edge so its
+    // far side goes into the screen toward the middle; its tilt is its one 3D
+    // setting, and nothing else of the 3D page acts on it. A free panel's
+    // scene is not touched by any of this.
+    property string screenEdge: ""
+    readonly property bool edgePanel: ["top", "bottom", "left", "right"].includes(screenEdge)
+    readonly property bool edgeStanding: screenEdge === "left" || screenEdge === "right"
+    // How thick the edge panel itself is: this scene is deeper (room for
+    // magnification) and centred across it. 0 where it is not known.
+    property real panelThickness: 0
+    // Its size across the edge and along it.
+    readonly property real edgeAcross: Math.max(1, Math.min(edgeStanding ? width : height,
+        panelThickness > 0 ? panelThickness : Infinity))
+    readonly property real edgeAlong: Math.max(1, edgeStanding ? height : width)
+    // How far it tilts: 0 faces the viewer; at 60 degrees its icons still
+    // fit in the panel.
+    readonly property real edgeTiltLimit: 60
+    readonly property real edgeTilt: edgePanel
+        ? Math.max(0, Math.min(edgeTiltLimit, bounded("cameraPitch", 25, -180, 180))) : 0
+    // The platform's band across the panel, in its own units, bevels
+    // included; its pixels per unit fill the panel's thickness with it.
+    readonly property real edgeBandReach: PlatformGeometry.maximumBand
+        + (PlatformGeometry.innerBevel + PlatformGeometry.outerBevel) / 2
+    readonly property real edgeUnit: edgeAcross / 2 / edgeBandReach
+    // The platform's frame: its top in the panel's own plane and its outer
+    // edge on the screen's edge, turned about that edge by the tilt. Its near
+    // wall then shows below its top, so it moves in by as much; where its far
+    // side would still reach out of the panel (at a small tilt, the near wall
+    // pushing it out), the whole is drawn a little smaller.
+    readonly property var edgeFrame: {
+        if (!edgePanel) return null
+        const theta = edgeTilt * Math.PI / 180
+        const sine = Math.sin(theta), cosine = Math.cos(theta)
+        const across = edgeAcross, depth = cameraDistance
+        const wall = (PlatformGeometry.topHeight - PlatformGeometry.bottomHeight) * edgeUnit
+        const reach = (across * cosine + wall * sine) * depth - across * across / 2 * sine
+        const scale = reach > across * depth ? across * depth / reach : 1
+        const inward = scale * wall * sine
+        const top = PlatformGeometry.topHeight * edgeUnit
+        const frames = {
+            bottom: { hinge: [0, -across / 2], inward: [0, 1], turn: Qt.vector3d(-edgeTilt, 0, 0) },
+            top: { hinge: [0, across / 2], inward: [0, -1], turn: Qt.vector3d(edgeTilt, 0, 0) },
+            left: { hinge: [-across / 2, 0], inward: [1, 0], turn: Qt.vector3d(0, edgeTilt, 0) },
+            right: { hinge: [across / 2, 0], inward: [-1, 0], turn: Qt.vector3d(0, -edgeTilt, 0) }
+        }
+        const frame = frames[screenEdge]
+        return {
+            position: Qt.vector3d(frame.hinge[0] + frame.inward[0] * inward,
+                                  frame.hinge[1] + frame.inward[1] * inward, 0),
+            pivot: Qt.vector3d(frame.hinge[0], frame.hinge[1], top),
+            turn: frame.turn,
+            scale: scale
+        }
+    }
     property string appearance: ""
     property string customColor: ""
     readonly property var materialNames: ["glass", "crystal", "neon", "minimal", "plasma", "lightning", "aurora", "lime",
@@ -216,8 +276,9 @@ Item {
         easing.type: Easing.OutQuad
     }
     readonly property var generatedSpec: (sceneDefinition || ({})).generated || null
-    readonly property var generatedShape: generatedSpec
-        ? PlatformGeometry.shapeForLayout(generatedSpec.layout, generatedSpec.polygonSides) : null
+    readonly property var generatedShape: !generatedSpec ? null
+        : edgePanel ? { kind: "bar", vertical: edgeStanding, length: edgeAlong / 2 / edgeUnit }
+        : PlatformGeometry.shapeForLayout(generatedSpec.layout, generatedSpec.polygonSides)
     readonly property var shapedPalette: materialColour.length || materialLook !== "theme"
         ? PlatformGeometry.paletteFromStyle(LayoutEngine.themeStyle(
             materialLook === "theme" ? appearance : materialLook, materialColour, 48))
@@ -253,8 +314,9 @@ Item {
         return Math.max(PlatformGeometry.minimumBand, footprint, corners, Math.min(PlatformGeometry.maximumBand,
             (Number(style.lineWidth) || 12) / 2 / radius))
     }
-    readonly property real resolvedBand: bandAuto ? flatLineBand : bandSetting
-    readonly property real platformThickness: transformValue("thickness", 1, 0.05, 20)
+    readonly property real resolvedBand: edgePanel ? PlatformGeometry.maximumBand
+        : bandAuto ? flatLineBand : bandSetting
+    readonly property real platformThickness: edgePanel ? 1 : transformValue("thickness", 1, 0.05, 20)
         * (bandAuto ? Math.max(0.4, Math.min(1, resolvedBand / 0.11)) : 1)
     // A platform wearing a picture wears it as a real surface, its
     // brightness its height (PictureRelief), as deep as Relief depth: traced
@@ -303,7 +365,7 @@ Item {
             : Number(generatedPlatform.textureRepeats || 1)
     readonly property string generatedKey: generatedShape ? JSON.stringify(Object.assign({
         shape: generatedShape, band: resolvedBand,
-        bend: bounded("bend", 0, -1, 1), palette: generatedPalette,
+        bend: edgePanel ? 0 : bounded("bend", 0, -1, 1), palette: generatedPalette,
         allRound: textureChoice !== "none" && textureMaterial.length > 0 }, pictureRelief ? { relief: true } : {})) : ""
     readonly property var generatedPlatform: generatedKey.length > 0
         ? PlatformGeometry.platform(JSON.parse(generatedKey)) : null
@@ -325,9 +387,16 @@ Item {
     // time, so it never ended while the dock turned.
     property var restEntryCentres: []
     readonly property var decorationIconPoints: decorationWanted ? restEntryCentres.map(function(centre) {
-        return PlatformGeometry.standPoint(Number(centre.x) - width / 2, height / 2 - Number(centre.y),
-                                           layoutTrackRadius, generatedPlatform.track)
+        return platformPlace(Number(centre.x) - width / 2, height / 2 - Number(centre.y))
     }) : []
+    // Where on a generated platform an icon stands whose place in the flat
+    // layout is (x, y) pixels from the panel's centre: carried onto the
+    // layout's track, or on an edge panel's straight platform just where it
+    // is.
+    function platformPlace(x, y) {
+        return edgePanel ? [x / platformScale, y / platformScale]
+            : PlatformGeometry.standPoint(x, y, layoutTrackRadius, generatedPlatform.track)
+    }
     // How far an icon stands raised on the decoration under it, in the
     // scene's pixels (its height there, Thickness stretching it).
     function decorationLift(index) {
@@ -342,7 +411,7 @@ Item {
         : themeReliefMesh || (sceneResources || ({})).mesh || null
     readonly property real baseTopHeight: generatedSpec ? PlatformGeometry.topHeight
         : Math.max(0, ...((basePlatformMesh || {}).positions || []).map(p => Number(p[2])))
-    readonly property real platformFold: bounded("fold", 0, -1, 1)
+    readonly property real platformFold: edgePanel ? 0 : bounded("fold", 0, -1, 1)
     readonly property var platformMesh: PlatformGeometry.foldMesh(basePlatformMesh, platformFold, baseTopHeight)
     // A generated platform's pedestals take its top's colour, and its rim
     // glows in the look's glow colour.
@@ -478,7 +547,7 @@ Item {
     // Bend tilts a generated band's top across its width (0.9 per unit of
     // bend), so a stand on the centre line would sink into the rim on the
     // high side: the band's rise under the stand's width.
-    readonly property real platformBendSlope: generatedSpec ? Math.abs(bounded("bend", 0, -1, 1)) * 0.9 : 0
+    readonly property real platformBendSlope: generatedSpec && !edgePanel ? Math.abs(bounded("bend", 0, -1, 1)) * 0.9 : 0
     // Its material: the platform's or a look's, in its colour, opacity and
     // glow; its texture: the material's own, none, or a look's.
     readonly property string pedestalTextureLook: pedestalTextureChoice === "material"
@@ -1047,6 +1116,7 @@ Item {
         return Math.round(Math.max(0, pedestalExtentsUnit.top * unit + gap - iconCellSize * 0.07) * 4) / 4
     }
     readonly property real platformScale: {
+        if (edgePanel) return edgeUnit
         const fitted = Math.min(width / platformReachX, height / platformReachY) * 0.40
             / (1 + Math.abs(platformFold) * platformThickness * 0.4)
         // The icons' line is 0.8 of the platform's reach; above its top
@@ -1236,33 +1306,37 @@ Item {
     }
     readonly property bool transitionsEnabled: !reducedMotion && !gizmoDragging
         && (sceneDefinition || ({})).transitions !== false
-    readonly property real cameraDistance: Math.max(1, height)
+    readonly property real cameraDistance: Math.max(1, edgePanel ? edgeAcross : height)
         / (2 * Math.tan(panelFieldOfView * Math.PI / 360))
     // The platform and its icons reach a little past the platform's radius.
     readonly property real sceneExtentX: platformScale * platformReachX * 1.05 * targetScaleX
     readonly property real sceneExtentY: platformScale * platformReachY * 1.05 * targetScaleY
-    readonly property real targetScale: transformValue("scale", 1, 0.05, 20)
+    // An edge panel is neither turned, moved nor scaled by these: it stands
+    // on its edge, tilted by edgeFrame.
+    readonly property real targetScale: edgePanel ? 1 : transformValue("scale", 1, 0.05, 20)
     // Sideways and up and down on its own, in the panel's own frame: the
     // platform and where its icons stand stretch, the icons keep their
     // shape.
-    readonly property real targetScaleX: transformValue("scaleX", 1, 0.05, 20)
-    readonly property real targetScaleY: transformValue("scaleY", 1, 0.05, 20)
+    readonly property real targetScaleX: edgePanel ? 1 : transformValue("scaleX", 1, 0.05, 20)
+    readonly property real targetScaleY: edgePanel ? 1 : transformValue("scaleY", 1, 0.05, 20)
     readonly property real fitLimit: Math.min(width / 2 / Math.max(1, sceneExtentX),
                                               height / 2 / Math.max(1, sceneExtentY))
     // Nearer is larger: depth stops where the platform would outgrow the panel.
-    readonly property real targetDepth: Math.min(transformValue("positionZ", 0, -1, 1) * platformScale * 0.5,
-        cameraDistance * Math.max(0, 1 - targetScale / Math.max(targetScale, fitLimit)))
+    readonly property real targetDepth: edgePanel ? 0
+        : Math.min(transformValue("positionZ", 0, -1, 1) * platformScale * 0.5,
+            cameraDistance * Math.max(0, 1 - targetScale / Math.max(targetScale, fitLimit)))
     readonly property real apparentScale: targetScale * cameraDistance
         / Math.max(1, cameraDistance - targetDepth)
     readonly property real roomX: Math.max(0, width / 2 - sceneExtentX * apparentScale)
     readonly property real roomY: Math.max(0, height / 2 - sceneExtentY * apparentScale)
-    readonly property vector3d targetPosition: Qt.vector3d(
+    readonly property vector3d targetPosition: edgePanel ? Qt.vector3d(0, 0, 0) : Qt.vector3d(
         transformValue("positionX", 0, -1, 1) * roomX * (cameraDistance - targetDepth) / cameraDistance,
         transformValue("positionY", 0, -1, 1) * roomY * (cameraDistance - targetDepth) / cameraDistance,
         targetDepth)
-    readonly property real targetPitch: transformValue("cameraPitch", 25, -180, 180)
-    readonly property real targetYaw: transformValue("cameraYaw", 0, -180, 180)
-    readonly property real targetRoll: transformValue("roll", 0, -180, 180)
+    // An edge panel is seen straight on: its tilt turns the platform itself.
+    readonly property real targetPitch: edgePanel ? 0 : transformValue("cameraPitch", 25, -180, 180)
+    readonly property real targetYaw: edgePanel ? 0 : transformValue("cameraYaw", 0, -180, 180)
+    readonly property real targetRoll: edgePanel ? 0 : transformValue("roll", 0, -180, 180)
     // What is drawn. It eases toward the targets when transitions are on and
     // jumps to them otherwise. One frame-driven easing instead of a Behavior
     // per value: Qt creates a Behavior's animation on its first use, which
@@ -1328,7 +1402,7 @@ Item {
         onTriggered: root.stepTransform(frameTime)
     }
     // A slow rise and fall, off unless chosen, and never under reduced motion.
-    readonly property bool floatRunning: (sceneDefinition || ({})).float === true
+    readonly property bool floatRunning: (sceneDefinition || ({})).float === true && !edgePanel
         && !reducedMotion && motionAllowed && !gizmoDragging
     property real floatOffset: 0
     onFloatRunningChanged: if (!floatRunning) floatOffset = 0
@@ -2384,7 +2458,8 @@ Item {
                     // scene moves it too.
                     readonly property var place: {
                         if (!glyph || !glyph.visible) return null
-                        const angles = [root.shownPitch, root.shownYaw, root.shownRoll, root.cameraDistance, view.width, view.height]
+                        const angles = [root.shownPitch, root.shownYaw, root.shownRoll, root.edgeTilt,
+                                        root.cameraDistance, view.width, view.height]
                         const mapped = view.mapFrom3DScene(root.reflectedPoint(glyph.scenePosition))
                         if (!(mapped.z > 0)) return null
                         const focal = (view.height / 2) / Math.tan(root.viewFieldOfView * Math.PI / 360)
@@ -2686,11 +2761,17 @@ Item {
         Node {
             id: sceneContent
             objectName: "mesh-scene-content"
-            position: Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
-                                  root.shownPosition.z + root.floatOffset)
-            scale: Qt.vector3d(root.shownScale * root.radialCollapseScale,
-                               root.shownScale * root.radialCollapseScale,
-                               root.shownScale * root.radialCollapseScale)
+            // An edge panel turns about its screen's edge (edgeFrame).
+            position: root.edgePanel ? root.edgeFrame.position
+                : Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
+                              root.shownPosition.z + root.floatOffset)
+            pivot: root.edgePanel ? root.edgeFrame.pivot : Qt.vector3d(0, 0, 0)
+            eulerRotation: root.edgePanel ? root.edgeFrame.turn : Qt.vector3d(0, 0, 0)
+            scale: root.edgePanel
+                ? Qt.vector3d(root.edgeFrame.scale, root.edgeFrame.scale, root.edgeFrame.scale)
+                : Qt.vector3d(root.shownScale * root.radialCollapseScale,
+                              root.shownScale * root.radialCollapseScale,
+                              root.shownScale * root.radialCollapseScale)
         Node {
             id: entryFrame
             eulerRotation.z: -root.layoutAngle
@@ -2741,7 +2822,12 @@ Item {
                     : facing.inverted().times(Qt.vector3d(0, 0, -(baseLift + tileLift)))
                 readonly property real openingRadius: root.pedestalDrawn ? openingSpot.radius * pedestalScale : size * 0.4
                 readonly property bool hologramLightShown: root.iconHologram.beam && visual !== null
-                readonly property real footLift: hologramLightShown ? openingInIcon.y + root.hologramLift * size : standFootLift
+                // On an edge panel an icon without a stand is centred on its
+                // place, as on the flat panel, rather than standing on it, and
+                // grows about its middle.
+                readonly property bool edgeCentred: root.edgePanel && !root.pedestalDrawn && !hologramLightShown
+                readonly property real footLift: hologramLightShown ? openingInIcon.y + root.hologramLift * size
+                    : edgeCentred ? -size / 2 : standFootLift
                 readonly property real iconX: hologramLightShown ? openingInIcon.x : pedestalTopX
                 // The lens the hologram's light leaves, in its colour or its
                 // icon's main colour.
@@ -2952,8 +3038,7 @@ Item {
                 onHoverScaleChanged: root.hitTestsChanged()
                 onVisibleChanged: root.hitTestsChanged()
                 readonly property var baseStandPoint: root.generatedPlatform
-                    ? PlatformGeometry.standPoint(reachX, reachY, root.layoutTrackRadius,
-                                                  root.generatedPlatform.track)
+                    ? root.platformPlace(reachX, reachY)
                     : [(reach > 0.001 ? reachX / reach : 0) * root.entryTrackRadius / root.platformScale,
                        (reach > 0.001 ? reachY / reach : 1) * root.entryTrackRadius / root.platformScale]
                 // The path's direction at the icon's place, degrees from x.
@@ -3273,7 +3358,9 @@ Item {
                         // Its foot floats over the stand's top, centred on it,
                         // or over its hologram's light.
                         x: entryNode.iconX
-                        y: entryNode.footLift + entryNode.hologramFloat
+                        y: entryNode.footLift + entryNode.hologramFloat - (entryNode.edgeCentred
+                            ? (entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
+                               * root.number(entryNode.iconMotion, "scaleY", 1) - 1) * entryNode.size / 2 : 0)
                         // Hover magnification and icon motion grow the icon about
                         // its foot, so it stays standing on the pedestal. A turn
                         // in the icon's plane (Spin, Wobble, Swing) becomes a turn

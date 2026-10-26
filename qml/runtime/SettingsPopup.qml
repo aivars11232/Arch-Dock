@@ -1490,6 +1490,12 @@ Window {
                 return fields.find(function(row) { return row.key === key; });
             }).filter(function(row) { return row !== undefined; });
         };
+        // An edge panel's one 3D setting: how far it tilts from the screen's
+        // edge toward the middle.
+        if (isNativePanel()) {
+            rows.push.apply(rows, pick(["scene3DCameraPitch"]));
+            return rows;
+        }
         // Moving and scaling are done by hand, on the desktop; the exact turn stays here.
         rows.push(section(qsTr("Orientation"),
             qsTr("Pitch, yaw and roll turn the platform. Edit on desktop moves, turns and scales it by hand.")));

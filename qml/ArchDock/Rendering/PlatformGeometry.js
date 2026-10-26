@@ -1047,6 +1047,23 @@ function centreLine(shape, segments, radius, overhang) {
                        n: n, m: [n[0], n[1]] })
         }
         runs.push({ closed: false, twisted: true, samples: run })
+    } else if (shape.kind === "bar") {
+        // An edge panel's straight platform: one open run `length` either
+        // side of the middle, along x or, standing, along y, its ends closed
+        // as an arc's are. The band's walls are bevelled unevenly, so its
+        // line runs a little off the middle for the band itself to be
+        // centred.
+        const half = Math.max(0.01, finite(shape.length, 1))
+        const offset = -(outerBevel - innerBevel) / 2
+        const count = Math.max(8, Math.round(finite(segments, 96)))
+        const run = []
+        for (let index = 0; index <= count; ++index) {
+            const along = -half + 2 * half * index / count
+            run.push(shape.vertical
+                ? { c: [offset, -along], m: [1, 0], n: [1, 0, 0] }
+                : { c: [along, offset], m: [0, 1], n: [0, 1, 0] })
+        }
+        runs.push({ closed: false, samples: run })
     } else if (shape.kind === "arc") {
         // An open path's first and last icons stand on its ends: the platform
         // runs on past them by `overhang`, so their pedestals stand on it.
@@ -1168,7 +1185,7 @@ var reliefTriangles = 24000
 function platform(spec) {
     const options = spec || ({})
     const shape = options.shape
-    if (!shape || ["ring", "polygon", "star", "arc", "mobius"].indexOf(shape.kind) < 0)
+    if (!shape || ["ring", "polygon", "star", "arc", "mobius", "bar"].indexOf(shape.kind) < 0)
         return null
     const half = clamp(finite(options.band, 0.11), minimumBand, maximumBand)
     const twisted = shape.kind === "mobius"

@@ -4144,8 +4144,9 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
         QVERIFY2(registry.genericScene3D(*registry.panelDefinition(panelId), {}, {}).has_value(),
                  qPrintable(layout));
     }
-    // Not adapted: an open curve about an off-centre point, a native edge
-    // panel, a straight skin, and a look that ships its own scene.
+    // Not adapted: an open curve about an off-centre point, a straight skin,
+    // and a look that ships its own scene. A native edge panel is: it stands
+    // on a straight platform along its edge.
     for (const QString &layout : {QStringLiteral("semicircle"), QStringLiteral("arc"),
                                   QStringLiteral("fan")})
     {
@@ -4155,7 +4156,7 @@ void PanelRegistryTest::genericSceneAdaptsRadialLooksWithoutAScene()
         QVERIFY(!registry.themeCapabilityProfile(*registry.panelDefinition(panelId))
                      ->rendererTiers.contains(ArchDock::RendererTier::True3D));
     }
-    QVERIFY(!registry.genericScene3D(*registry.panelDefinition(QStringLiteral("bottom")), {}, {}).has_value());
+    QVERIFY(registry.genericScene3D(*registry.panelDefinition(QStringLiteral("bottom")), {}, {}).has_value());
     QVERIFY(registry.applyTheme(panelId, QStringLiteral("mesh-platform-cyan"),
                                 QStringLiteral("complete")));
     projection = registry.themeRuntimeProjection(*registry.panelDefinition(panelId));

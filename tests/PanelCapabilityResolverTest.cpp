@@ -212,6 +212,7 @@ private slots:
     void productionSkinnedTwoDIsAvailableOnSupportedHosts();
     void dynamicGlowRequiresHostAndThemeDeclaration();
     void bakedTwoPointFiveDIsAvailableOnTheFreeHostOnly();
+    void trueThreeDIsAvailableOnEdgePanels();
     void trueThreeDReportsNotInstalled();
     void productionBuildFactsAreNotSettings();
     void trueThreeDReportsDisabledSeparately();
@@ -738,6 +739,61 @@ void PanelCapabilityResolverTest::bakedTwoPointFiveDIsAvailableOnTheFreeHostOnly
     QVERIFY(!nativeChoice->available);
     QCOMPARE(nativeChoice->reason,
              CapabilityReasonCode::RendererHostUnsupported);
+}
+
+// An edge panel can be drawn in 3D, on a straight platform along its edge;
+// baked 2.5D stays the free host's.
+void PanelCapabilityResolverTest::trueThreeDIsAvailableOnEdgePanels()
+{
+    ThemeCapabilityProfile theme = themeFor(
+        QStringLiteral("generated-platform"),
+        {PanelHostKind::FreeDesktop, PanelHostKind::NativeEdge},
+        {PanelLayoutKind::Adaptive},
+        {RendererTier::Procedural2D, RendererTier::True3D},
+        RendererTier::Procedural2D);
+    theme.fallbackRendererTiers = {RendererTier::Procedural2D};
+    PanelDefinition panel = panelFor(PanelHostKind::NativeEdge);
+    panel.surface.rendererTier = QStringLiteral("true3d");
+
+    const CapabilityResolution result = PanelCapabilityResolver::resolve(
+        panel,
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+
+    QVERIFY(result.available);
+    const RendererCandidateDecision *choice = rendererChoiceByTier(
+        result.rendererChoices, RendererTier::True3D);
+    QVERIFY(choice);
+    const bool built = ARCHDOCK_QUICK3D_BUILT != 0 && ARCHDOCK_SCENE3D_BUILT != 0;
+    QCOMPARE(choice->available, built);
+    if (built)
+    {
+        QCOMPARE(result.renderer.effectiveTier,
+                 std::optional<RendererTier>(RendererTier::True3D));
+    }
+    const RendererCandidateDecision *baked = rendererChoiceByTier(
+        result.rendererChoices, RendererTier::Baked2_5D);
+    QVERIFY(baked);
+    QVERIFY(!baked->available);
+
+    // One that opens and closes by a mechanism a generated platform cannot
+    // draw is not offered 3D.
+    PanelDefinition closing = panelFor(PanelHostKind::NativeEdge);
+    closing.presentation.collapseMechanism = QStringLiteral("collapse-horizontal");
+    const CapabilityResolution closingResult = PanelCapabilityResolver::resolve(
+        closing,
+        PanelCapabilityResolver::productionHostProfile(PanelHostKind::NativeEdge),
+        theme,
+        PanelCapabilityResolver::productionRenderers(),
+        PanelCapabilityResolver::productionPlatform());
+    const RendererCandidateDecision *closingChoice = rendererChoiceByTier(
+        closingResult.rendererChoices, RendererTier::True3D);
+    QVERIFY(closingChoice);
+    QVERIFY(!closingChoice->available);
+    if (built)
+        QCOMPARE(closingChoice->reason, CapabilityReasonCode::PresentationMechanismUnavailable);
 }
 
 void PanelCapabilityResolverTest::trueThreeDReportsNotInstalled()

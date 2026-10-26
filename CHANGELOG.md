@@ -23,6 +23,23 @@
   arches' shields, the raptor's dome). A decoration now fits the panel's own
   thickness, and along a bar it runs from one end of the bar to the other,
   its own end shapes inside the bar.
+- **Edge panels can be drawn in 3D.** On a Plasma-held edge panel or an
+  Arch Dock bar, Panel Studio's 3D page offers the 3D switch and one
+  setting, Tilt, 0 to 60 degrees (25 to begin with). The panel is drawn as
+  a straight 3D platform as large as the panel, tilted from its screen edge
+  toward the middle: a bottom panel's upper side, a top panel's lower
+  side, a left panel's right side and a right panel's left side go into
+  the screen. Its icons stay upright, centred on their places, smaller as
+  the platform takes them away, and the platform and its icons stay inside
+  the panel. The panel's own colour still colours the platform. An edge
+  panel that opens and closes is not offered 3D (a generated platform has
+  no parts to open and close with), nor is one wearing a skin. Free panels
+  are unchanged.
+- **No Plasma panel behind an edge panel.** Plasma drew its theme's own
+  panel background behind a Plasma-held edge panel (a white or grey bar in
+  the default theme). While the dock stands in a Plasma panel it now turns
+  that background off, and gives it back if it leaves; Plasma's saved panel
+  settings are not changed.
 
 ## 0.1.1-49 — 2026-10-26
 

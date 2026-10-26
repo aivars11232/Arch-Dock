@@ -379,6 +379,27 @@ PlasmoidItem {
     Plasmoid.title: qsTr("Arch Dock")
     Plasmoid.icon: "org.archdock.ArchDock"
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
+    // A Plasma panel draws its theme's panel background behind its widgets.
+    // The dock draws its panel's look itself, so while it stands in a Plasma
+    // panel that background is turned off, and given back when the dock
+    // leaves. Nothing is saved: Plasma's panel settings stay as they are.
+    readonly property var plasmaPanel: !freeSurface && Plasmoid.containment
+        && Plasmoid.containment.pluginName === "org.kde.panel" ? Plasmoid.containment : null
+    property var heldPlasmaPanel: null
+    property int heldPlasmaPanelHints: 0
+    function holdPlasmaPanelBackground() {
+        if (heldPlasmaPanel === plasmaPanel) return;
+        releasePlasmaPanelBackground();
+        if (!plasmaPanel) return;
+        heldPlasmaPanel = plasmaPanel;
+        heldPlasmaPanelHints = plasmaPanel.backgroundHints;
+        plasmaPanel.backgroundHints = PlasmaCore.Types.NoBackground;
+    }
+    function releasePlasmaPanelBackground() {
+        if (heldPlasmaPanel) heldPlasmaPanel.backgroundHints = heldPlasmaPanelHints;
+        heldPlasmaPanel = null;
+    }
+    onPlasmaPanelChanged: holdPlasmaPanelBackground()
     // One dock per widget. With switch sizes set, Plasma chooses the
     // representation by the widget's size, ignores this preference, and in
     // its compact mode builds the full representation as well, for the
@@ -1856,5 +1877,7 @@ PlasmoidItem {
         root.refresh();
         root.publishPresentationState();
         root.consumePresentationRequest();
+        root.holdPlasmaPanelBackground();
     }
+    Component.onDestruction: root.releasePlasmaPanelBackground()
 }

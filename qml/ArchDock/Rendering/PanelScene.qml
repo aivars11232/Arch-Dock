@@ -2135,6 +2135,7 @@ Item {
         decorationEdge: root.freeHost ? "" : root.screenEdge
         decorationWindow: root.barDecorationWindow
         decorationPanelThickness: root.freeHost || root.inBar ? 0 : root.panelThickness
+        edgePanelThickness: root.freeHost ? 0 : root.inBar ? root.surfaceSpanThickness : root.panelThickness
         iconCentres: root.surfaceIconCentres
         restEntryCentres: root.restEntryCentres
         geometry: root.surfaceSpanned ? root.spannedRendererGeometry : root.rendererGeometry

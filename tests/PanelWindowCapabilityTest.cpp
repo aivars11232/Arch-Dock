@@ -338,6 +338,7 @@ private slots:
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
+    void edgePanelIn3DOffersItsTiltAlone();
     void idleRotateIsOfferedOnThreeDPanelsAlone();
     void platformOffRestoresTheCompleteFlatLook();
     void themeCardsResolveEachThemesOwnRenderer();
@@ -1907,6 +1908,46 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
     if (available)
         QVERIFY(reloaded.panelDefinition(panel)->surface.parameters3D.value("iconSolid").toBool());
+}
+
+// An edge panel drawn in 3D stands on a straight platform along its edge.
+// Its one 3D setting is its tilt from the screen's edge toward the middle,
+// 0 to 60 degrees; nothing else of the 3D page is offered, and the panel's
+// own colour, which colours that platform, stays offered.
+void PanelWindowCapabilityTest::edgePanelIn3DOffersItsTiltAlone()
+{
+    if (!(ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT))
+        QSKIP("Qt Quick 3D is not built in");
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = QStringLiteral("bottom");
+    auto fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    QVERIFY(!fieldKeys(fields).contains("scene3DCameraPitch"));
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"rendererTier", "true3d"}}).value("success").toBool());
+    QCOMPARE(backend.panelRendererConfiguration(panel).value("effectiveRendererTier").toString(),
+             QStringLiteral("true3d"));
+    fields = backend.panelSettingsEditorSnapshot(panel, "studio").value("panelFields").toList();
+    QStringList panel3D;
+    for (const QVariant &value : fields)
+    {
+        const QVariantMap field = value.toMap();
+        const QString key = field.value("key").toString();
+        if (key.startsWith("scene3D") && field.value("section").toString() != QStringLiteral("icons-3d"))
+            panel3D.append(key);
+    }
+    QCOMPARE(panel3D, QStringList{QStringLiteral("scene3DCameraPitch")});
+    const auto tilt = fieldByKey(fields, "scene3DCameraPitch");
+    QCOMPARE(tilt.value("label").toString(), QStringLiteral("Tilt"));
+    QCOMPARE(tilt.value("minimumValue").toDouble(), 0.0);
+    QCOMPARE(tilt.value("maximumValue").toDouble(), 60.0);
+    QVERIFY(fieldKeys(fields).contains("color"));
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"scene3DCameraPitch", 45.0}}).value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("cameraPitch").toDouble(), 45.0);
 }
 
 // Idle rotate turns each icon on its upright axis over its stand, which only
@@ -4166,12 +4207,15 @@ void PanelWindowCapabilityTest::rendererProjectionPreservesConsumedValuesWithout
     }
     QVERIFY(renderer.contains(QStringLiteral("capabilityResolution")));
     QVERIFY(renderer.contains(QStringLiteral("effectiveRendererTier")));
+    // A panel without a theme carries only the small projection of the 3D
+    // platform generated for it: an edge panel's straight one along its edge.
     QCOMPARE(renderer.value(
                  QStringLiteral("themeProjectionStatus")).toString(),
-             QStringLiteral("unavailable"));
+             QStringLiteral("ready"));
     QVERIFY(renderer.value(
         QStringLiteral("themeProjectionError")).toString().isEmpty());
-    QVERIFY(renderer.value(QStringLiteral("themeDefinition")).toMap().isEmpty());
+    QVERIFY(renderer.value(QStringLiteral("themeDefinition")).toMap()
+                .value(QStringLiteral("genericScene3D")).toBool());
     QCOMPARE(renderer.value(
                  QStringLiteral("iconStyleProjectionStatus")).toString(),
              QStringLiteral("ready"));

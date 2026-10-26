@@ -508,6 +508,39 @@ TestCase {
         compare(PlatformGeometry.platform({ shape: null }), null)
     }
 
+    // An edge panel's straight platform (PanelScene3D's edge panels, never a
+    // free panel's layout): one closed solid along its edge, lying or
+    // standing, its band centred on the panel's middle line and as long as
+    // asked.
+    function test_edgePanelBarPlatform_data() {
+        return [{ tag: "lying", vertical: false }, { tag: "standing", vertical: true }]
+    }
+
+    function test_edgePanelBarPlatform(data) {
+        const length = 3.5
+        const mesh = PlatformGeometry.platform({ shape: { kind: "bar", vertical: data.vertical, length: length },
+            band: PlatformGeometry.maximumBand, bend: 0,
+            palette: { top: [0.1, 0.2, 0.3, 1], rim: [0.9, 0.5, 0.2, 1],
+                       wall: [0.05, 0.1, 0.15, 1], under: [0, 0, 0, 1] } })
+        verify(mesh !== null)
+        compare(mesh.shape, "bar")
+        compare(boundaryEdges(mesh).length, 0, "a closed surface")
+        compare(misWound(mesh), 0, "faces outward everywhere")
+        const across = PlatformGeometry.maximumBand + (PlatformGeometry.innerBevel + PlatformGeometry.outerBevel) / 2
+        let lowAcross = Infinity, highAcross = -Infinity, lowAlong = Infinity, highAlong = -Infinity
+        for (const point of mesh.positions) {
+            const a = data.vertical ? point[0] : point[1], b = data.vertical ? point[1] : point[0]
+            lowAcross = Math.min(lowAcross, a)
+            highAcross = Math.max(highAcross, a)
+            lowAlong = Math.min(lowAlong, b)
+            highAlong = Math.max(highAlong, b)
+        }
+        fuzzyCompare(lowAcross, -across, 1e-9)
+        fuzzyCompare(highAcross, across, 1e-9)
+        fuzzyCompare(lowAlong, -length, 1e-9)
+        fuzzyCompare(highAlong, length, 1e-9)
+    }
+
     function test_bubbleIsADomeOverEveryShape() {
         for (const shape of ["rounded", "circle", "square", "squircle", "hexagon", "diamond"]) {
             const outline = PlatformGeometry.tileOutline(shape)

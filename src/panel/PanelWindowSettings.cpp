@@ -927,8 +927,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         case ArchDock::EditorCapability::DynamicTint:
             // A theme's 2D tint capability does not tint its native mesh.
-            // Native colour is the live material control on Panels > 3D.
-            available = tier != ArchDock::RendererTier::True3D
+            // Native colour is the live material control on Panels > 3D. An
+            // edge panel's 3D page holds its tilt alone: the panel's own
+            // colour still colours the platform generated for it.
+            available = (tier != ArchDock::RendererTier::True3D || (!freeHost && generatedPlatform))
                 && controlAvailable(descriptor->editor.capability);
             // A picture covers the whole band in its own colours, and a
             // decoration is drawn in its own.
@@ -1094,7 +1096,10 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 resolution.rendererChoices.cend(), [](const auto &choice) {
                     return choice.tier == ArchDock::RendererTier::True3D && choice.available;
                 });
-            available = freeHost && resolution.available
+            // An edge panel in 3D has one setting of its own: its tilt, how
+            // far it leans from the screen's edge toward the middle.
+            const bool edgeTilt = !freeHost && key == QStringLiteral("scene3DCameraPitch");
+            available = (freeHost || edgeTilt) && resolution.available
                 && resolution.renderer.effectiveTier == ArchDock::RendererTier::True3D
                 && renderer != resolution.rendererChoices.cend();
             if (available)
@@ -1106,6 +1111,16 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (available && key == QStringLiteral("scene3DCameraPitch"))
                     field.insert(QStringLiteral("defaultValue"), theme->value(QStringLiteral("scene3D"))
                         .toMap().value(QStringLiteral("cameraPitch"), 25.0));
+                // It leans one way only, as far as its icons still fit in the
+                // panel (PanelScene3D.edgeTiltLimit).
+                if (available && edgeTilt)
+                {
+                    field.insert(QStringLiteral("label"), QStringLiteral("Tilt"));
+                    field.insert(QStringLiteral("minimumValue"), 0.0);
+                    field.insert(QStringLiteral("maximumValue"), 60.0);
+                    field.insert(QStringLiteral("defaultValue"),
+                        qBound(0.0, field.value(QStringLiteral("defaultValue")).toDouble(), 60.0));
+                }
                 // Only a generated platform has a shape to adjust; a theme's
                 // own mesh is drawn as its theme made it.
                 if (available && *capability == ArchDock::EditorCapability::Scene3DShape)

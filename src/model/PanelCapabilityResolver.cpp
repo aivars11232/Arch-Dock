@@ -799,9 +799,12 @@ HostCapabilityProfile PanelCapabilityResolver::productionHostProfile(
         PanelPresentationMechanism::Split,
         PanelPresentationMechanism::Shutter,
     };
+    // An edge panel can also be drawn in 3D: a straight platform along its
+    // edge, tilted from the screen's edge toward its middle.
     profile.rendererTiers = {
         RendererTier::Procedural2D,
         RendererTier::Skinned2D,
+        RendererTier::True3D,
     };
     return profile;
 }
@@ -979,7 +982,7 @@ QVector<RendererAvailability> PanelCapabilityResolver::productionRenderers()
         {RendererTier::True3D,
          ARCHDOCK_QUICK3D_BUILT != 0,
          true,
-         {PanelHostKind::FreeDesktop},
+         {PanelHostKind::NativeEdge, PanelHostKind::FreeDesktop},
          {QStringLiteral("arch")},
          6,
          true,
@@ -1054,6 +1057,23 @@ CapabilityResolution PanelCapabilityResolver::resolve(
             host,
             renderers,
             platform));
+    }
+    // A 3D panel opens and closes only by its theme's own 3D parts, and a
+    // generated platform has none: an edge panel set to open and close any
+    // other way is not offered 3D (a free panel always stands open).
+    const std::optional<PanelPresentationMechanism> closing =
+        requestedPresentation(definition.presentation);
+    if (closing.has_value() && *closing != PanelPresentationMechanism::Open
+        && !contains(theme.scene3DMechanisms, *closing))
+    {
+        for (RendererCandidateDecision &choice : result.rendererChoices)
+        {
+            if (choice.tier == RendererTier::True3D && choice.available)
+            {
+                choice.available = false;
+                choice.reason = CapabilityReasonCode::PresentationMechanismUnavailable;
+            }
+        }
     }
 
     if (definition.host.kind != host.kind || host.id.trimmed().isEmpty() ||
