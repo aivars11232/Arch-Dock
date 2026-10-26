@@ -61,6 +61,10 @@ Item {
     // On a drawn band each child's stand has its base on the band and the
     // icon stands above it; elsewhere the icon's middle is on the path.
     property bool standsOnPath: false
+    // On a tilted 3D panel, the dock's middle in these coordinates: a child
+    // standing above it (the far side) carries its name above its icon,
+    // away from the ring; a child below it carries it below, as always.
+    property real dockMiddleY: NaN
     property bool outlineFilled: false
     property var outlineStyle: null
     property real outlineOpacity: 0.9
@@ -86,13 +90,15 @@ Item {
     // stays clear under the stand.
     readonly property var standLayout: PlatformGeometry.pedestalLayout(pedestalSettings, iconSize)
     readonly property real cellWidth: Math.max(showNames ? 108 : iconSize, standLayout.width)
-    readonly property real cellHeight: iconSize + standLayout.above + standLayout.below
+    readonly property real cellHeight: iconSize + standLayout.above + standLayout.below + nameHeight
+    // Two lines of a name and its gap from the body; nothing without names.
+    readonly property real nameHeight: showNames ? nameMetrics.height * 2 + 4 : 0
     // The stand's base below the cell's top: on a free panel's path the
     // icon is raised inside its cell and the stand sits about the cell's
     // middle, so the base is not the cell's bottom. Without a stand it is
     // the icon's middle.
-    readonly property real standFoot: cellHeight / 2 + standLayout.standCentre + standLayout.height / 2
-        + (showNames ? nameMetrics.height * 2 + 4 : 0)
+    readonly property real standFoot: (iconSize + standLayout.above + standLayout.below) / 2
+        + standLayout.standCentre + standLayout.height / 2
     // Neighbours along the dock's curve: a name's width apart, or an icon
     // and a gap.
     readonly property real pitch: pathPitch > 0 ? pathPitch
@@ -461,6 +467,7 @@ Item {
             // The icon's drawn size: its depth on a tilted or projected
             // panel, and the growth.
             readonly property real drawnScale: Math.max(0.35, Number(placed.scale) || 1) * grownScale
+            readonly property bool nameAbove: isFinite(root.dockMiddleY) && centreY < root.dockMiddleY
             objectName: "folder-child-" + index
             // The icon's centre travels from the folder icon to its place.
             readonly property real centreX: root.expansionOrigin.x
@@ -508,10 +515,12 @@ Item {
                 // width wherever its child stands along the depth: only the
                 // opening's growth scales it, with the child.
                 x: (parent.width - width) / 2
-                // Below the cell, and below the stand as drawn: the name never
-                // crosses the stand or the icon.
-                y: Math.max((root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale,
-                            iconView.y + iconView.standDrawnBottom) + 4
+                // Below the cell and below the stand as drawn, so the name never
+                // crosses the stand or the icon; above the icon for a child on
+                // the far side of a tilted ring, away from the ring.
+                y: child.nameAbove ? -(height + 4)
+                    : Math.max((root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale,
+                               iconView.y + iconView.standDrawnBottom) + 4
                 width: root.cellWidth
                 visible: root.showNames
                 text: String(child.modelData.displayName || child.modelData.name || "")
@@ -521,7 +530,7 @@ Item {
                 maximumLineCount: 2
                 elide: Text.ElideRight
                 scale: child.grownScale
-                transformOrigin: Item.Top
+                transformOrigin: child.nameAbove ? Item.Bottom : Item.Top
                 style: Text.Outline
                 styleColor: palette.base
             }

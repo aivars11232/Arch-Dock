@@ -1377,8 +1377,11 @@ def run_interaction_matrix(free_panel):
                 problems = []
                 # On a 3D panel the curve keeps clear of the panel as drawn,
                 # its band and icons, so it starts a little further out.
+                # A child stands its own cell's reach outside the curve (its
+                # names or its stand never reach back over the dock), so the
+                # first one begins that much further from the folder.
                 start = (icon_size * 2 + 24 + state["pitch"] * 1.5 if tier == "true3d"
-                         else icon_size + 16 + state["pitch"] / 2 + 10)
+                         else icon_size + 16 + state["pitch"] / 2 + 10) + icon_size * 3
                 if nearest > start:
                     problems.append("the contents do not start at the folder")
                 # The children's middle lies outward of the folder, unless the

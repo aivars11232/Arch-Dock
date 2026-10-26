@@ -1508,15 +1508,19 @@ Item {
             const factor = cameraDistance / depth
             result.push({ x: width / 2 + (sample.at.x + sample.out.x * distance) * factor,
                           y: height / 2 - (sample.at.y + sample.out.y * distance) * factor,
-                          scale: base.depth / (depth - camera.clipNear) })
+                          scale: Math.min(base.biggest, base.depth / (depth - camera.clipNear)) })
         }
         return result
     }
     // The dock's track round the folder in the camera's frame: at each
     // sample where a child's middle is half an icon inside the platform's
-    // rim, and how it moves for each pixel further out.
+    // rim, and how it moves for each pixel further out. A child's size
+    // follows its depth, as the dock's icons' sizes do, but is never bigger
+    // than the dock's nearest icon: the opening is a window before the
+    // scene, and close to the camera the perspective would blow a child up
+    // past anything the dock shows.
     function folderTrackBase(entryIndex, span, count) {
-        const empty = { samples: [], depth: 1 }
+        const empty = { samples: [], depth: 1, biggest: Infinity }
         const node = worldEntries.objectAt(entryIndex)
         if (!rendererReady || !node || !node.inputAnchor || count < 2) return empty
         const anchor = node.inputAnchor
@@ -1547,7 +1551,10 @@ Item {
             const x = Math.cos(turn) * shownScaleX, y = Math.sin(turn) * shownScaleY
             samples.push({ at: frame.at(start * x, start * y), out: frame.step(x, y) })
         }
-        return { samples: samples, depth: root.projectScenePoint(anchor.scenePosition).z }
+        const drawn = projectedEntryGeometry[entryIndex]
+        const tallest = Math.max.apply(null, projectedEntryGeometry.map(function(rect) { return Number(rect.height) || 0 }))
+        return { samples: samples, depth: root.projectScenePoint(anchor.scenePosition).z,
+                 biggest: drawn && drawn.height > 0 && tallest > 0 ? tallest / drawn.height : Infinity }
     }
     // How much of its track the dock's icons get as drawn, against the track
     // in the panel's own pixels, for neighbours that need their drawn size
@@ -1797,6 +1804,26 @@ Item {
             const stride = Math.max(1, Math.floor(mesh.length / 1500))
             for (let index = 0; index < mesh.length; index += stride) {
                 const x = Number(mesh[index][0]), y = Number(mesh[index][1]), z = Number(mesh[index][2])
+                const ahead = -(o.z + (ex.z - o.z) * x + (ey.z - o.z) * y + (ez.z - o.z) * z)
+                if (!(ahead > camera.clipNear + 1e-6)) continue
+                const factor = cameraDistance / ahead
+                points.push({ x: width / 2 + (o.x + (ex.x - o.x) * x + (ey.x - o.x) * y + (ez.x - o.x) * z) * factor,
+                              y: height / 2 - (o.y + (ex.y - o.y) * x + (ey.y - o.y) * y + (ez.y - o.y) * z) * factor })
+            }
+        }
+        // Under a decoration the platform is not drawn: the decoration's
+        // solid is the panel's outline then, its vertices carried through
+        // its frame as the platform's are.
+        if (decorationShown) {
+            const frame = platformDecoration.solidFrame()
+            const seen = function(point) {
+                const local = camera.mapPositionFromScene(point)
+                return { x: local.x, y: local.y, z: local.z }
+            }
+            const o = seen(frame.origin), ex = seen(frame.x), ey = seen(frame.y), ez = seen(frame.z)
+            const flat = platformDecoration.outlineVertices
+            for (let index = 0; index + 2 < flat.length; index += 3) {
+                const x = Number(flat[index]), y = Number(flat[index + 1]), z = Number(flat[index + 2])
                 const ahead = -(o.z + (ex.z - o.z) * x + (ey.z - o.z) * y + (ez.z - o.z) * z)
                 if (!(ahead > camera.clipNear + 1e-6)) continue
                 const factor = cameraDistance / ahead

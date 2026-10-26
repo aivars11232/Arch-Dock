@@ -72,6 +72,12 @@ PlasmaCore.Dialog {
     property bool interactionAllowed: true
     // Measured when the folder opens, in screen coordinates.
     property var screenSamples: []
+    // The dock's middle on the screen while a 3D panel's track is open:
+    // a child above it carries its name above its icon, away from the
+    // ring, the others below.
+    property var screenDockMiddle: null
+    // Whether the track's children stand on the curve by their stands (a 3D panel).
+    property bool trackStandsOnPath: false
     property var screenOutline: null
     property var screenShape: null
     property point screenOrigin: Qt.point(0, 0)
@@ -303,13 +309,14 @@ PlasmaCore.Dialog {
         let shape = null
         // The panel as drawn, on the screen: its outline and its icons.
         const keepOutView = typeof keepOut === "function" ? keepOut() : null
+        const onScreenRect = function(rect) {
+            const a = toScreen(rect.x, rect.y), b = toScreen(rect.x + rect.width, rect.y + rect.height)
+            return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
+                     width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
+        }
         const keep = keepOutView ? {
             hull: (keepOutView.hull || []).map(function(point) { return toScreen(point.x, point.y) }),
-            rects: (keepOutView.rects || []).map(function(rect) {
-                const a = toScreen(rect.x, rect.y), b = toScreen(rect.x + rect.width, rect.y + rect.height)
-                return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
-                         width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
-            })
+            rects: (keepOutView.rects || []).map(onScreenRect)
         } : null
         const rectangles = [{ x: centre.x - iconSize, y: centre.y - iconSize,
                               width: 2 * iconSize, height: 2 * iconSize }]
@@ -327,6 +334,17 @@ PlasmaCore.Dialog {
             })
         }
         if (folderLayout === "track") {
+            // A child's body, its icon with its stand, keeps clear of the dock.
+            // On a 3D panel the body stands on its point of the curve by its
+            // stand's base and is as wide as its icon or stand; elsewhere the
+            // icon's middle is on the point and the whole cell counts. The
+            // name hangs free - above the icon on the far side of a tilted
+            // ring, below the stand elsewhere - and keeps clear as well.
+            const bodyHeight = iconSize + Number(content.standLayout.above || 0) + Number(content.standLayout.below || 0)
+            const bodyWidth = keep ? Math.max(iconSize, Number(content.standLayout.width) || 0) : content.cellWidth
+            const anchorUp = keep ? Number(content.standFoot) || iconSize / 2 : iconSize / 2
+            const nameHeight = Number(content.nameHeight) || 0
+            trackStandsOnPath = keep !== null
             if (typeof trackSamples !== "function") return false
             // The dock's own pitch, not the one a shape opened with before.
             screenShape = null
@@ -334,50 +352,83 @@ PlasmaCore.Dialog {
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {
                 return toScreen(point.x, point.y)
             }) : []
-            // Whether a child at `place` stays on the screen and keeps clear
-            // of the dock: on a 3D panel of the panel as drawn - no child
-            // covers or touches it - elsewhere of the dock's other icons.
-            function onScreen(place) {
+            const middle = typeof dockCentre === "function" ? dockCentre() : null
+            const centreOnScreen = middle ? toScreen(middle.x, middle.y) : null
+            screenDockMiddle = keep && centreOnScreen ? centreOnScreen : null
+            // The child's body and its name at a place on the curve, on the screen.
+            function boxes(place) {
                 const scale = Math.max(0.35, Number(place.scale) || 1)
-                const left = place.x - content.cellWidth * scale / 2, top = place.y - iconSize * scale / 2
-                return left >= area.x && left + content.cellWidth * scale <= area.x + area.width
-                    && top >= area.y && top + content.cellHeight * scale <= area.y + area.height
+                const body = { x: place.x - bodyWidth * scale / 2, y: place.y - anchorUp * scale,
+                               width: bodyWidth * scale, height: bodyHeight * scale }
+                if (!(nameHeight > 0)) return [body]
+                const above = screenDockMiddle !== null && place.y < screenDockMiddle.y
+                return [body, { x: place.x - content.cellWidth / 2, width: content.cellWidth, height: nameHeight,
+                                y: above ? body.y - nameHeight - 4 : body.y + body.height + 4 }]
             }
-            function clear(place) {
-                const scale = Math.max(0.35, Number(place.scale) || 1)
-                const reach = iconSize / 2 + 4
-                const left = place.x - content.cellWidth * scale / 2, top = place.y - iconSize * scale / 2
-                if (!onScreen(place)) return false
-                if (overOther({ x: left, y: top, width: content.cellWidth * scale,
-                                height: content.cellHeight * scale })) return false
-                if (keep) return !LayoutEngine.rectTouchesKeepOut({ x: left, y: top,
-                    width: content.cellWidth * scale, height: content.cellHeight * scale }, keep, keepOutMargin)
-                return others.every(function(icon) {
-                    return left >= icon.x + reach || left + content.cellWidth * scale <= icon.x - reach
-                        || top >= icon.y + reach || top + content.cellHeight * scale <= icon.y - reach
+            // Whether a child at `place` stays on the screen and keeps clear
+            // of the dock. On a 3D panel, behind the dock's middle the child
+            // stands behind the dock as drawn, so its body and its name keep
+            // off the panel's outline and off every icon with its stand; in
+            // front of the middle it stands before the dock, nearer the
+            // viewer, so its body may rise before the band as anything in
+            // front does, but its foot stays outside the outline and neither
+            // its body nor its name covers any icon or stand. On a flat or
+            // baked panel the whole cell keeps off the dock's other icons.
+            const outline = keep ? { hull: keep.hull } : null
+            const footprints = keep ? { rects: keep.rects } : null
+            function onScreen(place) {
+                return boxes(place).every(function(box) {
+                    return box.x >= area.x && box.x + box.width <= area.x + area.width
+                        && box.y >= area.y && box.y + box.height <= area.y + area.height
                 })
             }
-            // The curve steps out of the dock where a child would otherwise
-            // stand on one of its icons: every place a child stands or passes
-            // keeps clear. The step is measured on the screen, point by point
-            // along the curve: on a steeply tilted 3D panel a step on the
-            // panel's own plane looks short on its far side and long on its
-            // near side, so each point steps out on the plane until its child
-            // clears the panel as drawn, up to three icons of the screen, and
-            // the steps change gently from point to point.
+            function clear(place) {
+                if (!onScreen(place)) return false
+                const parts = boxes(place)
+                if (parts.some(overOther)) return false
+                if (!keep) {
+                    const reach = iconSize / 2 + 4
+                    return parts.every(function(box) {
+                        return others.every(function(icon) {
+                            return box.x >= icon.x + reach || box.x + box.width <= icon.x - reach
+                                || box.y >= icon.y + reach || box.y + box.height <= icon.y - reach
+                        })
+                    })
+                }
+                const before = screenDockMiddle !== null && place.y > screenDockMiddle.y
+                if (!before) return parts.every(function(box) {
+                    return !LayoutEngine.rectTouchesKeepOut(box, keep, keepOutMargin)
+                })
+                const foot = { x: place.x, y: place.y, width: 0, height: 0 }
+                return !LayoutEngine.rectTouchesKeepOut(foot, outline, keepOutMargin)
+                    && parts.every(function(box) {
+                        return !LayoutEngine.rectTouchesKeepOut(box, footprints, keepOutMargin)
+                    })
+            }
+            // On a 3D panel the curve keeps as close to the dock as its
+            // children allow, as drawn: each point of the dock's curve steps
+            // out on the panel's plane until the child standing there clears
+            // the panel and its icons on the screen. So the children hug a
+            // tilted ring's drawn oval - just past the rim at the sides, above
+            // the far icons' tiles, and before the near band with their icons
+            // below the near icons' tiles. Every point within
+            // half a pitch steps out with the farthest of its neighbours, so a
+            // child's whole width stands clear, and between neighbouring
+            // points the step changes by no more than their own distance
+            // apart: the curve bends, it never kinks. A flat or baked panel
+            // keeps one step for the whole curve, within 64 px: a near miss
+            // beats a curve whose ends flare away from the dock.
             // The curve reaches as far round the dock as the children need:
             // a quarter of the way at first on a 3D panel, a third on a flat
             // or baked one, then further, up to three quarters; the rest
             // scroll in with the wheel. A curve every child keeps clear of the
-            // icons on is preferred. When none does, the first that keeps
-            // every child on the screen is used, and failing that the first.
+            // icons on is preferred. When none does, the nearest and shortest
+            // that keeps every child on the screen is used, and failing that
+            // the first: never the furthest.
             // A reach chosen in the Studio is the curve's own span; all the
             // way round stops short of closing, so the two ends keep apart.
             const stride = keep ? Math.max(4, iconSize / 4) : 8
-            // On a 3D panel a point may step out up to three icons of the screen;
-            // a flat or baked panel keeps the step within 64 px, where a near miss
-            // beats a curve whose ends flare away from the dock.
-            const screenReach = keep ? 3 * iconSize : 64, mostSteps = keep ? 96 : 16
+            const mostSteps = keep ? Math.ceil(6 * iconSize / stride) : 8
             const chosenSpan = ({ quarter: Math.PI / 2, third: 2 * Math.PI / 3, half: Math.PI,
                                   "three-quarters": 3 * Math.PI / 2, full: 1.9 * Math.PI })[trackReach]
             const firstSpan = chosenSpan || (keep ? Math.PI / 2 : 2 * Math.PI / 3)
@@ -386,12 +437,31 @@ PlasmaCore.Dialog {
                 const point = toScreen(sample.x, sample.y)
                 return { x: point.x, y: point.y, scale: sample.scale }
             }
-            let layout = null, chosen = null, cleared = null, nearest = null, first = null
-            for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
-                // The curve at each step out, projected; a step that loses a
-                // point behind the camera ends the stepping.
+            // The children along a curve: with a reach chosen they spread
+            // from one end of it to the other; more than fit keep their
+            // spacing and the rest scroll in.
+            const settle = function(curve) {
+                let pitch = content.pitch
+                if (chosenSpan && content.entries.length > 1) {
+                    let length = 0
+                    for (let index = 1; index < curve.length; ++index)
+                        length += LayoutEngine.trackRun(curve[index - 1], curve[index], false)
+                    pitch = Math.max(content.pitch, length / (content.entries.length - 1))
+                }
+                const laid = LayoutEngine.folderTrackLayout(curve, content.entries.length, pitch, 0)
+                const half = LayoutEngine.folderTrackLayout(curve, content.entries.length, pitch, 0.5)
+                const places = laid.entries.concat(half.entries).filter(function(placed) {
+                    return placed.visibility > 0
+                })
+                return { samples: curve, layout: laid, pitch: chosenSpan ? pitch : 0, places: places }
+            }
+            // The dock's curve with each point stepped out until its child
+            // clears, the steps evened out along the curve as drawn.
+            const hugging = function(span) {
                 const rows = [trackSamples(0, span).map(project)]
-                if (rows[0].length < 2) return false
+                if (rows[0].length < 2) return null
+                // The curve at each step out; a step that loses a point
+                // behind the camera ends the stepping.
                 const row = function(step) {
                     while (rows.length <= step) {
                         const next = trackSamples(rows.length * stride, span).map(project)
@@ -400,71 +470,70 @@ PlasmaCore.Dialog {
                     }
                     return rows[step]
                 }
-                const steps = rows[0].map(function(start, index) {
-                    let step = 0
-                    for (; step < mostSteps; ++step) {
+                const distance = function(index, step) {
+                    const point = rows[step][index], start = rows[0][index]
+                    return Math.hypot(point.x - start.x, point.y - start.y)
+                }
+                const needed = rows[0].map(function(start, index) {
+                    for (let step = 0; step <= mostSteps; ++step) {
                         const points = row(step)
-                        if (!points) return Math.max(0, step - 1)
-                        const point = points[index]
-                        if (clear(point) || Math.hypot(point.x - start.x, point.y - start.y) >= screenReach) break
+                        if (!points) break
+                        if (clear(points[index])) return step
                     }
-                    return Math.min(step, rows.length - 1)
+                    return Math.min(mostSteps, rows.length - 1)
                 })
-                // Gentle, and back at the dock within a child's pitch: between
-                // neighbouring points the step changes by no more than 1.2
-                // times their own distance apart, so the curve bends without
-                // a kink and a far side stepped out does not lift the rest of
-                // the curve off the dock; the points between two steps are
-                // taken between the two rows.
-                let spacing = 0
+                const along = [0]
                 for (let index = 1; index < rows[0].length; ++index)
-                    spacing += Math.hypot(rows[0][index].x - rows[0][index - 1].x, rows[0][index].y - rows[0][index - 1].y)
-                spacing /= Math.max(1, rows[0].length - 1)
-                const perPoint = Math.max(0.05, 1.2 * spacing / stride)
-                for (let index = 1; index < steps.length; ++index)
-                    steps[index] = Math.max(steps[index], steps[index - 1] - perPoint)
-                for (let index = steps.length - 2; index >= 0; --index)
-                    steps[index] = Math.max(steps[index], steps[index + 1] - perPoint)
-                samples = steps.map(function(step, index) {
-                    const last = rows.length - 1
-                    const below = Math.min(last, Math.floor(step)), above = Math.min(last, below + 1)
-                    const part = Math.min(1, Math.max(0, step - below))
+                    along.push(along[index - 1] + Math.hypot(rows[0][index].x - rows[0][index - 1].x,
+                                                             rows[0][index].y - rows[0][index - 1].y))
+                const halfPitch = content.pitch / 2
+                const wanted = needed.map(function(step, index) {
+                    let most = step
+                    for (let other = index - 1; other >= 0 && along[index] - along[other] <= halfPitch; --other)
+                        most = Math.max(most, needed[other])
+                    for (let other = index + 1; other < needed.length && along[other] - along[index] <= halfPitch; ++other)
+                        most = Math.max(most, needed[other])
+                    return distance(index, Math.min(most, rows.length - 1))
+                })
+                for (let index = 1; index < wanted.length; ++index)
+                    wanted[index] = Math.max(wanted[index], wanted[index - 1] - (along[index] - along[index - 1]))
+                for (let index = wanted.length - 2; index >= 0; --index)
+                    wanted[index] = Math.max(wanted[index], wanted[index + 1] - (along[index + 1] - along[index]))
+                // Each point where it is that far out, between two of the rows.
+                return wanted.map(function(want, index) {
+                    let below = 0
+                    while (below + 1 <= mostSteps && row(below + 1) && distance(index, below + 1) < want) ++below
+                    const above = below + 1 <= mostSteps && row(below + 1) ? below + 1 : below
                     const a = rows[below][index], b = rows[above][index]
+                    const from = distance(index, below), to = distance(index, above)
+                    const part = to > from ? Math.min(1, Math.max(0, (want - from) / (to - from))) : 0
                     return { x: a.x + (b.x - a.x) * part, y: a.y + (b.y - a.y) * part,
                              scale: a.scale + (b.scale - a.scale) * part }
                 })
-                // With a reach chosen the children spread from one end of it
-                // to the other; more than fit keep their spacing and the rest
-                // scroll in.
-                let pitch = content.pitch
-                if (chosenSpan && content.entries.length > 1) {
-                    let length = 0
-                    for (let index = 1; index < samples.length; ++index)
-                        length += LayoutEngine.trackRun(samples[index - 1], samples[index], false)
-                    pitch = Math.max(content.pitch, length / (content.entries.length - 1))
+            }
+            let layout = null, chosen = null, cleared = null, nearest = null, first = null
+            spans: for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
+                for (let step = 0; step <= mostSteps; ++step) {
+                    const curve = keep ? hugging(span) : trackSamples(step * stride, span).map(project)
+                    if (!curve || curve.length < 2) return false
+                    chosen = settle(curve)
+                    if (!first) first = chosen
+                    if (!nearest && chosen.places.every(onScreen)) nearest = chosen
+                    if (chosen.places.every(clear)) {
+                        cleared = chosen
+                        if (!chosen.layout.windowed) break spans
+                        break
+                    }
+                    // A 3D panel's curve is already as near as it can be.
+                    if (keep) break
                 }
-                layout = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0)
-                const half = LayoutEngine.folderTrackLayout(samples, content.entries.length, pitch, 0.5)
-                const places = layout.entries.concat(half.entries).filter(function(placed) {
-                    return placed.visibility > 0
-                })
-                chosen = { samples: samples, layout: layout, pitch: chosenSpan ? pitch : 0 }
-                if (!first) first = chosen
-                if (!nearest && places.every(onScreen)) nearest = chosen
-                if (!places.every(clear)) continue
-                cleared = chosen
-                if (!layout.windowed) break
             }
             chosen = cleared || nearest || first || chosen
             samples = chosen.samples
             trackPitch = chosen.pitch || 0
             layout = chosen.layout
-            for (const placed of layout.entries.concat(layout.ends || [])) {
-                const scale = Math.max(0.35, Number(placed.scale) || 1)
-                rectangles.push({ x: placed.x - content.cellWidth * scale / 2,
-                                  y: placed.y - iconSize * scale / 2,
-                                  width: content.cellWidth * scale, height: content.cellHeight * scale })
-            }
+            for (const placed of layout.entries.concat(layout.ends || []))
+                for (const box of boxes(placed)) rectangles.push(box)
         } else {
             trackPitch = 0
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {
@@ -647,6 +716,7 @@ PlasmaCore.Dialog {
         opened: root.visible
         // The path where the window really is: Plasma may keep the window
         // inside the screen, and the contents still stand where they belong.
+        dockMiddleY: root.screenDockMiddle ? root.local(root.screenDockMiddle).y : NaN
         samples: root.screenSamples.map(function(sample) {
             const point = root.local(sample)
             return { x: point.x, y: point.y, scale: sample.scale }
@@ -656,7 +726,7 @@ PlasmaCore.Dialog {
         pathCapacity: root.screenShape !== null ? Number(root.screenShape.capacity || 0) : 0
         pathPitch: root.screenShape !== null ? Number(root.screenShape.pitch || 0) : root.trackPitch
         measureAsDrawn: root.screenShape !== null && root.screenShape.projected === true
-        standsOnPath: root.screenShape !== null && root.screenShape.standsOnPath === true
+        standsOnPath: root.screenShape !== null ? root.screenShape.standsOnPath === true : root.trackStandsOnPath
         ringLimits: root.screenShape !== null && root.screenShape.ringCapacities ? root.screenShape.ringCapacities : []
         lobedPath: root.screenShape !== null && root.screenShape.lobes === true
         gridCells: root.screenShape !== null && root.screenShape.grid ? ({

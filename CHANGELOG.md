@@ -13,15 +13,23 @@
 - **3D icons on 3D panels.** The 3D icons switch now reaches a true-3D
   panel's scene; since 0.1.1-27 it had turned the solids on only for flat
   panels, so a 3D panel kept flat pictures whatever the switch said.
-- **Folder openings on tilted panels.** "Along the dock" now steps out of
-  the dock point by point as seen on the screen: on a steeply tilted 3D
-  ring the far side stepped out on the panel's plane but hardly moved on
-  the screen, so every curve failed the clearance test and the children
-  were put back on the rim, over the icons. On a drawn band (a fan's arc,
-  an arc, a ring) each child stands with its stand's base on the band and
-  the icon above it, at every tilt. The children's names keep the dock's
-  own letter size wherever they stand along the depth, instead of swelling
-  on the near side and shrinking on the far side.
+- **Folder openings on tilted panels.** "Along the dock" hugs a 3D panel
+  as drawn: each point of the dock's curve steps out on the panel's plane
+  only as far as the child standing there needs to clear the panel and its
+  icons on the screen. On a steeply tilted ring the children stand just
+  past the rim at the sides, above the far icons' tiles with their names
+  above them, away from the ring, and before the near band with their
+  icons below the near icons' tiles, on a curve that bends without kinks.
+  Before, one step served the whole curve: on a steep ring the far side
+  stepped out on the plane but hardly moved on the screen, so every curve
+  failed and the children were put back on the rim, over the icons. The
+  panel's outline now comes from a panel decoration's own solid while one
+  is shown (the platform under it is not drawn, so the children had only
+  the icons to keep off), and a child in front of the dock is drawn no
+  bigger than the dock's nearest icon. On a drawn band (a fan's arc, an
+  arc, a ring) each child stands with its stand's base on the band and the
+  icon above it, at every tilt; the names sit below the stand as drawn and
+  keep the dock's own letter size wherever they stand along the depth.
 - **A hover moves the hovered icon alone.** The magnification's reach is
   1 icon by default (it was 2.4, so two neighbours on each side grew, lit
   up and their pedestals glowed with every hover); a stored reach of 2.4,

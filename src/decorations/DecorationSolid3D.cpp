@@ -35,6 +35,7 @@ void DecorationSolid::refresh()
     const std::shared_ptr<const void> now = tubes ? std::shared_ptr<const void>(swept) : std::shared_ptr<const void>(relief);
     if (now == m_shown && now) return;
     m_shown = now;
+    m_relief = relief;
     clear();
     const std::vector<float> *vertices = relief ? &relief->vertices : swept ? &swept->mesh.vertices : nullptr;
     const std::vector<quint32> *indices = relief ? &relief->indices : swept ? &swept->mesh.indices : nullptr;
@@ -56,6 +57,24 @@ void DecorationSolid::refresh()
         else setBounds(swept->mesh.minimum, swept->mesh.maximum);
     }
     update();
+}
+
+QVariantList DecorationSolid::outline(int most) const
+{
+    QVariantList points;
+    if (!m_relief) return points;
+    const auto &vertices = m_relief->vertices;
+    const int stride = ArchDock::ReliefMesh::stride;
+    const int count = int(vertices.size() / size_t(stride));
+    const int step = qMax(1, count / qMax(1, most));
+    for (int index = 0; index < count; index += step)
+    {
+        const float *vertex = vertices.data() + size_t(index) * size_t(stride);
+        points.append(qreal(vertex[0]));
+        points.append(qreal(vertex[1]));
+        points.append(qreal(vertex[2]));
+    }
+    return points;
 }
 
 DecorationMap::DecorationMap(QQuick3DObject *parent)

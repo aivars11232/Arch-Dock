@@ -102,6 +102,16 @@ Node {
     }
     readonly property int triangleCount: decorationBaker.triangleCount
     property alias baker: decorationBaker
+    // The decoration's outline as drawn, for what keeps clear of it: about
+    // six hundred of its solid's vertices as one flat list of x, y, z in the
+    // solid's own frame, read once per bake, and the solid's frame in the
+    // scene - its origin and a unit step along each of its axes - to carry
+    // them with.
+    readonly property var outlineVertices: ready && decorationBaker.revision >= 0 ? solidGeometry.outline(600) : []
+    function solidFrame() {
+        const seen = function(x, y, z) { return solid.mapPositionToScene(Qt.vector3d(x, y, z)) }
+        return { origin: seen(0, 0, 0), x: seen(1, 0, 0), y: seen(0, 1, 0), z: seen(0, 0, 1) }
+    }
 
     // The centre line in the decoration's pixels (the scene's, y down as
     // on a flat panel): a closed shape's runs joined round, an arc's one run.
@@ -277,7 +287,7 @@ Node {
             objectName: "mesh-platform-decoration"
             visible: root.ready
             pickable: true
-            geometry: DecorationSolid { baker: decorationBaker }
+            geometry: DecorationSolid { id: solidGeometry; baker: decorationBaker }
             materials: root.hologram ? hologramSolid : surfaceMaterial
         }
         // What is round all the way round (a trunk and its branches), as

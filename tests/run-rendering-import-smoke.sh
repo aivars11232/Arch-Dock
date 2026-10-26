@@ -1609,7 +1609,9 @@ run_outer() {
     require_command python3
     if [[ "${ARCHDOCK_RENDERING_INTERACTIONS:-}" == '1' ]]; then
         require_command setpriv
-        python3 -c 'import ctypes, gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk, Gio; ctypes.CDLL("libei.so.1")'
+        # The interaction script also reads the pictures it takes (PySide6).
+        python3 -c 'import ctypes, gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk, Gio; ctypes.CDLL("libei.so.1"); import PySide6.QtGui' \
+            || { echo "The interaction smokes need python3 with PyGObject, libei and PySide6 (python3 on PATH)." >&2; exit 1; }
     fi
 
     local build_dir="${ARCHDOCK_BUILD_DIR:-$ARCHDOCK_RENDERING_PROJECT_ROOT/build}"

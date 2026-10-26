@@ -1825,7 +1825,7 @@ Item {
         if (!freeHost || folderIndex < 0 || folderIndex >= entryCount) return null
         const mesh = surfaceLoader.true3DReady ? surfaceLoader.true3DItem : null
         const plane = mesh && mesh.folderPlane ? mesh.folderPlane(folderIndex) : null
-        if (!plane) return null
+        if (!plane) return bakedFolderPlane(folderIndex)
         const drawn = mesh.projectedEntryGeometry ? mesh.projectedEntryGeometry[folderIndex] : null
         const size = drawn ? drawn.height / Math.max(1, layoutGeometry.iconSize) : 1
         const sized = function(map) {
@@ -1842,6 +1842,43 @@ Item {
                  } }
     }
 
+    // A baked platform's plane for a folder's shapes: the artwork is the
+    // platform seen at its tilt, squashed about the dock's middle by the
+    // tilt's factor, so the plane is the drawn circle unsquashed, and a
+    // rise above it shows lifted as the tilt lifts it. The shapes then lie
+    // on the picture's own tilt, as they do on a true 3D panel. Null on a
+    // flat panel, which has no tilt.
+    function bakedFolderPlane(folderIndex) {
+        const metrics = bakedMetadataUsable ? bakedTrackMetrics : null
+        if (!metrics || !(metrics.radiusX > 0)) return null
+        const ratio = Math.max(0.05, Math.min(1, Number(metrics.tiltFactor) || metrics.radiusY / metrics.radiusX))
+        const lift = Math.sqrt(Math.max(0, 1 - ratio * ratio))
+        const centre = dockCentre()
+        const half = layoutGeometry.iconSize / 2
+        const onPlane = function(point) { return { x: point.x - centre.x, y: (point.y - centre.y) / ratio } }
+        const output = entryGeometryAt(folderIndex)
+        if (!output || !output.position) return null
+        const folder = onPlane({ x: output.position.x + half, y: output.position.y + half })
+        const radius = Math.hypot(folder.x, folder.y)
+        if (!(radius > 0)) return null
+        const ux = folder.x / radius, uy = folder.y / radius
+        // The platform's rim: the artwork's own half width about the middle.
+        const rim = Math.max(radius, metrics.platform && metrics.platform.width > 0
+            ? metrics.platform.width / 2 : radius + half)
+        const view = function(x, y, h) {
+            return { x: centre.x + x, y: centre.y + y * ratio - (Number(h) || 0) * lift, scale: 1 }
+        }
+        const icons = []
+        for (let index = 0; index < entryCount; ++index) {
+            const geometry = entryGeometryAt(index)
+            if (geometry && geometry.position)
+                icons.push(onPlane({ x: geometry.position.x + half, y: geometry.position.y + half }))
+        }
+        return { origin: { x: ux * rim, y: uy * rim }, outward: { x: ux, y: uy }, radius: rim, icons: icons,
+                 rimAt: function() { return rim }, toView: view,
+                 // No perspective: the plane is the same everywhere.
+                 alignedAt: function() { return view } }
+    }
     // What a 3D panel's opened folder keeps clear of - the platform as
     // drawn and its icons with their stands (PanelScene3D.folderKeepOut) -
     // or null on any other panel.

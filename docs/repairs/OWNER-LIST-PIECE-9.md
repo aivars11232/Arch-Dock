@@ -1323,3 +1323,73 @@ degrees; evidence `OPENING-TILT-*` in the audit folder, pictures 93-94.
   can fail silently while the tests run on - join with `&&`. A capability-bearing KWin keeps `/proc/<pid>/exe` and
   `environ` private: the pointer tool verifies it by name and socket. An
   angular-gap list named `gaps` shadowed the spacing gaps: renamed.
+- The owner's last X (the opening's lower end too far at 60 degrees) and
+  "text must not overlay pedestals or icons": a probe of the curve search
+  showed every keep-out rectangle a screen wide - the stand's foot had been
+  taken from a stand node whose scene position resolves at the platform's
+  origin. The foot is the entry's own place lowered by its stand's height,
+  through the entry's parent frame; rectangles are 57-86 x 95-141 px now and
+  the near end steps 2-3 strides where it stepped 8-20. Names sit below the
+  stand as drawn (the icon scene exposes its drawn bottom; the stand is
+  drawn a little past the layout's foot). Picture 99. Lesson: a Rendering
+  module change needs a rebuild before a replica - only the widget's QML is
+  copied from the source.
+- 2026-10-26, the owner's marks on the 60-degree pictures ("Top right
+  bottom is too far, and bottom left is also too far", a red line hugging
+  the ring where the children should stand; then ticks on the three
+  far-side openings and X on the three near-side ones, "with x too far").
+  Found, not guessed, with a probe that reports what blocks each curve
+  point at each step (`folder-instrument.py` in the audit tools):
+  1. The search kept one distance for the whole curve, set by its tightest
+     spot; on a 60-degree ring that spot is behind the far icons' tiles,
+     so the sides and the near end floated 4-6 icons out. Each point of
+     the dock's curve now steps out on the panel's plane only as far as
+     the child standing there needs to clear the panel and its icons on
+     the screen (the child's real body, its icon or stand wide, not the
+     108 px name cell; its name as a box of its own, above the icon on the
+     far side); every point within half a pitch steps out with the
+     farthest of its neighbours and the step changes by no more than the
+     points' own distance apart, so the curve bends without kinks.
+  2. The keep-out had no outline at all under a panel decoration: the
+     owner's ring is the "Collective Hull" decoration, and the platform the
+     outline came from is not drawn under a decoration. The decoration's
+     solid now hands out its vertices (`DecorationSolid.outline`), the
+     decoration maps them into the scene (`outlineInScene`), and the scene
+     projects them into the keep-out's hull as it does the platform mesh.
+     The probe showed the hull's box empty for five of six openings, and
+     the ring's box (325 x 186 px) once the outline was in.
+  3. The camera's perspective drew a child in front of the ring up to 2.75
+     times its size (the dock's own icons span 0.68-1.5), so its body needed
+     that much more room below the near icons. A child is now drawn no
+     bigger than the dock's nearest icon (`folderTrackBase` caps the depth
+     scale).
+  4. In front of the dock's middle a child stands before the dock, nearer
+     the viewer: its foot stays outside the outline and its body and name
+     cover no icon or stand, but it may rise before the band as anything
+     in front does. Behind the middle the whole body and name keep off the
+     outline and every icon with its stand, as before. The tighter rule
+     tried on the way (only the icons' tiles kept clear in front) put a
+     child's icon over the bottom icon's bowl, an overlay, and was dropped.
+  Picture 100 (before: the crossed concentric curve; after: the three
+  near-side openings); picture 101 (25 degrees in true 3D: the track at
+  three folders, the ring and the fan). The far-side openings, the ring
+  and the fan are as ticked (replica runs `FINAL11-60`, `FINAL14-60`; the
+  25-degree true-3D and flat runs `FINAL14-25`, `FINAL14-flat`, the flat
+  tier unchanged). Replica lesson: without
+  `OPENING_PITCH` the runner's "3d-*" pictures are the copied panel's own
+  tier (flat for the owner's ring); the 3D check at 25 degrees needs
+  `OPENING_PITCH=25`.
+  Tests on the final build (`final-focused-tests-16..20.log`):
+  `panel-model-test`, `renderer-capability-software-test`,
+  `renderer-parity-test`, `panel-capability-resolver-test`,
+  `folder-content-model-test`, `folder-expansion-test`, `folder-easing-test`,
+  `folder-interaction-smoke`, `folder-anchor-smoke`,
+  `panel-window-capability-test`, `studio-navigation-test`,
+  `capability-model-test` and `studio-truth-matrix-smoke` (26/26, 445 s)
+  pass. The truth matrix crashed twice on the way with the known Qt Quick
+  3D layer crash (`QSGRhiLayer::grab`, open item) before passing. The two
+  folder smokes need PySide6 for `python3`: the system package was removed
+  on 2026-09-13, so they run with the audit venv first on PATH; the smoke
+  script now names PySide6 in its requirement check. One run tripped on
+  `session_seconds: unbound variable` after the matrix had passed; it did
+  not recur in the next two runs.

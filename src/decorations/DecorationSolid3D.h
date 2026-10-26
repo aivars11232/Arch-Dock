@@ -33,6 +33,11 @@ public:
     void setBaker(QObject *baker);
     QString part() const { return m_part; }
     void setPart(const QString &part);
+    // The solid's vertices, at most about `most` of them spread evenly
+    // through the mesh, as one flat list of x, y, z in the solid's own
+    // frame: enough for the outline of the decoration as drawn, which a
+    // folder's opening keeps clear of. Empty for the tubes.
+    Q_INVOKABLE QVariantList outline(int most) const;
 
 signals:
     void bakerChanged();
@@ -45,6 +50,7 @@ private:
     QMetaObject::Connection m_baked;
     QString m_part = QStringLiteral("relief");
     std::shared_ptr<const void> m_shown;
+    std::shared_ptr<const ArchDock::ReliefMesh> m_relief;
 };
 
 // One of a solid decoration's surface maps as a texture: "albedo",
