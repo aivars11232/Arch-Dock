@@ -891,7 +891,7 @@ beyond either end stays in the scene with zero opacity and no pointer input.
 
 `expansionGeometry(…, { side, lean })` lays every popup layout out in the frame
 of the side it opens on (`left`, `right`, `top`, `bottom`): the Fan and Arc half
-circle bulges away from the folder, Ring and Stack begin beside it, and the
+circle bulges away from the folder, a Ring begins beside it, and the
 returned `anchor` says where the folder stands on the popup's near edge.
 Without a side the original right-opening frame is kept.
 `FolderExpansionHost` chooses the side when the folder opens: a native panel

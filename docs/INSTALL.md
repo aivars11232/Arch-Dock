@@ -7,7 +7,7 @@ be installed together.
 ## The simple way: the released package
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-48/arch-dock-0.1.1-48-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-49/arch-dock-0.1.1-49-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 
@@ -620,16 +620,14 @@ faces out of it:
   the folder and the children on its arc. **Fan opening** (40 to 160 degrees,
   90 by default) sets how wide it opens.
 - **Grid**: rows of children in a popup beside the folder.
-- **Stack**: a straight line of children from the folder outward. **Stack
-  length** (2 to 12, 5 by default) sets how many show at once.
 - **Arc**: the children on an arc centred on the folder, all at one distance
   from it.
 - **Ring**: a second circle beside the folder with the children on it. **Ring
   size** is **Small** (just big enough for the children) or **Same as panel**
   (the dock's own radius, offered on panels that have one).
 
-Fan opening, Stack length and Ring size appear only while their layout is
-chosen. Scrolling over the contents moves them along their path: one wheel
+Fan opening and Ring size appear only while their layout is chosen, and
+Along the dock reach while Along the dock is. Scrolling over the contents moves them along their path: one wheel
 notch, or one child's distance of touchpad scrolling, moves them one place,
 and a child that leaves one end comes back at the other; on a ring they go
 round. In Grid one notch moves one row. On a free panel with a curved layout,

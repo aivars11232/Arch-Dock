@@ -797,12 +797,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Only launcher and hybrid content take drops, and folders arrive
             // by being dropped.
             available = droppedContent;
-            // A free panel opens its folders as a fan, a stack or a ring of
-            // its own, each with its setting, shown while that layout is
-            // chosen; an edge panel's folders open a popup.
+            // A free panel opens its folders as a fan or a ring of its own,
+            // or along the dock, each with its setting, shown while that
+            // layout is chosen; an edge panel's folders open a popup.
             static const QHash<QString, QString> shapeSettings{
                 {QStringLiteral("folderFanOpening"), QStringLiteral("fan")},
-                {QStringLiteral("folderStackLength"), QStringLiteral("stack")},
                 {QStringLiteral("folderRingSize"), QStringLiteral("ring")},
                 {QStringLiteral("folderTrackReach"), QStringLiteral("track")},
             };
@@ -1486,7 +1485,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // A folder opens as a fan, a grid or a ring, on a curved free
             // panel along the dock too (an arc is the same opening), and on
             // a free panel as a Möbius band; an edge panel's popup draws no
-            // band. One saved as a stack opens as a fan.
+            // band. A stack saved by an older version opens as a fan.
             choices = {QStringLiteral("fan"), QStringLiteral("grid"), QStringLiteral("ring")};
             if (freeHost && curvedLayout(candidate.layout.pathType))
             {

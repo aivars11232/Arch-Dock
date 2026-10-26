@@ -1831,6 +1831,9 @@ follow-up `3b63b47`) and rechecked on a fresh clone; its report is
 packaged or installed: the PC still runs 0.1.1-11, and the package for this
 work comes with ADREP-TASK-005.
 
+- (The Stack folder layout and Stack length were removed on 2026-10-26, on
+  the owner's decision; a saved stack opens as a fan. The lines below are the
+  state before that.)
 - A free panel opens Fan, Arc, Stack and Ring on a path of their own outside
   the dock, in the transparent window Along the dock already used
   (`FolderTrackHost`, `FolderTrack`); `LayoutEngine.folderShape()` builds them

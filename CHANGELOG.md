@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.1-49 — 2026-10-26
+
+- **The Star layout is the Star of David.** Two equilateral triangles laid
+  over each other: six tips, the notches where the triangles' edges cross.
+  Only the shape changed; the star is always six-pointed now, so Polygon
+  sides is offered for the Polygon layout alone. Flat, baked and 3D panels
+  draw the same star and stand the icons on it.
+- **Stack removed.** The Stack folder layout and its Stack length setting are
+  gone from free and edge panels alike, on the owner's decision; a panel
+  saved with a stack opens its folders as a fan.
+- **Along the dock on a flat or baked panel** opens as it did in 0.1.1-47:
+  one step out of the dock, the children's cells clear of the dock's icons.
+  0.1.1-48 had added the names to that test, which no step within its range
+  could pass, so the children fell back to the base distance, too close to
+  the ring.
+- **A 3D panel's decoration while the dock turns.** A turning 3D panel
+  (Panels > Motion) showed no decoration until the turning stopped: the
+  decoration was worked out round the icons' drawn places, which move
+  every frame as the icons travel, so its bake started over sixty times a
+  second and never ended, and the baker's thread worked flat out meanwhile.
+  The decoration is now worked out round the icons' rest places, as on a
+  flat panel, and the icons travel over it.
+- **Along the dock on a 3D panel:** a child's standing point glides round
+  the ring. Behind the dock's middle a child stands by its stand's base, its
+  body rising behind the ring; before the middle it carries its icon on the
+  curve with its stand below, as anything standing before the ring does, so
+  the near-side children hug the ring instead of dropping a body's height
+  below it; between, the point glides with the child's height across the
+  dock, so a child scrolled round the ring never jumps.
+
 ## 0.1.1-48 — 2026-10-26
 
 - **Crash protection.** Arch Dock's two programs (`arch-dock`, `arch-dock-bars`)

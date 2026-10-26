@@ -264,6 +264,8 @@ function shapeSides(layout, fallback) {
     if (layout === "pentagon") return 5;
     if (layout === "hexagon") return 6;
     if (layout === "octagon") return 8;
+    // The star is the six-pointed Star of David, whatever the corner count.
+    if (layout === "star") return 6;
     return clamp(Math.round(Number(fallback || 6)), 3, 12);
 }
 
@@ -430,9 +432,12 @@ function polygonPoint(progress, sides, radius) {
     };
 }
 
-// A star's notches lie at this share of its tips' radius. A 3D panel's
-// generated platform follows the same star (PlatformGeometry.js).
-var starInnerRadius = 0.46;
+// The star is the Star of David: two equilateral triangles laid over each
+// other, six tips with the notches where the triangles' edges cross,
+// 1 / √3 of the way out from the middle to a tip. A 3D panel's generated
+// platform follows the same star (PlatformGeometry.js).
+var starPoints = 6;
+var starNotchRadius = 1 / Math.sqrt(3);
 
 function starPoint(progress, points, radius) {
     const vertices = Math.max(3, points) * 2;
@@ -440,7 +445,7 @@ function starPoint(progress, points, radius) {
     const segment = Math.floor(segmentPosition) % vertices;
     const fraction = segmentPosition - Math.floor(segmentPosition);
     function vertex(index) {
-        const vertexRadius = index % 2 === 0 ? radius : radius * starInnerRadius;
+        const vertexRadius = index % 2 === 0 ? radius : radius * starNotchRadius;
         const radians = -Math.PI / 2 + index * Math.PI * 2 / vertices;
         return {
             x: Math.cos(radians) * vertexRadius,
@@ -1516,11 +1521,6 @@ function expansionOffset(layout, index, count, iconSize, spacing, radius, rows) 
             y: (Math.floor(index / columns) - (safeRows - 1) / 2) * slot
         };
     }
-    if (layout === "stack")
-        return {
-            x: index * Math.max(iconSize * 0.65, spacing),
-            y: -index * Math.max(iconSize * 0.2, spacing * 0.5)
-        };
     if (layout === "vertical")
         return { x: 0, y: (index - (safeCount - 1) / 2) * slot };
     if (layout === "horizontal")
@@ -1565,7 +1565,7 @@ function expansionVertical(side) {
 function expansionGeometry(layout, count, iconSize, spacing, radius, rows, options) {
     // A popup draws no band: a Möbius opening is its ring there.
     const requested = layout === "mobius" ? "ring" : String(layout || "fan");
-    const resolved = ["fan", "grid", "stack", "arc", "ring"].includes(requested)
+    const resolved = ["fan", "grid", "arc", "ring"].includes(requested)
         ? requested : "fan";
     const safeCount = clamp(Math.floor(finite(count, 0)), 0, 48);
     const size = clamp(finite(iconSize, 48), 16, 128);
@@ -1657,12 +1657,6 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
             const out = distance * Math.cos(turn), across = distance * Math.sin(turn);
             point = { x: (frame.out.x * out + frame.across.x * across) * cellWidth / size,
                       y: (frame.out.y * out + frame.across.y * across) * cellHeight / size };
-        } else if (oriented && resolved === "stack") {
-            // A stack rises from the folder, drifting the way the folder leans.
-            const offset = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
-            const across = lean > 0.38 ? -offset.y : offset.y;
-            point = { x: (frame.out.x * offset.x + frame.across.x * across) * cellWidth / size,
-                      y: (frame.out.y * offset.x + frame.across.y * across) * cellHeight / size };
         } else {
             point = expansionOffset(resolved, index, safeCount, size, gap, distance, rows);
             point = { x: point.x * cellWidth / size, y: point.y * cellHeight / size };
@@ -1684,13 +1678,11 @@ function expansionGeometry(layout, count, iconSize, spacing, radius, rows, optio
     });
     // The folder stands against the edge nearest it. Across that edge it is
     // centred, or toward the side its outward direction leans, so the
-    // contents lean away from the dock with it; a stack starts at the folder.
+    // contents lean away from the dock with it.
     const acrossExtent = vertical ? width : height;
     let anchorAcross = acrossExtent / 2 - lean * Math.max(0, acrossExtent / 2 - cellAcross / 2);
     if (followsPath)
         anchorAcross = pathRadiusY + cellAcross / 2 - lean * pathRadiusY;
-    else if (resolved === "stack" && entries.length > 0)
-        anchorAcross = (vertical ? entries[0].x : entries[0].y) + cellAcross / 2;
     const anchorOut = side === "left" ? width : side === "top" ? height : 0;
     return {
         layout: resolved,
@@ -2307,8 +2299,6 @@ function unitedBounds(rectangles) {
 //                 the children on its arc.
 //   arc  the children at one distance from the folder, facing it,
 //                 symmetric about the outward direction.
-//   stack  a straight line from the folder outward, `stackLength`
-//                 children at a time.
 //   ring  a circle beside the folder along the outward direction,
 //                 "small" to fit the children or "panel" at the dock's radius.
 //   mobius        a Möbius strip beside the folder along the outward
@@ -2346,7 +2336,7 @@ function folderShape(shape, options) {
 
 function folderShapePlanned(shape, options) {
     const value = options || {};
-    const kind = ["fan", "arc", "stack", "ring", "grid", "mobius"].includes(shape) ? shape : "fan";
+    const kind = ["fan", "arc", "ring", "grid", "mobius"].includes(shape) ? shape : "fan";
     // A Möbius band opens where a ring does and shows as many at once as a
     // ring of one circle.
     const ringLike = kind === "ring" || kind === "mobius";
@@ -2382,7 +2372,7 @@ function folderShapePlanned(shape, options) {
     // The outline's own line, without the glow round it.
     const outlineWidth = Math.max(0, finite(value.outlineWidth, 2 * outlineMargin));
     // `folder` is already an edge the shape opens from (a 3D platform's
-    // rim), not the folder icon's centre: a fan's apex and a stack's first
+    // rim), not the folder icon's centre: a fan's apex and a ring's first
     // child stand on it rather than a square's reach beyond it.
     const fromEdge = value.fromEdge === true;
     // The screen, less the margin the window keeps round the shape.
@@ -2728,106 +2718,6 @@ function folderShapePlanned(shape, options) {
             result.centre = centreAt;
             result.radius = radius;
             result.span = 150;
-        } else if (kind === "stack") {
-            // Neighbours along the line just clear each other's cells.
-            // On a plane the line runs any way across the screen: a name's
-            // diagonal apart.
-            const pitch = project ? curvePitch : Math.min(cellWidth / Math.max(Math.abs(direction.x), 1e-6),
-                                   cellHeight / Math.max(Math.abs(direction.y), 1e-6)) + gap;
-            // On a plane, the step along the line from `at` that keeps two
-            // neighbours a pitch apart at the size each is drawn there.
-            const stepFrom = function(at) {
-                let step = pitch;
-                for (let round = 0; project && round < 3; ++round) {
-                    const drawn = drawnLength([along(folder, direction, at), along(folder, direction, at + step)]);
-                    if (!(drawn > 1e-6))
-                        break;
-                    step *= pitch / drawn;
-                }
-                return step;
-            };
-            const length = clamp(Math.round(finite(value.stackLength, 3)), 2, 12);
-            // Against a dock's side (`stackSpan`: the side's length, from
-            // `folder` along `direction`), the slots are centred within it
-            // and never outnumber what fits, so the stack is never longer
-            // than the dock beside it; the rest of the children scroll in.
-            const span = Math.max(0, finite(value.stackSpan, 0));
-            // On a plane against the panel's side, the way out of the panel
-            // there (`sideOut`): the line runs along the side and moves out
-            // from it only as far as keeps every child clear.
-            const sideOut = project && span > 0 && value.sideOut ? (function() {
-                const x = finite(value.sideOut.x, 0), y = finite(value.sideOut.y, 0), l = Math.hypot(x, y);
-                return l > 1e-6 ? { x: x / l, y: y / l } : null;
-            })() : null;
-            // The side, `out` from where it lies, finely.
-            const sideAt = function(out) {
-                const points = [];
-                for (let index = 0; index <= 32; ++index)
-                    points.push(along(along(folder, direction, span * index / 32), sideOut, out));
-                return points;
-            };
-            const fitting = sideOut ? Math.max(2, Math.floor(drawnLength(sideAt(0)) / pitch + 0.01) + 1)
-                : span > 0 ? Math.max(2, Math.floor(span / pitch) + 1) : length;
-            const slots = Math.max(1, Math.min(count, length, fitting) - fewer);
-            // The slots centred on the side as drawn, a pitch apart; a slot
-            // more past the last for a stack of one, which the path needs.
-            const sideSlots = function(out) {
-                const points = sideAt(out);
-                const runs = [0];
-                for (let index = 1; index < points.length; ++index)
-                    runs.push(runs[index - 1] + drawnLength([points[index - 1], points[index]]));
-                const total = runs[runs.length - 1];
-                const first = total / 2 - (slots - 1) * pitch / 2;
-                const placed = [];
-                for (let index = 0; index < Math.max(2, slots); ++index) {
-                    const target = first + index * pitch;
-                    let segment = 0;
-                    while (segment < runs.length - 2 && runs[segment + 1] < target)
-                        ++segment;
-                    const a = points[segment], b = points[segment + 1];
-                    const piece = runs[segment + 1] - runs[segment];
-                    const t = piece > 1e-9 ? (target - runs[segment]) / piece : 0;
-                    placed.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-                }
-                return placed;
-            };
-            let distance = span > 0 ? Math.max(0, (span - (Math.max(2, slots) - 1) * pitch) / 2)
-                : fromEdge ? 0 : squareReach(size, direction);
-            const lineAt = function(from) {
-                const points = [along(folder, direction, from)];
-                let at = from;
-                for (let index = 1; index < Math.max(2, slots); ++index) {
-                    at += stepFrom(at);
-                    points.push(along(folder, direction, at));
-                }
-                return points;
-            };
-            let line;
-            if (sideOut) {
-                const out = leastOut(function(distance) { return allClear(sideSlots(distance).slice(0, slots)); });
-                line = sideSlots(out);
-                distance = out;
-            } else if (project && span <= 0) {
-                // On a plane the whole line moves out only as far as keeps
-                // every child clear of the panel.
-                const from = distance;
-                distance = from + leastOut(function(out) { return allClear(lineAt(from + out)); });
-                line = lineAt(distance);
-            } else {
-                while (span <= 0 && distance < largest && !allClear([along(folder, direction, distance)]))
-                    distance += 2;
-                while (span <= 0 && distance < largest && !allClear(lineAt(distance)))
-                    distance += 4;
-                line = lineAt(distance);
-            }
-            result.samples = line;
-            result.out = distance;
-            result.start = "start";
-            result.pitch = pitch;
-            result.planePitch = Math.hypot(line[1].x - line[0].x, line[1].y - line[0].y);
-            result.capacity = slots;
-            result.stackLength = length;
-            result.first = line[0];
         } else if (kind === "grid") {
             // At its smallest a grid holds two rows of three; the others come
             // in a row at a time with the wheel. Where the screen is short it
@@ -3260,12 +3150,11 @@ function folderShapePlanned(shape, options) {
         return candidate;
     }
     // Along the outward direction where the screen has room: a fan, an arc
-    // or a stack first holds fewer children at once, then the shape turns a
+    // first holds fewer children at once, then the shape turns a
     // little more each time towards either side, and only last opens the
     // other way.
     const shrinks = [0];
     const fewest = kind === "fan" || kind === "arc" ? 4
-        : kind === "stack" ? clamp(Math.round(finite(value.stackLength, 3)), 2, 12) - 2
         : kind === "grid" ? 2
         : ringSteps.length - 1;
     for (let fewer = 1; fewer <= fewest; ++fewer)
@@ -3274,10 +3163,8 @@ function folderShapePlanned(shape, options) {
     // On a plane a shape never opens back across the panel: it stays on the
     // folder's side, turned at most a right angle, where it is drawn the
     // size its own place gives it.
-    const follows = project && ((kind === "fan" && value.hug && typeof value.hug.rimAt === "function")
-                                || (kind === "stack" && value.sideOut && finite(value.stackSpan, 0) > 0));
-    // A fan hugging the rim, or a stack along the panel's side, follows the
-    // panel and does not turn.
+    const follows = project && kind === "fan" && value.hug && typeof value.hug.rimAt === "function";
+    // A fan hugging the rim follows the panel and does not turn.
     const turns = follows ? [0]
         : [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90].concat(project ? [] : [180]);
     // A ring with a second circle first turns towards a side where both
@@ -3294,7 +3181,7 @@ function folderShapePlanned(shape, options) {
             }
         }
     }
-    // On a plane a fan, an arc or a stack holds the children its smallest
+    // On a plane a fan or an arc holds the children its smallest
     // size shows at once, and stands as close to the panel as it can: of
     // every way it fits the screen, the one that moved out least (then the
     // one turned least). It holds fewer only where none fits.

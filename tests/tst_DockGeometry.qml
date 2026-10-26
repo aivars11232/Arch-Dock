@@ -36,7 +36,7 @@ TestCase {
     }
 
     function test_folderExpansionBoundsAndFallback() {
-        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+        for (const layout of ["fan", "grid", "arc", "ring"]) {
             for (const count of [0, 1, 8, 48]) {
                 const value = LayoutEngine.expansionGeometry(layout, count, 48, 8, 120, 6)
                 compare(value.count, count)
@@ -46,10 +46,6 @@ TestCase {
                     LayoutEngine.expansionGeometry(layout, count, 48, 8, 120, 6)))
                 for (const point of value.entries)
                     verifyPointInside(point, value, layout + "/" + count)
-                if (layout === "stack" && count > 1) {
-                    verify(value.entries[1].x - value.entries[0].x >= 24,
-                           "each stacked child retains an exposed pointer target")
-                }
             }
         }
         const invalid = LayoutEngine.expansionGeometry("legacy", Infinity, NaN, -5, Infinity, 0)
@@ -1272,7 +1268,7 @@ TestCase {
     function test_folderContentsOpenAwayFromTheFolder_data() {
         const rows = []
         for (const side of ["right", "left", "top", "bottom"])
-            for (const layout of ["fan", "arc", "grid", "stack", "ring"])
+            for (const layout of ["fan", "arc", "grid", "ring"])
                 rows.push({ tag: side + "/" + layout, side: side, layout: layout })
         return rows
     }
@@ -1315,26 +1311,20 @@ TestCase {
             const middle = centres[Math.floor((centres.length - 1) / 2)]
             verify(depth(middle) > depth(first) + 100, data.tag + ": the curve bulges outward")
         }
-        if (data.layout === "stack" || data.layout === "ring") {
-            // Both start beside the folder.
+        if (data.layout === "ring") {
+            // It starts beside the folder.
             const distance = c => Math.hypot(c.x - value.anchor.x, c.y - value.anchor.y)
             const nearest = centres.reduce((best, c, index) =>
                 distance(c) < distance(centres[best]) ? index : best, 0)
             compare(nearest, 0, data.tag + ": the first child is the nearest")
         }
-        if (data.layout === "stack") {
-            for (let index = 1; index < centres.length; ++index)
-                verify(depth(centres[index]) > depth(centres[index - 1]), "a stack rises outward")
-        }
-
         // Leaning along "across", the folder's anchor moves to that side's
         // start so the contents grow toward the lean.
         const leaning = LayoutEngine.expansionGeometry(data.layout, 6, 48, 6, 140, 3, {
             maximumWidth: 620, maximumHeight: 400, labelWidth: 108, labelHeight: 36.65625,
             compactPath: true, side: data.side, lean: 0.7 })
         const across = a => vertical ? a.x : a.y
-        if (data.layout !== "stack")
-            verify(across(leaning.anchor) < across(value.anchor) - 10, data.tag + ": the lean moves the folder's anchor")
+        verify(across(leaning.anchor) < across(value.anchor) - 10, data.tag + ": the lean moves the folder's anchor")
     }
 
     // "Along the dock": children stand on the traced curve a pitch apart,
@@ -1448,7 +1438,7 @@ TestCase {
     function test_folderWithoutASideKeepsItsFrame() {
         const options = { maximumWidth: 620, maximumHeight: 400, labelWidth: 108,
                           labelHeight: 36.65625, compactPath: true }
-        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+        for (const layout of ["fan", "grid", "arc", "ring"]) {
             const before = LayoutEngine.expansionGeometry(layout, 9, 48, 6, 140, 3, options)
             const right = LayoutEngine.expansionGeometry(layout, 9, 48, 6, 140, 3,
                 Object.assign({ side: "right" }, options))

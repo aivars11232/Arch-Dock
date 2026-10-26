@@ -1091,18 +1091,16 @@ PlasmoidItem {
                 || folderTrack.visible
             // A free panel opens its folders on a path outside the dock: a
             // curved one can open them on its own curve, "Along the dock",
-            // and any free panel as a fan, an arc, a stack or a ring.
+            // and any free panel as a fan, an arc or a ring.
             // Grid, and every edge panel, open a popup.
             // Along the dock kept from a curved shape opens as a fan once the
             // panel's shape has no curve (a straight row), never as a popup
             // that cannot draw it.
             // A folder opens as a fan, a grid, a ring or a Möbius band, and
             // on a free panel along the dock, which one saved as an arc does
-            // too; one saved as a stack opens as a fan.
+            // too.
             readonly property string savedFolderLayout: {
                 const saved = String(root.configuration.folderLayout || "fan")
-                if (saved === "stack")
-                    return "fan"
                 if (saved === "arc" || saved === "track")
                     return root.freeSurface ? "track" : "fan"
                 return saved
@@ -1111,7 +1109,7 @@ PlasmoidItem {
                 && !LayoutEngine.curvedLayout(panelScene.layoutPath) ? "fan" : savedFolderLayout
             // A grid lies on a 3D panel's plane too; elsewhere it is a popup.
             readonly property bool folderOnPath: root.freeSurface
-                && (["track", "fan", "arc", "stack", "ring", "mobius"].includes(folderLayout)
+                && (["track", "fan", "arc", "ring", "mobius"].includes(folderLayout)
                     || (folderLayout === "grid" && panelScene.folderPlaneReady))
             onFolderEntryIndexChanged: if (folderEntryIndex < 0) hideFolderExpansion()
 
@@ -1255,7 +1253,6 @@ PlasmoidItem {
                         ? panelScene.dockCentre() : null
                 }
                 fanOpening: Number(root.configuration.folderFanOpening || 90)
-                stackLength: Number(root.configuration.folderStackLength || 3)
                 ringSize: String(root.configuration.folderRingSize || "small")
                 trackReach: String(root.configuration.folderTrackReach || "auto")
                 appearance: panelScene.appearance

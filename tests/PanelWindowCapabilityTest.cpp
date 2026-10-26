@@ -6631,9 +6631,9 @@ void PanelWindowCapabilityTest::studioFolderShapeRows()
         }
         return QStringList{};
     };
-    const QStringList shapeKeys{"folderFanOpening", "folderStackLength", "folderRingSize", "folderTrackReach"};
+    const QStringList shapeKeys{"folderFanOpening", "folderRingSize", "folderTrackReach"};
     const QList<QPair<QString, QString>> cases{{"track", "folderTrackReach"}, {"fan", "folderFanOpening"},
-        {"grid", ""}, {"stack", "folderStackLength"}, {"arc", ""}, {"ring", "folderRingSize"}};
+        {"grid", ""}, {"arc", ""}, {"ring", "folderRingSize"}};
     for (const auto &[layout, setting] : cases) {
         QVERIFY(set({{"folderLayout", layout}}));
         const QStringList page = behaviour();
@@ -6656,16 +6656,10 @@ void PanelWindowCapabilityTest::studioFolderShapeRows()
     QCOMPARE(opening.value(QStringLiteral("minimumValue")).toInt(), 40);
     QCOMPARE(opening.value(QStringLiteral("maximumValue")).toInt(), 160);
     QCOMPARE(opening.value(QStringLiteral("defaultValue")).toInt(), 90);
-    const QVariantMap length = fieldByKey(fields, QStringLiteral("folderStackLength"));
-    QCOMPARE(length.value(QStringLiteral("minimumValue")).toInt(), 2);
-    QCOMPARE(length.value(QStringLiteral("maximumValue")).toInt(), 12);
-    // A stack opens at its smallest: three at once.
-    QCOMPARE(length.value(QStringLiteral("defaultValue")).toInt(), 3);
     // The values reach the applet.
-    QVERIFY(set({{"folderFanOpening", 120}, {"folderStackLength", 9}, {"folderRingSize", "panel"}}));
+    QVERIFY(set({{"folderFanOpening", 120}, {"folderRingSize", "panel"}}));
     const QVariantMap configuration = backend.panelRendererConfiguration(panel);
     QCOMPARE(configuration.value(QStringLiteral("folderFanOpening")).toInt(), 120);
-    QCOMPARE(configuration.value(QStringLiteral("folderStackLength")).toInt(), 9);
     QCOMPARE(configuration.value(QStringLiteral("folderRingSize")).toString(), QStringLiteral("panel"));
     // A row of icons has no radius: Small is its only ring, not a choice.
     QVERIFY(set({{"layout", "horizontal"}}));

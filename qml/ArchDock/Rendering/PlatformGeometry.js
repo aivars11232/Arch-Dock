@@ -29,9 +29,8 @@ var outerBevel = 0.05
 // width (0) follows the flat look's line down to this floor.
 var minimumBand = 0.06
 var maximumBand = 0.16
-// A star's notches lie at this share of its tips' radius. The flat layout
-// places its icons on the same star (LayoutEngine.js, starInnerRadius).
-var starInnerRadius = 0.46
+// A star's notches lie where the flat layout puts them (LayoutEngine.js,
+// starNotchRadius): the icons stand on the same star.
 // The top face's height and the underside's, as in the shipped theme meshes.
 var topHeight = 0.1
 var bottomHeight = -0.08
@@ -914,7 +913,7 @@ function shapeForLayout(layout, polygonSides) {
     if (name === "polygon")
         return { kind: "polygon", sides: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
     if (name === "star")
-        return { kind: "star", points: clamp(Math.round(finite(polygonSides, 6)), 3, 12) }
+        return { kind: "star", points: LayoutEngine.starPoints }
     if (name === "mobius")
         return { kind: "mobius" }
     return null
@@ -933,18 +932,18 @@ function standLift(kind, progress) {
     return kind === "mobius" ? -mobiusLift * Math.cos(2 * Math.PI * finite(progress, 0)) : 0
 }
 
-// A star's corners on the unit circle, tips and notches in turn, the first
+// The star's corners on the unit circle, tips and notches in turn, the first
 // tip straight up, in the order the layout walks them. Each corner carries
 // the outward normals of the edges before and after it, and its mitre `m`:
 // a band edge `d` out from the centre line meets its neighbour at c + m * d.
 // At a sharp tip the mitre is long, so the band ends in a point there, as the
 // star's own outline does.
 function starCorners(points) {
-    const count = 2 * clamp(Math.round(finite(points, 6)), 3, 12)
+    const count = 2 * clamp(Math.round(finite(points, LayoutEngine.starPoints)), 3, 12)
     const corners = []
     for (let k = 0; k < count; ++k) {
         const screen = -Math.PI / 2 + k * Math.PI * 2 / count
-        const radius = k % 2 === 0 ? 1 : starInnerRadius
+        const radius = k % 2 === 0 ? 1 : LayoutEngine.starNotchRadius
         corners.push({ c: [Math.cos(screen) * radius, -Math.sin(screen) * radius] })
     }
     // An edge's outward normal: across the edge, away from the star's middle,

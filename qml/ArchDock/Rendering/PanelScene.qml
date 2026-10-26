@@ -492,9 +492,9 @@ Item {
         resetTravel()
         resetTurn()
     }
-    // So does a polygon or star given another number of corners.
+    // So does a polygon given another number of corners.
     onPolygonSidesChanged: {
-        if (["polygon", "star"].includes(layoutPath)) {
+        if (layoutPath === "polygon") {
             resetTravel()
             resetTurn()
         }
@@ -1581,6 +1581,21 @@ Item {
         return centres
     }
 
+    // The icons' centres at rest - no travel - in the scene's pixels, to the
+    // half pixel: what a 3D panel's decoration is worked out round, so the
+    // icons' turning round the dock does not start its bake over.
+    readonly property var restEntryCentres: {
+        if (!panelDecoration.length || !surfaceLoader.true3DReady) return []
+        const centres = []
+        for (let index = 0; index < entryCount; ++index) {
+            const rect = baseEntryGeometryAt(index, 0).entryBounds
+            if (!rect) continue
+            centres.push({ x: Math.round((rect.x + rect.width / 2) * 2) / 2,
+                           y: Math.round((rect.y + rect.height / 2) * 2) / 2 })
+        }
+        return centres
+    }
+
     function buildRendererGeometry() {
         const result = ({})
         const keys = Object.keys(layoutGeometry || ({}))
@@ -2098,6 +2113,7 @@ Item {
         decorationSpeed: root.decorationSpeed
         decorationEdge: root.freeHost ? "" : root.screenEdge
         iconCentres: root.surfaceIconCentres
+        restEntryCentres: root.restEntryCentres
         geometry: root.surfaceSpanned ? root.spannedRendererGeometry : root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
         restingAngle: root.layoutAngle

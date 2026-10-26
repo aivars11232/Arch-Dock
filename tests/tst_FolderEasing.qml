@@ -27,8 +27,8 @@ TestCase {
         return result
     }
     // The layouts a folder opens in.
-    readonly property var layouts: ["popup/grid", "popup/fan", "popup/stack", "popup/arc",
-        "popup/ring", "path/track", "path/fan", "path/arc", "path/stack", "path/ring"]
+    readonly property var layouts: ["popup/grid", "popup/fan", "popup/arc",
+        "popup/ring", "path/track", "path/fan", "path/arc", "path/ring"]
     function trackSamples() {
         const samples = []
         for (let k = 0; k < 91; ++k) {
@@ -54,7 +54,7 @@ TestCase {
             } else {
                 const shape = LayoutEngine.folderShape(kind, { folder: { x: 450, y: 350 },
                     outward: { x: 0, y: -1 }, iconSize: 48, cellWidth: 108, cellHeight: 82, gap: 6,
-                    count: 5, fanOpening: 90, stackLength: 5, ringSize: "small",
+                    count: 5, fanOpening: 90, ringSize: "small",
                     screen: { x: 0, y: 0, width: 900, height: 700 } })
                 values.samples = shape.samples
                 values.closedPath = shape.closed

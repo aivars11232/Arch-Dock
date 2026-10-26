@@ -428,7 +428,7 @@ layouts and each renderer tier they offer (21 panels). What follows from it:
   appearance's colour, line width and glow, or its custom colour. On a baked
   or 3D look they use that look's flat colours, not its artwork; a look whose
   flat surface draws no line (Plate, Pedestal) draws no fan or ring outline.
-- Along the dock, Fan, Arc, Stack and Ring scroll with the wheel, the touchpad
+- Along the dock, Fan, Arc and Ring scroll with the wheel, the touchpad
   and the keys; they have no drag scrolling. Their window covers the shape's
   whole box, so a press there beside the children and the drawn fan or ring
   closes the folder rather than reaching the dock underneath.

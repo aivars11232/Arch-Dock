@@ -120,6 +120,9 @@ Item {
     property real decorationSpeed: 1
     property string decorationEdge: ""
     property var iconCentres: []
+    // The icons' places at rest, in the scene's pixels, for a 3D panel's
+    // decoration (PanelScene.restEntryCentres).
+    property var restEntryCentres: []
 
     readonly property string normalizedRequestedTier:
         String(requestedRendererTier || "procedural2d").toLowerCase()
@@ -364,6 +367,7 @@ Item {
                 return ThemeStates.assetUrl(definition, (definition.scene3D || ({})).texture)
             }),
             entryGeometry: Qt.binding(function() { return root.entryGeometry }),
+            restEntryCentres: Qt.binding(function() { return root.restEntryCentres }),
             // A decoration is worn in a generated platform's place.
             decoration: Qt.binding(function() { return root.decoration }),
             decorationChoices: Qt.binding(function() { return root.decorationChoices }),

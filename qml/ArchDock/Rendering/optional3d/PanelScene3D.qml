@@ -318,8 +318,14 @@ Item {
             Math.max(PlatformGeometry.minimumBand, Math.min(PlatformGeometry.maximumBand, resolvedBand))
             + PlatformGeometry.outerBevel)
         : []
-    readonly property var decorationIconPoints: decorationWanted ? entryGeometry.map(function(rect) {
-        return PlatformGeometry.standPoint(Number(rect.centerX) - width / 2, height / 2 - Number(rect.centerY),
+    // The icons' places at rest in the panel's own pixels (PanelScene's
+    // restEntryCentres): the decoration is worked out round them once. The
+    // icons travel over it as they turn round the dock; their drawn places
+    // (entryGeometry) move every frame and would start the bake over each
+    // time, so it never ended while the dock turned.
+    property var restEntryCentres: []
+    readonly property var decorationIconPoints: decorationWanted ? restEntryCentres.map(function(centre) {
+        return PlatformGeometry.standPoint(Number(centre.x) - width / 2, height / 2 - Number(centre.y),
                                            layoutTrackRadius, generatedPlatform.track)
     }) : []
     // How far an icon stands raised on the decoration under it, in the

@@ -429,20 +429,23 @@ TestCase {
         verify(edgeWays > 0, "the edges move between their faces")
     }
 
-    // A star with any number of points, from three to twelve, is one closed
-    // band within the scene's reach, its tips ending in points.
-    function test_starsOfEveryPointCount() {
-        for (let points = 3; points <= 12; ++points) {
-            const shape = PlatformGeometry.shapeForLayout("star", points)
-            compare(shape.points, points)
+    // The star is the six-pointed Star of David whatever corner count a
+    // panel carries: one closed band within the scene's reach, its six tips
+    // ending in points at the edge, its notches a third of the way in.
+    function test_starIsTheSixPointedStar() {
+        for (const corners of [3, 6, 8, 12]) {
+            const shape = PlatformGeometry.shapeForLayout("star", corners)
+            compare(shape.points, 6)
             const mesh = PlatformGeometry.platform({ shape: shape, band: 0.1, bend: 0 })
-            compare(boundaryEdges(mesh).length, 0, points + " points: a closed surface")
-            compare(misWound(mesh), 0, points + " points: faces outward everywhere")
+            compare(boundaryEdges(mesh).length, 0, "a closed surface")
+            compare(misWound(mesh), 0, "faces outward everywhere")
             let farthest = 0
             for (const point of mesh.positions)
                 farthest = Math.max(farthest, Math.hypot(point[0], point[1]))
-            verify(farthest <= PlatformGeometry.reach + 1e-9, points + " points: within reach")
-            verify(farthest > PlatformGeometry.reach - 1e-6, points + " points: the tips reach the edge")
+            verify(farthest <= PlatformGeometry.reach + 1e-9, "within reach")
+            verify(farthest > PlatformGeometry.reach - 1e-6, "the tips reach the edge")
+            const notch = PlatformGeometry.starCorners(6)[1].c
+            fuzzyCompare(Math.hypot(notch[0], notch[1]), 1 / Math.sqrt(3), 1e-9, "the notches where two triangles' edges cross")
         }
     }
 

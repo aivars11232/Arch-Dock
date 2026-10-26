@@ -102,7 +102,7 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
     QVERIFY(legacy.has_value());
     QVERIFY(legacy->content.folderShowNames);
     for (const QString &layout : {QStringLiteral("fan"), QStringLiteral("grid"),
-         QStringLiteral("stack"), QStringLiteral("arc"), QStringLiteral("ring"),
+         QStringLiteral("arc"), QStringLiteral("ring"),
          QStringLiteral("spiral"), QStringLiteral("physics")})
     {
         const auto definition = PanelDefinition::fromLegacyMap({
@@ -124,36 +124,38 @@ void PanelSettingsSchemaTest::folderSettingsPreserveLegacyValues()
     for (const QString &key : {QStringLiteral("folderLayout"), QStringLiteral("folderSpeed"),
          QStringLiteral("folderEasing"), QStringLiteral("folderExpandOnClick"),
          QStringLiteral("folderShowNames"), QStringLiteral("folderFanOpening"),
-         QStringLiteral("folderStackLength"), QStringLiteral("folderRingSize")})
+         QStringLiteral("folderRingSize")})
         QVERIFY(PanelSettingsSchema::isTransactionPanelField(key));
 
     // A free panel's folder shapes. A saved panel without
-    // them opens a 90 degree fan, a stack of five and a small ring.
+    // them opens a 90 degree fan and a small ring. A stack saved by an
+    // older version opens as a fan.
     QCOMPARE(legacy->content.folderFanOpening, 90);
-    QCOMPARE(legacy->content.folderStackLength, 3);
     QCOMPARE(legacy->content.folderRingSize, QStringLiteral("small"));
+    const auto stacked = PanelDefinition::fromLegacyMap({
+        {QStringLiteral("id"), QStringLiteral("folder-stacked")},
+        {QStringLiteral("folderLayout"), QStringLiteral("stack")},
+        {QStringLiteral("folderStackLength"), 7}});
+    QVERIFY(stacked.has_value());
+    QCOMPARE(stacked->content.folderLayout, QStringLiteral("fan"));
+    QVERIFY(!stacked->toPersistedMap().contains(QStringLiteral("folderStackLength")));
     const auto shapes = PanelDefinition::fromLegacyMap({
         {QStringLiteral("id"), QStringLiteral("folder-shapes")},
         {QStringLiteral("folderFanOpening"), 400},
-        {QStringLiteral("folderStackLength"), 1},
         {QStringLiteral("folderRingSize"), QStringLiteral("PANEL")}});
     QVERIFY(shapes.has_value());
     QCOMPARE(shapes->content.folderFanOpening, 160);
-    QCOMPARE(shapes->content.folderStackLength, 2);
     QCOMPARE(shapes->content.folderRingSize, QStringLiteral("panel"));
     const auto shapesBack = PanelDefinition::fromLegacyMap(shapes->toPersistedMap());
     QVERIFY(shapesBack.has_value());
     QCOMPARE(shapesBack->content.folderFanOpening, 160);
-    QCOMPARE(shapesBack->content.folderStackLength, 2);
     QCOMPARE(shapesBack->content.folderRingSize, QStringLiteral("panel"));
     const auto narrow = PanelDefinition::fromLegacyMap({
         {QStringLiteral("id"), QStringLiteral("folder-narrow")},
         {QStringLiteral("folderFanOpening"), 10},
-        {QStringLiteral("folderStackLength"), 99},
         {QStringLiteral("folderRingSize"), QStringLiteral("huge")}});
     QVERIFY(narrow.has_value());
     QCOMPARE(narrow->content.folderFanOpening, 40);
-    QCOMPARE(narrow->content.folderStackLength, 12);
     QCOMPARE(narrow->content.folderRingSize, QStringLiteral("small"));
 }
 

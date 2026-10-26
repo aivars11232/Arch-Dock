@@ -6,7 +6,7 @@ import org.kde.plasma.core as PlasmaCore
 // A free panel's folder contents on a path outside the dock, in a transparent
 // window just large enough for them and the folder they unfold from:
 // "Along the dock" on the dock's own curve, which follows
-// its shape, tilt and perspective, or a fan, an arc, a stack or a ring that
+// its shape, tilt and perspective, or a fan, an arc or a ring that
 // opens from the folder along the way it faces out of the dock
 // (LayoutEngine.folderShape()). The contents are drawn where they belong on
 // the screen, relative to wherever the window really lands. A press beside
@@ -15,7 +15,7 @@ PlasmaCore.Dialog {
     id: root
     property var snapshot: ({ status: "unavailable", entries: [] })
     property string folderTitle: ""
-    // "track" (Along the dock), "fan", "arc", "stack", "ring" or "mobius".
+    // "track" (Along the dock), "fan", "arc", "ring" or "mobius".
     property string folderLayout: "track"
     // A Möbius band opens where a ring would.
     readonly property bool ringLike: folderLayout === "ring" || folderLayout === "mobius"
@@ -28,7 +28,6 @@ PlasmaCore.Dialog {
     property var pedestalSettings: ({})
     property int iconSize: 48
     property int fanOpening: 90
-    property int stackLength: 3
     property string ringSize: "small"
     // How far round the dock it opens along the dock (Along the dock reach).
     property string trackReach: "auto"
@@ -59,7 +58,7 @@ PlasmaCore.Dialog {
     // the shape from the folder icon.
     property var outwardRay: null
     // A function returning a 3D panel's plane round the folder
-    // (PanelScene.folderPlane), for a fan, arc, stack or ring that lies on
+    // (PanelScene.folderPlane), for a fan, arc or ring that lies on
     // it; null, or a function returning null, builds the shape flat.
     property var folderPlane: null
     // A function returning what the contents keep clear of on a 3D panel -
@@ -76,8 +75,10 @@ PlasmaCore.Dialog {
     // a child above it carries its name above its icon, away from the
     // ring, the others below.
     property var screenDockMiddle: null
-    // Whether the track's children stand on the curve by their stands (a 3D panel).
+    // Whether the track's children stand on the curve by their stands (a 3D
+    // panel), and the dock's drawn half height on the screen then.
     property bool trackStandsOnPath: false
+    property real screenDockHalf: 0
     property var screenOutline: null
     property var screenShape: null
     property point screenOrigin: Qt.point(0, 0)
@@ -163,7 +164,7 @@ PlasmaCore.Dialog {
         if ((a.fewer || 0) !== (b.fewer || 0)) return (a.fewer || 0) < (b.fewer || 0) ? a : b
         return (Number(a.out) || 0) <= (Number(b.out) || 0) ? a : b
     }
-    // A fan, arc, stack, grid or ring lying on a 3D panel's plane round the
+    // A fan, arc, grid or ring lying on a 3D panel's plane round the
     // folder (`plane`, from folderPlane), on the screen: `others` are the
     // dock's other icons there, `area` the screen and `avoid` the other free
     // panels as drawn. Null when no such shape can be seen whole.
@@ -192,7 +193,7 @@ PlasmaCore.Dialog {
                 iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                 standFoot: content.standFoot,
                 gap: 6, count: content.entries.length, fanOpening: fanOpening,
-                stackLength: stackLength, stackSpan: 0, ringSize: ringSize, panelRadius: plane.radius,
+                ringSize: ringSize, panelRadius: plane.radius,
                 obstacles: others, planeObstacles: plane.icons || [], obstacleSize: iconSize,
                 keepOut: keep, keepOutMargin: keepOutMargin, avoid: avoid, screen: area, screenMargin: margin,
                 outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur, outlineWidth: outlineStyle.lineWidth,
@@ -258,41 +259,6 @@ PlasmaCore.Dialog {
                                 { hug: { rimAt: plane.rimAt, turn: Math.atan2(origin.y, origin.x) } })
             return shape && !shape.hidden ? shape : null
         }
-        // A stack lies along the panel's side nearest the folder: up and
-        // down beside its left or right side, across along its near or far
-        // side, centred on that side and no longer than it, a little way out
-        // of the rim; where it is not seen whole there, along the next
-        // nearest side.
-        if (folderLayout === "stack" && (plane.icons || []).length >= 2) {
-            let box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
-            for (const point of plane.icons)
-                box = { left: Math.min(box.left, point.x), right: Math.max(box.right, point.x),
-                        top: Math.min(box.top, point.y), bottom: Math.max(box.bottom, point.y) }
-            const sides = [
-                { gap: Math.abs(origin.x - box.left), from: { x: -plane.rimAt(Math.PI), y: box.top },
-                  way: { x: 0, y: 1 }, span: box.bottom - box.top, out: { x: -1, y: 0 } },
-                { gap: Math.abs(box.right - origin.x), from: { x: plane.rimAt(0), y: box.top },
-                  way: { x: 0, y: 1 }, span: box.bottom - box.top, out: { x: 1, y: 0 } },
-                { gap: Math.abs(origin.y - box.top), from: { x: box.left, y: -plane.rimAt(-Math.PI / 2) },
-                  way: { x: 1, y: 0 }, span: box.right - box.left, out: { x: 0, y: -1 } },
-                { gap: Math.abs(box.bottom - origin.y), from: { x: box.left, y: plane.rimAt(Math.PI / 2) },
-                  way: { x: 1, y: 0 }, span: box.right - box.left, out: { x: 0, y: 1 } }]
-            sides.sort(function(a, b) { return a.gap - b.gap })
-            // A side where another panel would push the stack far out is
-            // passed over for the next one; failing all, the stack that
-            // stands nearest.
-            const near = 2 * Math.max(content.cellWidth, content.cellHeight)
-            let nearest = null
-            for (const side of sides) {
-                const shape = build(side.from, side.way, atFolder, { stackSpan: side.span, sideOut: side.out })
-                if (!shape || shape.hidden || shape.overflow > 0.5) continue
-                if (!(Number(shape.out) > near)) return shape
-                if (!nearest || shape.out < nearest.out) nearest = shape
-            }
-            return nearest || firstFitting(sides.map(function(side) {
-                return function() { return build(side.from, side.way, atFolder, { stackSpan: side.span, sideOut: side.out }) }
-            }))
-        }
         const shape = build(origin, facing, atFolder)
         return shape && !shape.hidden ? shape : null
     }
@@ -340,11 +306,12 @@ PlasmaCore.Dialog {
             // icon's middle is on the point and the whole cell counts. The
             // name hangs free - above the icon on the far side of a tilted
             // ring, below the stand elsewhere - and keeps clear as well.
+            const hugging = keep !== null
             const bodyHeight = iconSize + Number(content.standLayout.above || 0) + Number(content.standLayout.below || 0)
-            const bodyWidth = keep ? Math.max(iconSize, Number(content.standLayout.width) || 0) : content.cellWidth
-            const anchorUp = keep ? Number(content.standFoot) || iconSize / 2 : iconSize / 2
+            const bodyWidth = hugging ? Math.max(iconSize, Number(content.standLayout.width) || 0) : content.cellWidth
+            const anchorUp = hugging ? Number(content.standFoot) || iconSize / 2 : iconSize / 2
             const nameHeight = Number(content.nameHeight) || 0
-            trackStandsOnPath = keep !== null
+            trackStandsOnPath = hugging
             if (typeof trackSamples !== "function") return false
             // The dock's own pitch, not the one a shape opened with before.
             screenShape = null
@@ -354,13 +321,36 @@ PlasmaCore.Dialog {
             }) : []
             const middle = typeof dockCentre === "function" ? dockCentre() : null
             const centreOnScreen = middle ? toScreen(middle.x, middle.y) : null
-            screenDockMiddle = keep && centreOnScreen ? centreOnScreen : null
-            // The child's body and its name at a place on the curve, on the screen.
+            screenDockMiddle = hugging && centreOnScreen ? centreOnScreen : null
+            // The dock's drawn half height on the screen, from its outline.
+            const outlineBox = hugging && keep.hull.length >= 3 ? LayoutEngine.unitedBounds(keep.hull.map(function(point) {
+                return { x: point.x, y: point.y, width: 0, height: 0 }
+            })) : null
+            const dockHalf = outlineBox ? outlineBox.height / 2 : 0
+            screenDockHalf = dockHalf
+            // Where a child stands on its point of the curve. On a 3D panel a
+            // child behind the dock's middle stands by its stand's base, its
+            // body rising behind the ring; one before the middle carries its
+            // icon on the point with its stand below, as anything standing
+            // before the ring does; between, the standing point glides from
+            // the one to the other with the child's height on the screen
+            // across the dock, so a child scrolled round the ring never
+            // jumps. Elsewhere the icon's middle is on the point.
+            const iconUp = iconSize / 2 + Number(content.standLayout.above || 0)
+            const standShare = function(place) {
+                if (!hugging) return 0
+                if (!centreOnScreen || !(dockHalf > 0)) return 1
+                return Math.max(0, Math.min(1, (centreOnScreen.y - place.y) / dockHalf * 0.5 + 0.5))
+            }
+            const anchorOf = function(place) { return iconUp + (anchorUp - iconUp) * standShare(place) }
+            // The child's body at a place on the curve, on the screen, and on
+            // a 3D panel its name as well, above the icon behind the dock's
+            // middle and below the stand before it.
             function boxes(place) {
                 const scale = Math.max(0.35, Number(place.scale) || 1)
-                const body = { x: place.x - bodyWidth * scale / 2, y: place.y - anchorUp * scale,
+                const body = { x: place.x - bodyWidth * scale / 2, y: place.y - anchorOf(place) * scale,
                                width: bodyWidth * scale, height: bodyHeight * scale }
-                if (!(nameHeight > 0)) return [body]
+                if (!hugging || !(nameHeight > 0)) return [body]
                 const above = screenDockMiddle !== null && place.y < screenDockMiddle.y
                 return [body, { x: place.x - content.cellWidth / 2, width: content.cellWidth, height: nameHeight,
                                 y: above ? body.y - nameHeight - 4 : body.y + body.height + 4 }]
@@ -371,10 +361,9 @@ PlasmaCore.Dialog {
             // off the panel's outline and off every icon with its stand; in
             // front of the middle it stands before the dock, nearer the
             // viewer, so its body may rise before the band as anything in
-            // front does, but its foot stays outside the outline and neither
-            // its body nor its name covers any icon or stand. On a flat or
-            // baked panel the whole cell keeps off the dock's other icons.
-            const outline = keep ? { hull: keep.hull } : null
+            // front does, but neither its body nor its name covers any icon
+            // or stand. On a flat or baked panel the whole cell keeps off the
+            // dock's other icons.
             const footprints = keep ? { rects: keep.rects } : null
             function onScreen(place) {
                 return boxes(place).every(function(box) {
@@ -386,7 +375,7 @@ PlasmaCore.Dialog {
                 if (!onScreen(place)) return false
                 const parts = boxes(place)
                 if (parts.some(overOther)) return false
-                if (!keep) {
+                if (!hugging) {
                     const reach = iconSize / 2 + 4
                     return parts.every(function(box) {
                         return others.every(function(icon) {
@@ -396,14 +385,9 @@ PlasmaCore.Dialog {
                     })
                 }
                 const before = screenDockMiddle !== null && place.y > screenDockMiddle.y
-                if (!before) return parts.every(function(box) {
-                    return !LayoutEngine.rectTouchesKeepOut(box, keep, keepOutMargin)
+                return parts.every(function(box) {
+                    return !LayoutEngine.rectTouchesKeepOut(box, before ? footprints : keep, keepOutMargin)
                 })
-                const foot = { x: place.x, y: place.y, width: 0, height: 0 }
-                return !LayoutEngine.rectTouchesKeepOut(foot, outline, keepOutMargin)
-                    && parts.every(function(box) {
-                        return !LayoutEngine.rectTouchesKeepOut(box, footprints, keepOutMargin)
-                    })
             }
             // On a 3D panel the curve keeps as close to the dock as its
             // children allow, as drawn: each point of the dock's curve steps
@@ -427,11 +411,11 @@ PlasmaCore.Dialog {
             // the first: never the furthest.
             // A reach chosen in the Studio is the curve's own span; all the
             // way round stops short of closing, so the two ends keep apart.
-            const stride = keep ? Math.max(4, iconSize / 4) : 8
-            const mostSteps = keep ? Math.ceil(6 * iconSize / stride) : 8
+            const stride = hugging ? Math.max(4, iconSize / 4) : 8
+            const mostSteps = hugging ? Math.ceil(6 * iconSize / stride) : 8
             const chosenSpan = ({ quarter: Math.PI / 2, third: 2 * Math.PI / 3, half: Math.PI,
                                   "three-quarters": 3 * Math.PI / 2, full: 1.9 * Math.PI })[trackReach]
-            const firstSpan = chosenSpan || (keep ? Math.PI / 2 : 2 * Math.PI / 3)
+            const firstSpan = chosenSpan || (hugging ? Math.PI / 2 : 2 * Math.PI / 3)
             const lastSpan = chosenSpan || 3 * Math.PI / 2
             const project = function(sample) {
                 const point = toScreen(sample.x, sample.y)
@@ -457,7 +441,7 @@ PlasmaCore.Dialog {
             }
             // The dock's curve with each point stepped out until its child
             // clears, the steps evened out along the curve as drawn.
-            const hugging = function(span) {
+            const hugCurve = function(span) {
                 const rows = [trackSamples(0, span).map(project)]
                 if (rows[0].length < 2) return null
                 // The curve at each step out; a step that loses a point
@@ -514,7 +498,7 @@ PlasmaCore.Dialog {
             let layout = null, chosen = null, cleared = null, nearest = null, first = null
             spans: for (let span = firstSpan; span <= lastSpan + 1e-9; span += Math.PI / 6) {
                 for (let step = 0; step <= mostSteps; ++step) {
-                    const curve = keep ? hugging(span) : trackSamples(step * stride, span).map(project)
+                    const curve = hugging ? hugCurve(span) : trackSamples(step * stride, span).map(project)
                     if (!curve || curve.length < 2) return false
                     chosen = settle(curve)
                     if (!first) first = chosen
@@ -525,7 +509,7 @@ PlasmaCore.Dialog {
                         break
                     }
                     // A 3D panel's curve is already as near as it can be.
-                    if (keep) break
+                    if (hugging) break
                 }
             }
             chosen = cleared || nearest || first || chosen
@@ -561,7 +545,6 @@ PlasmaCore.Dialog {
                 let origin = { x: centre.x, y: centre.y }
                 let facing = outwardNormal || ({ x: 0, y: -1 })
                 let fromEdge = false
-                let stackSpan = 0
                 const ray = typeof outwardRay === "function" ? outwardRay() : null
                 if (ray && ray.start && ray.direction) {
                     const from = scene.mapToGlobal(ray.start.x, ray.start.y)
@@ -572,42 +555,6 @@ PlasmaCore.Dialog {
                         facing = { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
                         fromEdge = true
                     }
-                }
-                // A stack lies against the dock's side nearest the folder: upright
-                // beside its left or right side, level above or below it, centred
-                // on the dock and no longer than it, one cell out. The dock's box
-                // on the screen is its icons' box, the same on every tier; where
-                // the chosen side would leave the screen, the opposite side is
-                // used.
-                if (folderLayout === "stack" && dock && others.length >= 2) {
-                    let box = { left: centre.x, right: centre.x, top: centre.y, bottom: centre.y }
-                    for (const point of others)
-                        box = { left: Math.min(box.left, point.x), right: Math.max(box.right, point.x),
-                                top: Math.min(box.top, point.y), bottom: Math.max(box.bottom, point.y) }
-                    box = { left: box.left - iconSize / 2, right: box.right + iconSize / 2,
-                            top: box.top - iconSize / 2, bottom: box.bottom + iconSize / 2 }
-                    const half = { x: content.cellWidth / 2 + 4, y: content.cellHeight / 2 + 4 }
-                    const sides = [
-                        { id: "left", gap: Math.abs(centre.x - box.left), vertical: true,
-                          x: box.left - half.x, fits: box.left - 2 * half.x >= area.x + margin },
-                        { id: "right", gap: Math.abs(box.right - centre.x), vertical: true,
-                          x: box.right + half.x, fits: box.right + 2 * half.x <= area.x + area.width - margin },
-                        { id: "top", gap: Math.abs(centre.y - box.top), vertical: false,
-                          y: box.top - half.y, fits: box.top - 2 * half.y >= area.y + margin },
-                        { id: "bottom", gap: Math.abs(box.bottom - centre.y), vertical: false,
-                          y: box.bottom + half.y, fits: box.bottom + 2 * half.y <= area.y + area.height - margin }]
-                    sides.sort(function(a, b) { return a.gap - b.gap })
-                    const side = sides.find(function(candidate) { return candidate.fits }) || sides[0]
-                    if (side.vertical) {
-                        origin = { x: side.x, y: box.top }
-                        facing = { x: 0, y: 1 }
-                        stackSpan = box.bottom - box.top
-                    } else {
-                        origin = { x: box.left, y: side.y }
-                        facing = { x: 1, y: 0 }
-                        stackSpan = box.right - box.left
-                    }
-                    fromEdge = true
                 }
                 // A ring opens beside the dock on the side with more of the
                 // screen: to the right of a dock on the left half, to the left of
@@ -630,7 +577,7 @@ PlasmaCore.Dialog {
                         iconSize: iconSize, cellWidth: content.cellWidth, cellHeight: content.cellHeight,
                         standFoot: content.standFoot,
                         gap: 6, count: content.entries.length, fanOpening: fanOpening,
-                        stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
+                        ringSize: ringSize, panelRadius: panelRadius,
                         obstacles: others, obstacleSize: iconSize, avoid: avoid, screen: area, screenMargin: margin,
                         // A 3D panel's platform as drawn, and its icons with
                         // their stands, are kept clear of here too.
@@ -717,6 +664,7 @@ PlasmaCore.Dialog {
         // The path where the window really is: Plasma may keep the window
         // inside the screen, and the contents still stand where they belong.
         dockMiddleY: root.screenDockMiddle ? root.local(root.screenDockMiddle).y : NaN
+        dockHalfHeight: root.screenDockHalf
         samples: root.screenSamples.map(function(sample) {
             const point = root.local(sample)
             return { x: point.x, y: point.y, scale: sample.scale }
@@ -764,7 +712,7 @@ PlasmaCore.Dialog {
                      apex: shape.apex ? root.local(shape.apex) : null,
                      centre: shape.centre ? root.local(shape.centre) : null,
                      radius: shape.radius || 0, opening: shape.opening || 0, span: shape.span || 0,
-                     pitch: shape.pitch, stackLength: shape.stackLength || 0,
+                     pitch: shape.pitch,
                      ringSize: shape.ringSize || "", fewer: shape.fewer || 0 }
         }
         expansionOrigin: Qt.point(root.screenOrigin.x - root.x, root.screenOrigin.y - root.y)

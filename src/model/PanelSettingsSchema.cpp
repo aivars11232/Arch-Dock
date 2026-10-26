@@ -458,7 +458,7 @@ const QVector<Descriptor> &schemaFields()
                      {"studio", "native"}, "drop-input")), {"dock-configuration"}),
         panel("folderLayout", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("fan"), "content.folderLayout",
-              {}, {}, {"fan", "grid", "stack", "arc", "ring", "mobius", "track", "spiral", "circular",
+              {}, {}, {"fan", "grid", "arc", "ring", "mobius", "track", "spiral", "circular",
                        "radial", "vertical", "horizontal", "elastic", "physics"}, false, true,
               editor("panels-behavior", "Folder layout", "combo", {"studio", "native"},
                      "folder-content")),
@@ -468,9 +468,6 @@ const QVector<Descriptor> &schemaFields()
               Normalization::IntegerRange, 90, "content.folderFanOpening", 40, 160, {}, false, true,
               editor("panels-behavior", "Fan opening", "spin", {"studio"}, "folder-content", {},
                      {{QStringLiteral("step"), 5}, {QStringLiteral("suffix"), QStringLiteral("°")}})),
-        panel("folderStackLength", Access::Editor, Type::Integer,
-              Normalization::IntegerRange, 3, "content.folderStackLength", 2, 12, {}, false, true,
-              editor("panels-behavior", "Stack length", "spin", {"studio"}, "folder-content")),
         panel("folderRingSize", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("small"), "content.folderRingSize",
               {}, {}, {"small", "panel"}, false, true,
@@ -656,13 +653,14 @@ const QVector<Descriptor> &schemaFields()
         panel("layoutPadding", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 18, "layout.padding", 0, 240, {}, false, true,
               editor("panels-layout", "Panel padding", "spin", {"studio"}, "layout")),
-        // Only the free polygon and the star read their number of sides; a
-        // triangle, square, pentagon, hexagon or octagon is named by its sides
-        // (LayoutEngine.shapeSides), so the control would do nothing there.
+        // Only the free polygon reads its number of sides; a triangle,
+        // square, pentagon, hexagon or octagon is named by its sides and the
+        // star is the six-pointed star (LayoutEngine.shapeSides), so the
+        // control would do nothing there.
         panel("pathSides", Access::Editor, Type::Integer,
               Normalization::IntegerRange, 6, "layout.polygonSides", 3, 12, {}, false, true,
               editor("panels-layout", "Polygon sides", "spin", {"studio"}, "layout",
-                     {"polygon", "star"})),
+                     {"polygon"})),
         panel("pathOrientation", Access::Editor, Type::String,
               Normalization::ChoiceLower, QStringLiteral("upright"), "layout.orientation",
               {}, {}, {"upright", "tangent", "radial"}, false, true,

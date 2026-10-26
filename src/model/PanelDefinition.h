@@ -129,11 +129,10 @@ struct PanelContent
     QVariantMap barWidgetSettings;
     bool acceptDrops = true;
     QString folderLayout = QStringLiteral("fan");
-    // A free panel's own folder shapes: the fan's opening in
-    // degrees, how many children a stack shows, and a ring that fits its
-    // children ("small") or has the dock's radius ("panel").
+    // A free panel's own folder shapes: the fan's opening in degrees, and a
+    // ring that fits its children ("small") or has the dock's radius
+    // ("panel").
     int folderFanOpening = 90;
-    int folderStackLength = 3;
     QString folderRingSize = QStringLiteral("small");
     // How far round the dock a folder opens along it.
     QString folderTrackReach = QStringLiteral("auto");

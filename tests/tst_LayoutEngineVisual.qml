@@ -33,7 +33,7 @@ TestCase {
     }
 
     function test_folderLayoutRendersEveryExposedEntry() {
-        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+        for (const layout of ["fan", "grid", "arc", "ring"]) {
             folderLayout = layout
             wait(0)
             const image = grabImage(folderFixture)

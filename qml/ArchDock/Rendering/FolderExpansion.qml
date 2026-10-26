@@ -56,13 +56,10 @@ QQC2.Pane {
     // A compact Fan or Arc holds as many children as stand on its half circle
     // and moves the rest along it: one wheel notch is one child.
     readonly property real pathScrollStep: 20 * Math.max(1, Qt.styleHints.wheelScrollLines)
-    // How far one wheel notch scrolls: one child along a path or a
-    // stack, one row of a grid or a ring, one column sideways.
-    readonly property real stackStep: Math.max(geometry.iconSize * 0.65, 6) / geometry.iconSize
-    readonly property real notchHeight: geometry.followsPath ? pathScrollStep
-        : geometry.layout === "stack" ? stackStep * geometry.cellHeight : geometry.cellHeight + 6
-    readonly property real notchWidth: geometry.layout === "stack"
-        ? stackStep * geometry.cellWidth : geometry.cellWidth + 6
+    // How far one wheel notch scrolls: one child along a path, one row of
+    // a grid or a ring, one column sideways.
+    readonly property real notchHeight: geometry.followsPath ? pathScrollStep : geometry.cellHeight + 6
+    readonly property real notchWidth: geometry.cellWidth + 6
     readonly property var path: LayoutEngine.expansionPath(geometry, viewport.height)
     readonly property int pathTarget: geometry.followsPath
         ? Math.max(0, Math.min(path.maximumOffset,
@@ -171,9 +168,9 @@ QQC2.Pane {
         if (opened) {
             if (!reducedMotion) runPhase(1)
             viewport.cancelFlick()
-            // A ring or stack starts beside the folder: when it is larger
-            // than the popup, the folder's end of it is shown first.
-            const fromFolder = geometry.layout === "ring" || geometry.layout === "stack"
+            // A ring starts beside the folder: when it is larger than the
+            // popup, the folder's end of it is shown first.
+            const fromFolder = geometry.layout === "ring"
             viewport.contentX = fromFolder && geometry.side === "left"
                 ? Math.max(0, viewport.contentWidth - viewport.width) : 0
             viewport.contentY = fromFolder && geometry.side === "top"

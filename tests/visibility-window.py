@@ -1028,6 +1028,10 @@ def run_interaction_matrix(free_panel):
                     "visibility": panel_call("nativePanelVisibilityStatus", "(s)", ("bottom",)),
                     "content": panel_call("contentRuntimeSnapshot", "(s)", ("bottom",))}
 
+        # The pointer away from every edge and from the free panel: an
+        # auto-hiding Plasma panel stays revealed while the pointer rests
+        # on it, and the hide below is proved by the panel going away.
+        motion([320, 100])
         before = evidence()
         host_trace.clear()
         succeeded = panel_call("setPanelVisible", "(sb)", ("bottom", False))
@@ -1149,11 +1153,9 @@ def run_interaction_matrix(free_panel):
             return folder_window(panel)
 
         def shown_shape(layout, free=True):
-            # The shape the dock shows for a saved folder shape: a Stack opens
-            # as a fan; an Arc opens along the dock of a curved free panel and
-            # as a fan on an edge panel; the others open as named.
-            if layout == "stack":
-                return "fan"
+            # The shape the dock shows for a saved folder shape: an Arc opens
+            # along the dock of a curved free panel and as a fan on an edge
+            # panel; the others open as named.
             if layout in ("arc", "track"):
                 return "track" if free else "fan"
             return layout
@@ -1218,7 +1220,7 @@ def run_interaction_matrix(free_panel):
                 shutil.copy2(path, target / path.name)
             return path
 
-        layouts = ["fan", "grid", "stack", "arc", "ring"]
+        layouts = ["fan", "grid", "arc", "ring"]
 
         # Where the free panel's folder stands on the screen, relative to the
         # dock's drawn centre, and how to put it at a given angle and open it.
@@ -1482,18 +1484,6 @@ def run_interaction_matrix(free_panel):
                             problems.append("the fan's apex is not at the folder")
                         if not state.get("outlineDrawn"):
                             problems.append("the fan's outline is not drawn")
-                    elif layout == "stack":
-                        # A straight line along the panel's side, one way.
-                        first, last = children[0], children[-1]
-                        span = distance(first, last) or 1
-                        axis = ((last[0] - first[0]) / span, (last[1] - first[1]) / span)
-                        aside = [abs((c[0] - first[0]) * -axis[1] + (c[1] - first[1]) * axis[0]) for c in children]
-                        along = [(c[0] - first[0]) * axis[0] + (c[1] - first[1]) * axis[1] for c in children]
-                        row["aside"] = [round(v, 1) for v in aside]
-                        if max(aside) > 4:
-                            problems.append("the stack is not a straight line")
-                        if any(b <= a for a, b in zip(along, along[1:])):
-                            problems.append("the stack does not run one way")
                     elif layout == "grid":
                         # Children only, at most two rows of three at once.
                         if len(children) > 6:
@@ -1516,11 +1506,11 @@ def run_interaction_matrix(free_panel):
                     if info["turn"] != 0:
                         problems.append("the shape turned although the screen has room")
                     # A true-3D panel opens its shapes from the platform's rim
-                    # beside the folder, the way out of the platform as drawn;
-                    # its stack lies along the rim. Flat and baked panels open
-                    # from the folder icon along its outward direction.
+                    # beside the folder, the way out of the platform as drawn.
+                    # Flat and baked panels open from the folder icon along
+                    # its outward direction.
                     edge = tier == "true3d"
-                    if layout not in ("ring", "stack") and facing < (0.6 if edge else 0.95):
+                    if layout != "ring" and facing < (0.6 if edge else 0.95):
                         problems.append("the shape does not open along the folder's outward direction")
                     near = icon_size * 2 + 24 if edge else icon_size * 0.75 + 12
                     if layout == "fan":
@@ -1554,37 +1544,6 @@ def run_interaction_matrix(free_panel):
                                 sum(c[1] for c in children) / len(children) - middle[1])
                         if (mean[0] * way[0] + mean[1] * way[1]) / (math.hypot(*mean) or 1) < 0.98:
                             problems.append("the arc is not symmetric about the folder's outward direction")
-                    elif layout == "stack":
-                        # Against the dock's side nearest the folder:
-                        # a straight, axis-aligned line outside the dock, centred
-                        # on it and no longer than the dock.
-                        base = children[0]
-                        aside = [abs((c[0] - base[0]) * -way[1] + (c[1] - base[1]) * way[0]) for c in children]
-                        along = [(c[0] - base[0]) * way[0] + (c[1] - base[1]) * way[1] for c in children]
-                        row["aside"] = [round(a, 1) for a in aside]
-                        if max(aside) > 4:
-                            problems.append("the stack is not a straight line")
-                        if any(b <= a for a, b in zip(along, along[1:])):
-                            problems.append("the stack does not run one way")
-                        if min(abs(way[0]), abs(way[1])) > 0.05:
-                            problems.append("the stack is not upright or level against the dock")
-                        # The dock's box on the screen: its icons' box.
-                        box_points = icons + [folder]
-                        box = (min(p[0] for p in box_points) - icon_size / 2, min(p[1] for p in box_points) - icon_size / 2,
-                               max(p[0] for p in box_points) + icon_size / 2, max(p[1] for p in box_points) + icon_size / 2)
-                        level = abs(way[0]) > abs(way[1])
-                        across = [c[1] for c in children] if level else [c[0] for c in children]
-                        low, high = (box[1], box[3]) if level else (box[0], box[2])
-                        if not (max(across) < low + 4 or min(across) > high - 4):
-                            problems.append("the stack is not outside the dock")
-                        extent = (box[2] - box[0]) if level else (box[3] - box[1])
-                        if along[-1] - along[0] > extent + icon_size + 24:
-                            problems.append("the stack is longer than the dock")
-                        # Centred on the dock along its side.
-                        mid = (children[0][0] + children[-1][0]) / 2 if level else (children[0][1] + children[-1][1]) / 2
-                        box_mid = (box[0] + box[2]) / 2 if level else (box[1] + box[3]) / 2
-                        if abs(mid - box_mid) > icon_size * 1.5:
-                            problems.append("the stack is not centred on the dock")
                     else:
                         middle = on_screen(info["centre"])
                         radii = [distance(c, middle) for c in children]
@@ -1732,7 +1691,7 @@ def run_interaction_matrix(free_panel):
                                    "folderSpeed": 80, "folderEasing": "outCubic", "folderShowNames": True})
             centre_dock()
             positions = [("right", 0), ("bottom", 90), ("left", 180), ("top", 270), ("diagonal", 315)]
-            layouts = os.environ.get("ARCHDOCK_FOLDER_LAYOUTS", "track,fan,grid,stack,arc,ring").split(",")
+            layouts = os.environ.get("ARCHDOCK_FOLDER_LAYOUTS", "track,fan,grid,arc,ring").split(",")
             counts = [int(value) for value in os.environ.get("ARCHDOCK_FOLDER_COUNTS", "3,8,24").split(",")]
             rows = []
             # Each folder window numbers its own openings.
@@ -1848,8 +1807,6 @@ def run_interaction_matrix(free_panel):
                 for name, position, count, values in [
                         ("fan-opening-40", "top", 8, {"folderFanOpening": 40}),
                         ("fan-opening-160", "top", 8, {"folderFanOpening": 160}),
-                        ("stack-length-2", "top", 24, {"folderStackLength": 2}),
-                        ("stack-length-12", "right", 24, {"folderStackLength": 12}),
                         ("ring-panel-8", "right", 8, {"folderRingSize": "panel"}),
                         ("ring-panel-24", "right", 24, {"folderRingSize": "panel"})]:
                     fill(count)
@@ -1863,7 +1820,7 @@ def run_interaction_matrix(free_panel):
                     print("FOLDER SETTING: " + json.dumps(extras[-1]), flush=True)
                     escape()
                     wait_for(closed, "folder closed")
-                configure(free_panel, {"folderFanOpening": 90, "folderStackLength": 5, "folderRingSize": "small",
+                configure(free_panel, {"folderFanOpening": 90, "folderRingSize": "small",
                                        "folderShowNames": False})
                 fill(8)
                 turn_folder_to(dict(positions)["diagonal"])
@@ -1903,7 +1860,7 @@ def run_interaction_matrix(free_panel):
 
                 for scale in (1, 2, 0.5):
                     configure(free_panel, {"scrollSensitivity": scale})
-                    for layout in ("track", "fan", "arc", "stack", "ring"):
+                    for layout in ("track", "fan", "arc", "ring"):
                         opening(f"sensitivity-{layout}-{scale}", layout, 24)
                         point = aim()
                         rows_here = [
@@ -1993,13 +1950,7 @@ def run_interaction_matrix(free_panel):
                 assert panel_call("requestPanelPresentation", "(ss)", (panel, "collapse"))
                 assert panel_call("panelPresentationState", "(s)", (panel,))["surfaceState"] == "open"
                 selected = current["snapshot"]["entries"][0]
-                if layout == "stack":
-                    key(106)  # Right, then Enter: stacked entries remain keyboard reachable.
-                    selected = current["snapshot"]["entries"][1]
-                    wait_for(lambda: folder_popup(panel).get("selected") == selected["id"], "keyboard child selection")
-                    key(28)
-                else:
-                    click(folder_point(panel, "folder-child-0", icon=True))
+                click(folder_point(panel, "folder-child-0", icon=True))
                 wait_for(lambda: marker.exists(), "controlled document handler opened selected child")
                 assert marker.read_text() in (selected["url"], str(folder / selected["name"])), marker.read_text()
                 marker.unlink()
@@ -2157,7 +2108,9 @@ def run_interaction_matrix(free_panel):
                 wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] == 0, "real upward folder wheel")
                 wait_for(lambda: on_path() and on_path()[0][0] == "folder-child-0", "the folder returns along the curve")
                 start = folder_point(panel, "folder-child-0")
-                drag(start, [start[0], start[1] - 100])
+                # Upward, as far as the screen allows: a child near its top
+                # edge still gets a drag of some length.
+                drag(start, [start[0], max(2.0, start[1] - 100)])
                 wait_for(lambda: folder_popup(panel)["viewport"]["contentY"] > 0, "real held-pointer folder drag")
                 assert not marker.exists() and folder_popup(panel)["visible"], "scroll drag opened a child"
                 escape()

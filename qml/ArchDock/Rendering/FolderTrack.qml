@@ -5,7 +5,7 @@ import "MotionChannels.js" as MotionChannels
 import "PlatformGeometry.js" as PlatformGeometry
 
 // A free panel's folder contents on a path: "Along the dock",
-// where the dock's own track continues outside it, or the fan, arc, stack and
+// where the dock's own track continues outside it, or the fan, arc and
 // ring of LayoutEngine.folderShape(). The host traces the path, and the small
 // panel drawn under it, in this item's coordinates; this item stands the
 // children on it, unfolds them from the folder icon and folds them back, and
@@ -15,7 +15,7 @@ Item {
     id: root
     property var snapshot: ({ status: "unavailable", entries: [] })
     property string folderTitle: ""
-    // "track" (Along the dock), "fan", "arc", "stack" or "ring".
+    // "track" (Along the dock), "fan", "arc", "ring" or "mobius".
     property string shape: "track"
     property int duration: 260
     property string easing: "outBack"
@@ -37,7 +37,7 @@ Item {
     property var rings: []
     property bool closedPath: false
     property bool startAtFolder: false
-    // At most this many children on the path at once (a stack's length); 0
+    // At most this many children on the path at once; 0
     // is as many as fit.
     property int pathCapacity: 0
     // The distance between neighbours on the path; 0 keeps the dock's pitch.
@@ -61,10 +61,14 @@ Item {
     // On a drawn band each child's stand has its base on the band and the
     // icon stands above it; elsewhere the icon's middle is on the path.
     property bool standsOnPath: false
-    // On a tilted 3D panel, the dock's middle in these coordinates: a child
-    // standing above it (the far side) carries its name above its icon,
-    // away from the ring; a child below it carries it below, as always.
+    // On a tilted 3D panel, the dock's middle in these coordinates and its
+    // drawn half height: a child standing above the middle (the far side)
+    // carries its name above its icon, away from the ring, and stands on
+    // the path by its stand's base; one below it carries its name below and
+    // its icon on the path, its stand below; between, the standing point
+    // glides from the one to the other across the dock's height.
     property real dockMiddleY: NaN
+    property real dockHalfHeight: 0
     property bool outlineFilled: false
     property var outlineStyle: null
     property real outlineOpacity: 0.9
@@ -468,6 +472,12 @@ Item {
             // panel, and the growth.
             readonly property real drawnScale: Math.max(0.35, Number(placed.scale) || 1) * grownScale
             readonly property bool nameAbove: isFinite(root.dockMiddleY) && centreY < root.dockMiddleY
+            // How much of the way from the icon's middle to the stand's base
+            // the standing point is: all of it behind a tilted dock's middle
+            // or on any drawn band, none of it before the middle or off a band.
+            readonly property real standShare: !root.standsOnPath ? 0
+                : isFinite(root.dockMiddleY) && root.dockHalfHeight > 0
+                    ? Math.max(0, Math.min(1, (root.dockMiddleY - centreY) / root.dockHalfHeight * 0.5 + 0.5)) : 1
             objectName: "folder-child-" + index
             // The icon's centre travels from the folder icon to its place.
             readonly property real centreX: root.expansionOrigin.x
@@ -475,8 +485,10 @@ Item {
             readonly property real centreY: root.expansionOrigin.y
                 + (placed.y - root.expansionOrigin.y) * root.openingProgress
             x: centreX - width / 2
-            // The icon's cell centred on its place; the raised icon above it.
-            y: centreY - (root.standsOnPath ? root.standFoot : root.iconSize / 2 + root.standLayout.above) * drawnScale
+            // The cell hung from its standing point: the icon's middle on the
+            // place, or the stand's base, or between.
+            y: centreY - (root.iconSize / 2 + root.standLayout.above
+                          + (root.standFoot - root.iconSize / 2 - root.standLayout.above) * standShare) * drawnScale
             width: root.cellWidth * drawnScale
             height: root.cellHeight * drawnScale
             opacity: placed.visibility * Math.max(0, Math.min(1, root.openingProgress * 1.5))

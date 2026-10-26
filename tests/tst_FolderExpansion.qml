@@ -92,7 +92,7 @@ TestCase {
         verify(point.y >= 0 && point.y < viewport.height)
     }
     function test_layoutSelection_data() {
-        return ["fan", "grid", "stack", "arc", "ring"].map(function(layout) {
+        return ["fan", "grid", "arc", "ring"].map(function(layout) {
             return { tag: layout, layout: layout }
         })
     }
@@ -145,7 +145,8 @@ TestCase {
         tryCompare(controller, "activeTracks", [])
     }
     function test_horizontalWheelAndShiftRespectBounds() {
-        const item = popup("stack", 48)
+        // A ring of 48 is wider than its popup.
+        const item = popup("ring", 48)
         const viewport = findChild(item, "folderViewport")
         verify(viewport.contentWidth > viewport.width)
         mouseWheel(viewport, 100, 20, -120, 0)
@@ -382,7 +383,7 @@ TestCase {
     // away from its screen edge.
     function test_hostOpensAgainstTheFolderOnItsOutwardSide_data() {
         const rows = []
-        for (const layout of ["fan", "grid", "stack", "arc", "ring"]) {
+        for (const layout of ["fan", "grid", "arc", "ring"]) {
             rows.push({ tag: layout + "/up", layout: layout, edge: "free", normal: { x: 0, y: -1 }, side: "top" })
             rows.push({ tag: layout + "/down", layout: layout, edge: "free", normal: { x: 0, y: 1 }, side: "bottom" })
             rows.push({ tag: layout + "/left", layout: layout, edge: "free", normal: { x: -1, y: 0 }, side: "left" })
@@ -440,8 +441,7 @@ TestCase {
                  + JSON.stringify([host.x, host.y, host.width, host.height, corner.x, corner.y]))
         if (data.normal.x === 0.6) {
             verify(host.expansionLean > 0.5, "a diagonal folder leans its contents")
-            verify(content.anchorAcross < content.width / 2 || data.layout === "stack",
-                   "the contents grow toward the lean")
+            verify(content.anchorAcross < content.width / 2, "the contents grow toward the lean")
         }
         // The contents unfold from the clicked icon, wherever the popup is.
         tryVerify(function() {
@@ -632,7 +632,7 @@ TestCase {
     function shapeOf(kind, outward, count, names, extra) {
         const options = { folder: { x: shapeFolder.x, y: shapeFolder.y }, outward: outward, iconSize: 48,
             cellWidth: names ? 108 : 48, cellHeight: names ? 82 : 48, gap: 6, count: count,
-            fanOpening: 90, stackLength: 5, ringSize: "small", panelRadius: 150,
+            fanOpening: 90, ringSize: "small", panelRadius: 150,
             obstacles: neighbours(outward), obstacleSize: 48,
             screen: { x: 0, y: 0, width: 3840, height: 2160 }, outlineMargin: 20 }
         for (const key in extra || {}) options[key] = extra[key]
@@ -660,7 +660,7 @@ TestCase {
     // on the shape as projected, at the scale there, and the outline and the
     // room the shape needs are the projected ones.
     function test_folderShapesLieOnATiltedPlane_data() {
-        return ["fan", "arc", "stack", "ring", "grid"].map(function(kind) { return { tag: kind, kind: kind } })
+        return ["fan", "arc", "ring", "grid"].map(function(kind) { return { tag: kind, kind: kind } })
     }
     function test_folderShapesLieOnATiltedPlane(data) {
         const centre = { x: 1920, y: 1500 }
@@ -672,7 +672,7 @@ TestCase {
         // (two circles lean: test_ringCirclesLeanLikeAGimbal).
         const shape = LayoutEngine.folderShape(data.kind, {
             folder: { x: 0, y: -300 }, outward: { x: 0, y: -1 }, fromEdge: true, iconSize: 48,
-            cellWidth: 108, cellHeight: 82, gap: 6, count: data.kind === "ring" ? 6 : 8, fanOpening: 90, stackLength: 5,
+            cellWidth: 108, cellHeight: 82, gap: 6, count: data.kind === "ring" ? 6 : 8, fanOpening: 90,
             ringSize: "small", panelRadius: 300, obstacles: [], obstacleSize: 48,
             screen: { x: 0, y: 0, width: 3840, height: 2160 }, outlineMargin: 20, project: project })
         verify(!shape.hidden)
@@ -695,27 +695,14 @@ TestCase {
                              "the ring lies on the plane")
             }
         }
-        if (data.kind === "stack") {
-            // A straight line on the plane is one on the screen too, its
-            // steps shortened by the tilt.
-            const first = shape.samples[0], second = shape.samples[1]
-            for (const sample of shape.samples.slice(2)) {
-                const cross = (second.x - first.x) * (sample.y - first.y) - (second.y - first.y) * (sample.x - first.x)
-                verify(Math.abs(cross) < 0.01 * Math.hypot(sample.x - first.x, sample.y - first.y) * 100,
-                       "the stack is a straight line")
-            }
-            // Neighbours a pitch apart at the size they are drawn, near or far.
-            fuzzyCompare(Math.hypot(second.x - first.x, second.y - first.y) / ((first.scale + second.scale) / 2),
-                         shape.pitch, 0.03 * shape.pitch, "a pitch apart as drawn")
-        }
         // Laid out at the size each child is drawn there, the shape holds its
         // smallest count at once: three named children on a fan or an arc,
-        // the stack's length, the ring's six.
+        // the ring's six.
         verify(shape.projected, "drawn on a plane")
         const laid = data.kind === "grid" ? LayoutEngine.gridTrackLayout(shape.grid, 8, 0)
             : LayoutEngine.folderTrackLayout(shape.samples, data.kind === "ring" ? 6 : 8, shape.pitch, 0,
                 { closed: shape.closed === true, start: shape.start, capacity: shape.capacity || 0, unscaled: true })
-        compare(laid.capacity, data.kind === "ring" ? 6 : data.kind === "stack" ? 5 : data.kind === "grid" ? 2 : 3)
+        compare(laid.capacity, data.kind === "ring" ? 6 : data.kind === "grid" ? 2 : 3)
         if (data.kind === "grid") {
             // Two rows of three on the plane, rows running out from the folder
             // and their columns along the rim; neighbours a pitch apart as
@@ -755,9 +742,8 @@ TestCase {
             project: function() { return null } }).hidden)
     }
     // On a 3D panel's plane a fan hugs the panel: its children stand along
-    // the rim round the folder, just clear of the panel as drawn. A stack
-    // lies along the panel's side, centred on it and a little way out.
-    // Neither turns away from the panel.
+    // the rim round the folder, just clear of the panel as drawn. It does
+    // not turn away from the panel.
     function test_planeShapesFollowThePanel() {
         const centre = { x: 1920, y: 1200 }
         const project = function(point) { return { x: centre.x + point.x, y: centre.y + point.y * 0.5, scale: 1 } }
@@ -792,22 +778,6 @@ TestCase {
         verify(nearest <= 40, "just clear of the rim at the folder: " + nearest)
         // Four children without names at once, a pitch apart as drawn.
         compare(LayoutEngine.folderTrackLayout(fan.samples, 8, fan.pitch, 0, { unscaled: true }).capacity, 4)
-
-        // The stack beside the right side: up and down along it, centred.
-        const stack = LayoutEngine.folderShape("stack", Object.assign({}, options, {
-            folder: { x: rim, y: -rim }, outward: { x: 0, y: 1 }, stackLength: 3, stackSpan: 2 * rim,
-            sideOut: { x: 1, y: 0 } }))
-        compare(stack.turn, 0)
-        compare(stack.capacity, 3)
-        const line = stack.samples.map(back)
-        for (const point of line)
-            fuzzyCompare(point.x, line[0].x, 0.01, "a line along the side")
-        verify(line[0].x > rim, "out of the rim")
-        fuzzyCompare((line[0].y + line[2].y) / 2, 0, 0.5, "centred on the side")
-        for (const sample of stack.samples.slice(0, 3))
-            verify(clearOf(sample), "clear of the panel as drawn")
-        fuzzyCompare(Math.hypot(stack.samples[1].x - stack.samples[0].x, stack.samples[1].y - stack.samples[0].y),
-                     stack.pitch, 0.5, "a pitch apart as drawn")
     }
     // No child of an opening covers another free panel as drawn: a shape
     // gives way to it, flat or on a plane.
@@ -820,7 +790,7 @@ TestCase {
             return { x: sample.x - size * scale / 2, y: sample.y - size * scale / 2,
                      width: size * scale, height: size * scale }
         }
-        for (const kind of ["fan", "arc", "stack", "ring", "grid"]) {
+        for (const kind of ["fan", "arc", "ring", "grid"]) {
             const plain = shapeOf(kind, { x: 0, y: -1 }, 8, false)
             // Another panel right where the shape would open.
             const where = LayoutEngine.unitedBounds(plain.samples.map(function(sample) { return cellAt(sample, 48) }))
@@ -1084,7 +1054,7 @@ TestCase {
         const rows = []
         const outwards = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 },
                            right: { x: 1, y: 0 }, diagonal: { x: 0.6, y: -0.8 } }
-        for (const kind of ["fan", "arc", "stack", "ring", "mobius"])
+        for (const kind of ["fan", "arc", "ring", "mobius"])
             for (const way in outwards)
                 for (const count of [3, 8, 24])
                     for (const names of [false, true])
@@ -1127,19 +1097,6 @@ TestCase {
             const first = middle[0], last = middle[middle.length - 1]
             fuzzyCompare(turnBetween(n, direction(shapeFolder, first)),
                          -turnBetween(n, direction(shapeFolder, last)), 0.05)
-        } else if (data.kind === "stack") {
-            // A straight line from the folder outward, as long as
-            // Stack length allows.
-            compare(layout.capacity, Math.min(data.count, 5))
-            for (let index = 0; index < shown.length; ++index) {
-                const entry = shown[index]
-                const along = (entry.x - shapeFolder.x) * n.x + (entry.y - shapeFolder.y) * n.y
-                const aside = (entry.x - shapeFolder.x) * -n.y + (entry.y - shapeFolder.y) * n.x
-                verify(Math.abs(aside) < 0.01, "on the line: " + aside)
-                verify(along > 24, "beyond the folder: " + along)
-                if (index > 0) fuzzyCompare(Math.hypot(entry.x - shown[index - 1].x,
-                                                       entry.y - shown[index - 1].y), shape.pitch, 0.01)
-            }
         } else if (data.kind === "mobius") {
             // An ∞ beside the folder along its outward direction, its loops
             // crossing in the middle, the children on its loops.
@@ -1197,11 +1154,6 @@ TestCase {
         verify(layoutOf(shapeOf("fan", up, 24, false, { fanOpening: 160 }), 24).capacity
                > layoutOf(shapeOf("fan", up, 24, false, { fanOpening: 40 }), 24).capacity,
                "a wider fan shows more children at once")
-        // Stack length: how many children the line shows.
-        for (const length of [2, 5, 12])
-            compare(layoutOf(shapeOf("stack", up, 24, false, { stackLength: length }), 24).capacity, length)
-        compare(layoutOf(shapeOf("stack", up, 3, false, { stackLength: 12 }), 3).capacity, 3)
-        compare(shapeOf("stack", up, 24, false, { stackLength: 40 }).capacity, 12)
         // Ring size: small - at its smallest six children, a second circle
         // round it for more - or the dock's radius, one circle.
         const small = shapeOf("ring", up, 8, false)
@@ -1257,12 +1209,6 @@ TestCase {
         verify(tightRing.fewer > 0, "fewer children at once")
         verify(!tightRing.rings, "one circle")
         verify(layoutOf(tightRing, 24).capacity < 24 && layoutOf(tightRing, 24).capacity >= 3)
-        // A stack too long for the room shows fewer children, still outward.
-        const stack = shapeOf("stack", { x: 1, y: 0 }, 24, true,
-                              { stackLength: 12, screen: { x: 0, y: 0, width: 1920 + 700, height: 2160 } })
-        compare(stack.turn, 0)
-        verify(stack.capacity < 12 && stack.capacity >= 2, "a shorter stack: " + stack.capacity)
-        verify(stack.bounds.x + stack.bounds.width <= 1920 + 700 + 0.5)
         // With no room above nor beside, it opens the other way.
         const flipped = shapeOf("ring", { x: 0, y: -1 }, 8, true,
                                 { screen: { x: 1920 - 160, y: 1080 - 200, width: 320, height: 1100 } })
@@ -1272,7 +1218,6 @@ TestCase {
     function test_folderPathsWrapAround_data() {
         return [
             { tag: "fan/24", kind: "fan", count: 24 }, { tag: "arc/24", kind: "arc", count: 24 },
-            { tag: "stack/24", kind: "stack", count: 24 }, { tag: "stack/3", kind: "stack", count: 3 },
             { tag: "fan/3", kind: "fan", count: 3 }, { tag: "ring/24", kind: "ring", count: 24 },
             { tag: "ring/3", kind: "ring", count: 3 }
         ]
