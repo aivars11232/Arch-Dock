@@ -563,6 +563,9 @@ PlasmaCore.Dialog {
                         gap: 6, count: content.entries.length, fanOpening: fanOpening,
                         stackLength: stackLength, stackSpan: stackSpan, ringSize: ringSize, panelRadius: panelRadius,
                         obstacles: others, obstacleSize: iconSize, avoid: avoid, screen: area, screenMargin: margin,
+                        // A 3D panel's platform as drawn, and its icons with
+                        // their stands, are kept clear of here too.
+                        keepOut: keep, keepOutMargin: keepOutMargin,
                         outlineMargin: outlineStyle.lineWidth / 2 + outlineStyle.blur,
                         standsOnPath: ["fan", "arc", "ring"].includes(folderLayout) })
                 }

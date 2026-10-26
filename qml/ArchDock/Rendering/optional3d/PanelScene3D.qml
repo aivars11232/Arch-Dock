@@ -1804,9 +1804,17 @@ Item {
                               y: height / 2 - (o.y + (ex.y - o.y) * x + (ey.y - o.y) * y + (ez.y - o.y) * z) * factor })
             }
         }
-        // An icon's square, and its stand below it.
+        // An icon's square with its tile round it, and its stand down to the
+        // platform, as drawn.
         const rects = (projectedEntryGeometry || []).map(function(rect) {
-            return { x: rect.x - rect.width * 0.1, y: rect.y, width: rect.width * 1.2, height: rect.height * 1.5 }
+            const footX = Number.isFinite(rect.footX) ? rect.footX : rect.x + rect.width / 2
+            const footY = Number.isFinite(rect.footY) ? rect.footY : rect.y + rect.height
+            const footHalf = Number(rect.footHalf) || 0
+            const left = Math.min(rect.x - rect.width * 0.15, footX - footHalf)
+            const right = Math.max(rect.x + rect.width * 1.15, footX + footHalf)
+            const top = rect.y - rect.height * 0.15
+            const bottom = Math.max(rect.y + rect.height * 1.5, footY + footHalf * 0.5)
+            return { x: left, y: top, width: right - left, height: bottom - top }
         })
         return { hull: LayoutEngine.convexHull(points), rects: rects }
     }
@@ -1870,8 +1878,19 @@ Item {
             const right = Math.max(...points.map(p => p.x)), bottom = Math.max(...points.map(p => p.y))
             if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return
             const center = root.projectScenePoint(anchor.scenePosition)
+            // Its stand as drawn: the foot on the platform and the stand's
+            // reach there, so an opened folder keeps clear of the whole.
+            const stand = node.standOnPanel || null
+            const foot = stand ? root.projectScenePoint(stand.scenePosition) : center
+            const reach = Math.max(0, Number(node.openingRadius) || 0)
+            const footEdge = stand && reach > 0
+                ? root.projectScenePoint(stand.mapPositionToScene(Qt.vector3d(reach, 0, 0))) : foot
+            const footHalf = Number.isFinite(footEdge.x) && Number.isFinite(footEdge.y)
+                ? Math.hypot(footEdge.x - foot.x, footEdge.y - foot.y) : 0
             result.push({x: left, y: top, width: right-left, height: bottom-top,
-                centerX: center.x, centerY: center.y, depth: center.z})
+                centerX: center.x, centerY: center.y, depth: center.z,
+                footX: Number.isFinite(foot.x) ? foot.x : center.x, footY: Number.isFinite(foot.y) ? foot.y : center.y,
+                footHalf: footHalf})
         }
         if (JSON.stringify(result) !== JSON.stringify(projectedEntryGeometry)) projectedEntryGeometry = result
         // The dock's centre as drawn: the platform's middle at its top. A
