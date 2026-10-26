@@ -138,6 +138,10 @@ Item {
     readonly property real iconRaise: hologramLight ? hologramLayout.raise : pedestalDrawn ? pedestalLayout.raise : 0
     readonly property real standTop: hologramLight ? hologramLayout.standTop
         : PlatformGeometry.standTopOffset(pedestalLayout, logicalSize)
+    // The stand's drawn bottom edge below this item's top, in its own
+    // pixels, for whatever stands under the stand (a folder child's name).
+    readonly property real standDrawnBottom: pedestalDrawn
+        ? root.mapFromItem(pedestalLayer, 0, pedestalLayer.height).y : height
     // The icon at rest in this scene's coordinates: in its cell, or away
     // from it over its stand or in its hologram's light - not following
     // its motion or magnification - where the pointer finds it.

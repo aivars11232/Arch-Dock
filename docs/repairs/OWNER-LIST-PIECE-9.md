@@ -1293,3 +1293,33 @@ degrees; evidence `OPENING-TILT-*` in the audit folder, pictures 93-94.
 - The track clearance on a flat ring with names: children keep a cell's
   box (108 px with names) clear, so they stand a little further out than
   the icon alone would need.
+
+### Finished on 2026-10-26
+
+- The owner's X on the 60-degree ring opening (band between icons and
+  stands): the stand layout raises the icon inside its cell on a free
+  panel's path and seats the stand about the cell's middle, so the stand's
+  drawn base lies ~30 px above the cell's bottom (measured: every bowl ended
+  13-14 px above the band's upper edge, the band ~30 px thick). A child on a
+  drawn band now stands with the layout's own foot (`standFoot`) on the
+  band, on the plane path and the flat path, and the planner stamps the
+  rule on every shape it returns (the ring builds candidates of its own).
+- The owner's X on the 25-degree openings (ring opening over the torus,
+  track children on the tiles and bowls): the keep-out held each icon's
+  square with a little room, and the flat fallback path had no keep-out at
+  all. The scene projects each entry's stand foot and reach with its square;
+  the keep-out is the tile round the square and the stand down to the
+  platform, on both paths (pictures 96 and 98).
+- The hover: measured in the replica, reach 2.4 enlarged two icons (58 and
+  62 px, rest 34), reach 1.0 exactly one (58 px, every other 34) - picture
+  97. The record upgrade without a schema bump: a stored 2.4 is read as 1.0.
+- Tests: `panel-model-test`, `folder-expansion-test`, `folder-interaction-smoke`,
+  `folder-anchor-smoke`, `panel-window-capability-test`,
+  `studio-truth-matrix-smoke`, `studio-navigation-test`,
+  `capability-model-test` all pass on the final build (logs
+  `final-focused-tests-*.log`); the complete suite before the stand and hover
+  work was 131/133 with the two explained failures.
+- Tooling lessons: an edit inside a background command joined with `;`
+  can fail silently while the tests run on - join with `&&`. A capability-bearing KWin keeps `/proc/<pid>/exe` and
+  `environ` private: the pointer tool verifies it by name and socket. An
+  angular-gap list named `gaps` shadowed the spacing gaps: renamed.

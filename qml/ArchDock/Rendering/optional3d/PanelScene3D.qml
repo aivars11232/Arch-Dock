@@ -1880,11 +1880,19 @@ Item {
             const center = root.projectScenePoint(anchor.scenePosition)
             // Its stand as drawn: the foot on the platform and the stand's
             // reach there, so an opened folder keeps clear of the whole.
-            const stand = node.standOnPanel || null
-            const foot = stand ? root.projectScenePoint(stand.scenePosition) : center
-            const reach = Math.max(0, Number(node.openingRadius) || 0)
-            const footEdge = stand && reach > 0
-                ? root.projectScenePoint(stand.mapPositionToScene(Qt.vector3d(reach, 0, 0))) : foot
+            // The stand's foot: the entry stands at the top of its stand, in the
+            // platform's frame, so the foot is that place lowered by the stand's
+            // height along the platform's normal. The stand's reach is its
+            // shape's reach at the entry's pedestal scale; a bowl reaches the
+            // same way all round, so the frame's x serves.
+            const standHeight = root.pedestalDrawn ? Number(node.pedestalTop) || 0 : 0
+            const reach = root.pedestalDrawn
+                ? PlatformGeometry.pedestalShapeReach(root.pedestalKind) * (Number(node.pedestalScale) || 0) : 0
+            const frame = node.parent && node.parent.mapPositionToScene ? node.parent : null
+            const footPlace = Qt.vector3d(node.position.x, node.position.y, node.position.z - standHeight)
+            const foot = frame && standHeight > 0 ? root.projectScenePoint(frame.mapPositionToScene(footPlace)) : center
+            const footEdge = frame && standHeight > 0 && reach > 0
+                ? root.projectScenePoint(frame.mapPositionToScene(footPlace.plus(Qt.vector3d(reach, 0, 0)))) : foot
             const footHalf = Number.isFinite(footEdge.x) && Number.isFinite(footEdge.y)
                 ? Math.hypot(footEdge.x - foot.x, footEdge.y - foot.y) : 0
             result.push({x: left, y: top, width: right-left, height: bottom-top,

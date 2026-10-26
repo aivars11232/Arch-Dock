@@ -485,6 +485,7 @@ Item {
                 entryIndex: child.index
             }
             IconScene {
+                id: iconView
                 x: (parent.width - width) / 2
                 y: root.standLayout.above * child.drawnScale
                 width: root.iconSize * child.drawnScale
@@ -507,7 +508,10 @@ Item {
                 // width wherever its child stands along the depth: only the
                 // opening's growth scales it, with the child.
                 x: (parent.width - width) / 2
-                y: (root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale + 4
+                // Below the cell, and below the stand as drawn: the name never
+                // crosses the stand or the icon.
+                y: Math.max((root.iconSize + root.standLayout.above + root.standLayout.below) * child.drawnScale,
+                            iconView.y + iconView.standDrawnBottom) + 4
                 width: root.cellWidth
                 visible: root.showNames
                 text: String(child.modelData.displayName || child.modelData.name || "")
