@@ -14,7 +14,9 @@
 //   fit: { out, in } the room (pixels) the band has across, toward the
 //        outward side and the other, or null to draw it as large as asked;
 //   ends: how far (half-widths) an open band runs on past its first and
-//         last icons, as the decorations were designed;
+//         last icons, as the decorations were designed; a path marked
+//         `within` (a bar's, from one end of the bar to the other) keeps the
+//         band's own ends at its ends instead;
 //   clip: { x, y, width, height, fade } the window the panel is seen
 //         through, or null;
 //   relief: made a solid for a 3D scene (its icons' points are given).
@@ -68,9 +70,81 @@ function extended(path, slots, extra, halfWidth) {
              slots: (slots || []).map(function(s) { return Number(s) + extra }) }
 }
 
-// The path and icon places a decoration is drawn on, at a half-width.
+// How far a scene reaches past its open path's first and last points, along
+// the path (pixels): the band's own end shapes and any parts at its ends.
+function reachAlong(scene, path) {
+    const points = path && path.points
+    if (!points || points.length < 2) return { start: 0, end: 0 }
+    const away = function(from, to) {
+        const length = Math.hypot(to.x - from.x, to.y - from.y) || 1
+        return { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
+    }
+    const first = points[0], last = points[points.length - 1]
+    const head = away(points[1], first), tail = away(points[points.length - 2], last)
+    let start = 0, end = 0
+    const see = function(x, y, r) {
+        start = Math.max(start, (x - first.x) * head.x + (y - first.y) * head.y + r)
+        end = Math.max(end, (x - last.x) * tail.x + (y - last.y) * tail.y + r)
+    }
+    for (const e of scene.elements) {
+        if (e.type === "fill") { for (const ring of e.rings) for (const p of ring) see(p[0], p[1], 0) }
+        else if (e.type === "stroke") { for (const p of e.points) see(p[0], p[1], e.width / 2) }
+        else see(e.centre[0], e.centre[1], e.radius)
+    }
+    return { start: start, end: end }
+}
+
+// An open path cut back by `start` pixels at its first end and `end` at its
+// last, and the icons' places on what is left. A path too short for both
+// keeps a sliver in its middle rather than turning inside out.
+function cutBack(path, slots, start, end) {
+    const points = path.points
+    const lengths = [0]
+    for (let i = 1; i < points.length; ++i)
+        lengths.push(lengths[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y))
+    const total = lengths[lengths.length - 1]
+    const share = start + end > total - 2 ? Math.max(0, (total - 2) / Math.max(1e-6, start + end)) : 1
+    const from = start * share, to = total - end * share
+    const at = function(distance) {
+        for (let i = 1; i < points.length; ++i) {
+            if (distance <= lengths[i] || i === points.length - 1) {
+                const span = lengths[i] - lengths[i - 1]
+                const u = span > 0 ? Math.max(0, Math.min(1, (distance - lengths[i - 1]) / span)) : 0
+                return { x: points[i - 1].x + (points[i].x - points[i - 1].x) * u,
+                         y: points[i - 1].y + (points[i].y - points[i - 1].y) * u }
+            }
+        }
+        return { x: points[0].x, y: points[0].y }
+    }
+    const kept = [at(from)]
+    for (let i = 1; i + 1 < points.length; ++i)
+        if (lengths[i] > from && lengths[i] < to) kept.push(points[i])
+    kept.push(at(to))
+    return { path: Object.assign({}, path, { points: kept }),
+             slots: (slots || []).map(function(s) { return Number(s) - from }) }
+}
+
+// A decoration's every frame is laid out the same, so a path's ends are
+// measured once for each path, size and decoration.
+var withinMeasure = { key: "", start: 0, end: 0 }
+
+// The path and icon places a decoration is drawn on, at a half-width. A path
+// marked `within` is cut back by as far as the band's own ends reach past
+// it, so those ends land on its ends.
 function laidOut(input, halfWidth) {
-    return extended(input.path, input.slots || [], Math.max(0, Number(input.ends) || 0) * halfWidth, halfWidth)
+    const path = input.path
+    if (path && path.within === true && path.closed !== true && path.points && path.points.length > 1) {
+        const decoration = decorationOf(input)
+        const key = JSON.stringify([input.decoration, path.points, input.slots, input.choices]) + "|" + halfWidth
+        if (decoration && withinMeasure.key !== key) {
+            const probe = Scene.scene(decoration, path, halfWidth, input.slots || [], { choices: input.choices || ({}) })
+            const reach = reachAlong(probe, path)
+            withinMeasure = { key: key, start: reach.start, end: reach.end }
+        }
+        return withinMeasure.key === key ? cutBack(path, input.slots || [], withinMeasure.start, withinMeasure.end)
+            : { path: path, slots: input.slots || [] }
+    }
+    return extended(path, input.slots || [], Math.max(0, Number(input.ends) || 0) * halfWidth, halfWidth)
 }
 
 // How far a scene reaches out from its path, toward the outward side and

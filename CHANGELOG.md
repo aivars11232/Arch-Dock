@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.1-50 — 2026-10-26
+
+- **Icon animations play again.** Every icon animation had stood still: when
+  a panel's animation changed, the dock reset the motion runners it had just
+  made for the new animation a moment after they started, and nothing
+  started them again. A runner that is still wanted now starts over from its
+  beginning when it is reset.
+- **Idle rotate belongs to 3D panels.** It turns each icon on its upright
+  axis over its stand, which a 3D panel draws. On a flat panel it could only
+  spin the whole icon flat, stand and light included, like a carousel, so it
+  is offered on 3D panels only; a flat panel that already has it keeps it
+  listed, and its icons stay still.
+- **Folder openings keep their names.** On a flat or baked free panel the
+  window an opening is drawn in held the children but not their names, so
+  the lowest names were cut off; it holds the names too now.
+- **Side panels no longer cut their decorations off.** A decoration on an
+  Arch Dock bar or a Plasma-held edge panel was laid out over the dock's own
+  drawing area, which is deeper than the panel (room for magnification) and,
+  in a bar, reaches past the bar's ends; the panel's window then sliced the
+  decoration along its long edges and at its ends (a hull's ends, the
+  arches' shields, the raptor's dome). A decoration now fits the panel's own
+  thickness, and along a bar it runs from one end of the bar to the other,
+  its own end shapes inside the bar.
+
 ## 0.1.1-49 — 2026-10-26
 
 - **The Star layout is the Star of David.** Two equilateral triangles laid

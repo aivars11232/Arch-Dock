@@ -1557,3 +1557,114 @@ than four clips per 600 s session.
   in the audit folder now waits a frame between grabs. Committed and
   packaged as 0.1.1-49 on the owner's word; the gallery's pictures, clips and
   replica runs went to the trash.
+
+## The owner's test of 0.1.1-49 (2026-10-26, evening)
+
+The owner, with four pictures: "Side panels are still cut off. And once
+again - why side panels don't have 3D option with it's settings? Free panel
+folder openings are also cut off. Icon animations don't work at all. And for
+god sake work only on problems i point, don't remove or invent anythig that
+i didn't ask." On the animation test view: "With ✓ is good and with x remove
+that animation" (✓ Idle rotate on the 3D ring, ✗ Idle rotate spinning a flat
+panel's icons). Evidence: `build-codex-adrep/evidence/OWNER-FIXES-2026-10-26/`;
+pictures 106 to 110 in `../OWNER-TEST-FIXES-2026-10-22/`.
+
+### Icon animations did not play
+
+`IconMotionController` rests its runners whenever its profiles change
+(`onProfilesChanged: reset()`). A profile change reached the runners just
+made for the new profile about 15 ms after they had started, so they were
+stopped at once; their `running` binding never changed again, and they stayed
+still for good. Probes in the runner showed the order (started, rest,
+finished, never started again); the same runner ran in a test outside
+Plasma. `MotionTrackRunner.rest()` now starts an active runner over from its
+origin. Test: `tst_AnimationProfileRuntime` `test_aProfileHandedOverAgainKeepsAnimating`
+(a profile handed over twice keeps its channel moving). On a copy of the
+owner's ring the turn channel advanced (56, 101, 146 degrees...) on the flat,
+3D-icon, hologram and 3D tiers.
+
+### Idle rotate on 3D panels only
+
+Owner's choice from the test view: Idle rotate turns each icon on its upright
+axis over a still stand on a 3D panel (ticked); on a flat panel it spun the
+whole icon cell, stand and light included (crossed). The Studio's Animation
+list offers Idle rotate when the panel is drawn in 3D (the tier it draws, not
+the one asked for), and keeps it listed on a flat panel that already uses it
+so the list shows the panel's own value; the dock (`main.qml`) and the scene
+(`PanelScene.defaultIconProfiles`) give a flat panel no Idle rotate motion.
+Test: `PanelWindowCapabilityTest::idleRotateIsOfferedOnThreeDPanelsAlone`.
+Replica (`GALLERY-verify-fixes`): flat icons and stands still, only the look's
+light strips change; on 3D each icon turns over its still stand (picture 106).
+
+### Free panel folder openings cut off
+
+On a flat or baked panel the opening's window was sized for the children's
+bodies only (`FolderTrackHost.boxes` returned the name box only while
+hugging a 3D panel), so the lowest names were cut at the window's edge. The
+window now holds every name; the keep-out test still keeps only the bodies
+clear of the dock. Picture 109, ticked by the owner ("Good").
+
+### Side panels cut off
+
+Probes on a private desktop (`GALLERY-probe-edges-cut`,
+`GALLERY-probe-edges-before`, `GALLERY-probe-edges-after2`): a top Arch Dock
+bar and a left Plasma-held panel with Collective Hull, Raptor Hull and Wizard
+Arches. Measured on the hull: its texture ran to the bar's window on all four
+sides with no fade, ending in hard lines at the bar's ends (x 510 and 1410)
+and at its long edges.
+
+Cause: a decoration on an edge panel is fitted across the item it is drawn
+in and faded at that item's edges. On an edge panel that item is the dock's
+scene, which is deeper than the panel (room for magnification) and centred
+across it; in a bar the surface's box also reaches past the bar's ends. So
+the band was fitted to a space larger than the panel, and the panel's window
+cut it: the hull's ends and sides, the arches' shields under the icons (the
+owner's picture showed such shapes sliced flat), the raptor's dome, and on
+the Plasma panel the parts reaching into the screen.
+
+Fix: `PanelScene.barDecorationWindow` gives a bar's decoration the bar's own
+window in its box, and `panelThickness` (from the widget, the size Plasma
+gives it across) a Plasma panel's thickness. `PanelDecoration2D` fits the
+band to that window (4 px room at its sides, as the flat band keeps), fades
+its halo and shadow at the window's edges, and along a bar runs the band
+down the bar's middle from end to end with `within` set. `DecorationJob`
+cuts such a path back at each end by as far as the band's own end shapes
+reach past it (measured once per path, size and decoration), so the ends
+land on the bar's ends instead of being sliced. Tests:
+`tst_PanelDecoration2D` `test_aBarKeepsItsDecorationInsideIt` (hull and
+raptor in a scene twice as deep and longer than the bar) and
+`test_aPlasmaSidePanelKeepsItsDecorationInsideIt`. Pictures 107 (top bar)
+and 108 (left panel), before and after.
+
+Found, not changed (a design decision for the owner): on a bar with stands or
+holograms, always shown, the dock is drawn in its own window above the bar
+(stands reach past the bar), and the bar's look then covers only the dock's
+icons, not the whole bar; that window also takes the pointer over the whole
+bar. Drawing the look along the whole bar there would cover the bar's other
+widgets, so it would have to stay in the bar's own window while the icons and
+stands go to the window above.
+
+### Answered
+
+- The white strip behind the left panel in the test pictures is Plasma's own
+  panel background: the private desktop runs plain Plasma with its default
+  Breeze theme (the owner's Plasma settings are never copied). Arch Dock's
+  widget asks for no background; Arch Dock's own bars have none.
+- "That icon tile, also supposed to be 3D... more like in 3D icon tile
+  bubble": the owner's ring has Icon Tiles > 3D tile form set to Flat (the
+  default it got when the setting came; no saved copy shows Bubble), a plate
+  2 px thick that turns edge-on with the icon. Bubble draws the glass bubble
+  round each icon (picture 110). The setting is shown while the panel is
+  drawn in 3D.
+
+### Verification
+
+- `panel-decoration-test` 13/13 after each change.
+- The 36 tests these changes touch (bars, decorations, motion, folders,
+  scene, capability, Studio): 35 passed; `studio-truth-matrix-smoke` stopped
+  after 89 s (its output was lost to a later ctest listing of mine), its
+  rerun passed in 454 s; the known Qt Quick 3D layer crash stops it about
+  one run in two (`tests-2.log`, `truth-matrix-rerun.log`).
+- No new QML warnings in the replica logs: the four `surfaceMetrics`
+  binding-loop warnings appear with and without these changes (also in the
+  committed files under `panel-decoration-test`).

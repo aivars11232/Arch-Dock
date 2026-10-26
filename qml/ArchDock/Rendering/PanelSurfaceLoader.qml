@@ -120,6 +120,13 @@ Item {
     property real decorationSpeed: 1
     property string decorationEdge: ""
     property var iconCentres: []
+    // In an Arch Dock bar, the bar's own window in this item's pixels, which
+    // the decoration keeps inside (PanelScene.barDecorationWindow); null
+    // elsewhere.
+    property var decorationWindow: null
+    // On a Plasma-held edge panel, how thick the panel is across its edge,
+    // which the decoration fits inside; 0 elsewhere.
+    property real decorationPanelThickness: 0
     // The icons' places at rest, in the scene's pixels, for a 3D panel's
     // decoration (PanelScene.restEntryCentres).
     property var restEntryCentres: []
@@ -501,6 +508,8 @@ Item {
             animated: root.decorationAnimated
             motionSpeed: root.decorationSpeed
             edge: root.decorationEdge
+            barWindow: root.decorationWindow
+            panelThickness: root.decorationPanelThickness
             iconCentres: root.iconCentres
             layout: root.layout
             geometry: root.geometry

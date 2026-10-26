@@ -338,6 +338,7 @@ private slots:
     void studioPageWheelInput();
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
+    void idleRotateIsOfferedOnThreeDPanelsAlone();
     void platformOffRestoresTheCompleteFlatLook();
     void themeCardsResolveEachThemesOwnRenderer();
     void sceneEditAuditionsOnlyAFree3DPanel();
@@ -1906,6 +1907,45 @@ void PanelWindowCapabilityTest::tiltEditorsFollowTheSelectedRenderer()
     QCOMPARE(reloaded.panelDefinition(panel)->surface.parameters2_5D.value("tilt").toDouble(), 8.0);
     if (available)
         QVERIFY(reloaded.panelDefinition(panel)->surface.parameters3D.value("iconSolid").toBool());
+}
+
+// Idle rotate turns each icon on its upright axis over its stand, which only
+// a 3D panel draws, so the Animation list offers it on 3D panels alone. A
+// flat panel that already uses it keeps it listed, so the list still shows
+// the panel's own value.
+void PanelWindowCapabilityTest::idleRotateIsOfferedOnThreeDPanelsAlone()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const auto choices = [&](const QString &panelId) {
+        return fieldByKey(backend.panelSettingsEditorSnapshot(panelId, "studio")
+            .value("panelFields").toList(), QStringLiteral("iconAnimation"))
+            .value("choices").toStringList();
+    };
+    const QString panel = registry->addFreePanel();
+    const auto blue = registry->themeCandidate(panel, "ring-platform-blue", "complete");
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        blue.value("values").toMap()).value("success").toBool());
+    QVERIFY(choices(panel).contains(QStringLiteral("spin")));
+    QVERIFY(!choices(panel).contains(QStringLiteral("idle-rotate")));
+    QVERIFY(!choices(QStringLiteral("bottom")).isEmpty());
+    QVERIFY(!choices(QStringLiteral("bottom")).contains(QStringLiteral("idle-rotate")));
+    if (!(ARCHDOCK_QUICK3D_BUILT && ARCHDOCK_SCENE3D_BUILT))
+        return;
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"rendererTier", "true3d"}}).value("success").toBool());
+    QVERIFY(choices(panel).contains(QStringLiteral("idle-rotate")));
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"iconAnimation", "idle-rotate"}}).value("success").toBool());
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"rendererTier", "procedural2d"}}).value("success").toBool());
+    QCOMPARE(registry->panelValue(panel, QStringLiteral("iconAnimation")).toString(),
+             QStringLiteral("idle-rotate"));
+    QVERIFY(choices(panel).contains(QStringLiteral("idle-rotate")));
 }
 
 // Desktop 3D editing starts only for a free panel drawn in 3D,

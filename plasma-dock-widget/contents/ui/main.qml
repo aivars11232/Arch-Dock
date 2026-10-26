@@ -145,6 +145,10 @@ PlasmoidItem {
     // resolve reduced-motion substitutes.
     readonly property var activeAnimationProfiles: {
         const profile = root.configuration.animationProfile
+        // Idle rotate is a 3D panel's turn of each icon over its stand; a
+        // flat panel does not spin its icons flat.
+        if (profile && profile.id === "idle-rotate" && root.effectiveRendererTier !== "true3d")
+            return []
         return profile && profile.id ? [profile] : []
     }
     readonly property var animationCatalogMap: {
@@ -1539,6 +1543,7 @@ PlasmoidItem {
                                                                             : dockContent.width - x - width)) : 0
                     surfaceSpanThickness: root.drawsBarSurface && !overflowHost.hosting
                         ? root.barSurfaceThickness : 0
+                    panelThickness: root.freeSurface || root.drawsBarSurface ? 0 : root.panelCrossSize
                     panelDefinition: root.scenePanelDefinition
                     runtimeState: root.sceneRuntimeState
                     orderedEntries: root.entries

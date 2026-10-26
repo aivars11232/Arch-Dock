@@ -58,6 +58,9 @@ Item {
             || motionCatalog[String(animationProfiles.iconAnimation
                 || definitionValue("motion", "iconProfile", "iconAnimation", "none"))]
         if (!selected) return []
+        // Idle rotate is a 3D panel's turn of each icon over its stand; a
+        // flat panel does not spin its icons flat.
+        if (selected.id === "idle-rotate" && effectiveRendererTier !== "true3d") return []
         const copy = Object.assign({}, selected)
         const trigger = AnimationProfileRuntime.normalizeTrigger(animationProfiles.animationTrigger
             || panelDefinition.animationTrigger || selected.trigger)
@@ -1308,6 +1311,10 @@ Item {
     property real surfaceSpanBefore: 0
     property real surfaceSpanAfter: 0
     property real surfaceSpanThickness: 0
+    // How thick a Plasma-held edge panel is across its edge (the widget's
+    // own size there, which Plasma gives it); 0 elsewhere. This scene is
+    // deeper than the panel (room for magnification) and centred across it.
+    property real panelThickness: 0
     // In an Arch Dock bar: told by the bar's depth alone, which nothing in
     // this scene's own size feeds back into.
     readonly property bool inBar: surfaceSpanThickness > 0
@@ -1437,6 +1444,20 @@ Item {
         }
         const side = Math.max(0, (surfaceSpanThickness - surfaceBand) / 2)
         return ({ start: surfaceBand / 2, end: surfaceBand / 2, sideStart: side, sideEnd: side })
+    }
+    // In a bar, the bar's own window inside the surface's box, which a
+    // decoration keeps inside: its ends at the bar's ends and its band no
+    // deeper than the bar. This scene is deeper than the bar (room for
+    // magnification) and centred across it, and the box reaches
+    // surfaceLineInset past the bar's ends; a decoration fitted to the box
+    // instead reached past the bar on every side, where the bar's window cut
+    // it off.
+    readonly property var barDecorationWindow: {
+        if (!inBar || !surfaceSpanned || skinSpansBar || !panelDecoration.length) return null
+        const box = surfaceBox, inset = surfaceLineInset, deep = surfaceSpanThickness
+        return verticalLayout
+            ? ({ x: (box.width - deep) / 2, y: inset, width: deep, height: Math.max(1, box.height - 2 * inset) })
+            : ({ x: inset, y: (box.height - deep) / 2, width: Math.max(1, box.width - 2 * inset), height: deep })
     }
     // The room a dock standing at a bar's end keeps there: its own padding
     // keeps its icons clear of a round end, not of a skin's ends.
@@ -2112,6 +2133,8 @@ Item {
         decorationAnimated: root.decorationAnimated
         decorationSpeed: root.decorationSpeed
         decorationEdge: root.freeHost ? "" : root.screenEdge
+        decorationWindow: root.barDecorationWindow
+        decorationPanelThickness: root.freeHost || root.inBar ? 0 : root.panelThickness
         iconCentres: root.surfaceIconCentres
         restEntryCentres: root.restEntryCentres
         geometry: root.surfaceSpanned ? root.spannedRendererGeometry : root.rendererGeometry

@@ -48,6 +48,19 @@ Item {
     // The screen edge an edge panel stands on ("bottom", "top", "left",
     // "right"); empty for a free panel.
     property string edge: ""
+    // In an Arch Dock bar, the bar's own window in this item's pixels
+    // ({x, y, width, height}), or null. Along a bar the band runs down the
+    // bar's middle from one end of the bar to the other and stays inside
+    // it: its own ends land on the bar's ends, and it is as deep as the bar
+    // but for a little room at its sides, as the flat band keeps.
+    property var barWindow: null
+    readonly property bool inBar: barWindow !== null && barWindow !== undefined
+        && Number(barWindow.width) > 0 && Number(barWindow.height) > 0
+    readonly property real barMargin: 4
+    // On a Plasma-held edge panel, how thick the panel is across its edge;
+    // this item is deeper (room for magnification) and centred across it,
+    // and the band fits inside the panel. 0: the item's own thickness.
+    property real panelThickness: 0
     property real panelOpacity: 0.9
     property var motionTracks: null
     property bool reducedMotion: false
@@ -68,30 +81,64 @@ Item {
         if (edge === "right") return ({ x: -1, y: 0 })
         return null
     }
+    // The bar's middle line, from its start to its end (down a side bar),
+    // the same little room in from its ends as from its sides.
+    readonly property var barLine: {
+        if (!inBar) return []
+        const w = barWindow, m = barMargin
+        const down = outward ? outward.x !== 0 : Number(w.height) > Number(w.width)
+        const points = []
+        for (let index = 0; index < 72; ++index) {
+            const t = index / 71
+            points.push(down ? ({ x: w.x + w.width / 2, y: w.y + m + t * Math.max(1, w.height - 2 * m) })
+                             : ({ x: w.x + m + t * Math.max(1, w.width - 2 * m), y: w.y + w.height / 2 }))
+        }
+        return points
+    }
     readonly property var decorationPath: ({
-        points: surfacePath.points,
-        closed: surfacePath.closed === true,
-        outward: outward
+        points: inBar ? barLine : surfacePath.points,
+        closed: !inBar && surfacePath.closed === true,
+        outward: outward,
+        // The band's own ends at the path's ends (a bar's), not past them.
+        within: inBar
     })
     readonly property var iconPlaces: DecorationScene.slotsOnPath(decorationPath, iconCentres)
     // An edge panel's room across its band, either side of its path, and
     // the window the panel is seen through.
+    // Across the panel, where its window starts and ends: a bar's own
+    // window, a Plasma-held panel's thickness centred in this item, or the
+    // whole item.
+    readonly property bool runsDown: outward ? outward.x !== 0 : false
+    readonly property real ownAcross: runsDown ? width : height
+    readonly property real windowNear: inBar ? Number(runsDown ? barWindow.x : barWindow.y)
+        : panelThickness > 0 ? Math.max(0, (ownAcross - panelThickness) / 2) : 0
+    readonly property real windowFar: inBar ? windowNear + Number(runsDown ? barWindow.width : barWindow.height)
+        : panelThickness > 0 ? Math.min(ownAcross, windowNear + panelThickness) : ownAcross
     readonly property var fitRoom: {
-        const first = surfacePath.points.length ? surfacePath.points[0] : null
+        const first = decorationPath.points.length ? decorationPath.points[0] : null
         if (!outward || !first) return undefined
-        // Clear of the fade at the window's edge.
-        const margin = Math.ceil(halfWidth * 0.35) + 1
-        if (outward.y < 0) return ({ out: first.y - margin, in: height - first.y - margin })
-        if (outward.y > 0) return ({ out: height - first.y - margin, in: first.y - margin })
-        if (outward.x > 0) return ({ out: width - first.x - margin, in: first.x - margin })
-        return ({ out: first.x - margin, in: width - first.x - margin })
+        // Clear of the fade at the window's edge; inside a panel's own
+        // window (a bar's, or a Plasma-held panel's thickness), as close to
+        // its sides as the flat band keeps.
+        const margin = inBar || panelThickness > 0 ? barMargin : Math.ceil(halfWidth * 0.35) + 1
+        if (outward.y < 0) return ({ out: first.y - windowNear - margin, in: windowFar - first.y - margin })
+        if (outward.y > 0) return ({ out: windowFar - first.y - margin, in: first.y - windowNear - margin })
+        if (outward.x > 0) return ({ out: windowFar - first.x - margin, in: first.x - windowNear - margin })
+        return ({ out: first.x - windowNear - margin, in: windowFar - first.x - margin })
     }
+    // A bar's own window, its halo and shadow fading out at its edges; an
+    // edge panel's runs on along the panel, which is made longer for the
+    // decoration's ends.
     readonly property var panelWindow: {
         if (!outward) return undefined
+        if (inBar)
+            return ({ x: Number(barWindow.x), y: Number(barWindow.y), width: Number(barWindow.width),
+                      height: Number(barWindow.height), fade: barMargin * 0.75 })
         const far = 100000
+        const fade = panelThickness > 0 ? barMargin * 0.75 : halfWidth * 0.35
         return outward.y !== 0
-            ? ({ x: -far, y: 0, width: width + 2 * far, height: height, fade: halfWidth * 0.35 })
-            : ({ x: 0, y: -far, width: width, height: height + 2 * far, fade: halfWidth * 0.35 })
+            ? ({ x: -far, y: windowNear, width: width + 2 * far, height: windowFar - windowNear, fade: fade })
+            : ({ x: windowNear, y: -far, width: windowFar - windowNear, height: height + 2 * far, fade: fade })
     }
     // How far the decoration reaches out of the panel's box on each side
     // (the scene's effect margins make room for it).
@@ -132,8 +179,9 @@ Item {
         iconPlaces: root.iconPlaces
         choices: root.choices
         animated: root.animated && !root.reducedMotion
-        // The band runs on past the end icons as it was designed round them.
-        ends: 2.5
+        // The band runs on past the end icons as it was designed round them;
+        // along a bar it already runs from end to end.
+        ends: root.inBar ? 0 : 2.5
         fit: root.fitRoom
         clip: root.panelWindow
         scale: root.Window.window ? root.Window.window.devicePixelRatio : Screen.devicePixelRatio

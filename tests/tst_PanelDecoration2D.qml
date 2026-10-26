@@ -98,6 +98,49 @@ TestCase {
         compare(renderer.outward.y, -1)
     }
 
+    function test_aBarKeepsItsDecorationInsideIt() {
+        // An Arch Dock bar 64 pixels deep inside a scene twice as deep that
+        // reaches 30 pixels past each end of the bar: the decoration is laid
+        // along the bar and fitted to it, nothing of it past the bar on any
+        // side, and it runs from one end of the bar to the other. The hull's
+        // ends are square; the raptor's come to a point with struts past it.
+        const geometry = Object.assign({}, rowGeometry(5), { height: 128 })
+        const bar = { x: 30, y: 32, width: geometry.width - 60, height: 64 }
+        for (const decoration of ["collective-hull", "raptor-hull"]) {
+            const renderer = made({ decoration: decoration, geometry: geometry, edge: "bottom", barWindow: bar,
+                                    iconCentres: centresOn(geometry, 5), animated: false })
+            tryVerify(function() { return renderer.rendererReady }, 30000, decoration)
+            verify(renderer.inBar)
+            verify(renderer.baker.drawnHalfWidth < renderer.halfWidth, decoration + " is fitted to the bar's depth")
+            // The scene's bounds hold its elements and their halo and shadow.
+            const halo = renderer.baker.drawnHalfWidth * 1.4
+            const box = renderer.baker.bounds
+            const left = box.x + halo, right = box.x + box.width - halo
+            const top = box.y + halo, bottom = box.y + box.height - halo
+            const said = decoration + " " + JSON.stringify(box) + " halo " + halo
+            verify(left >= bar.x - 2 && right <= bar.x + bar.width + 2, "along the bar: " + said)
+            verify(top >= bar.y - 2 && bottom <= bar.y + bar.height + 2, "across the bar: " + said)
+            verify(left <= bar.x + renderer.barMargin + 3 && right >= bar.x + bar.width - renderer.barMargin - 3,
+                   "from end to end: " + said)
+        }
+    }
+
+    function test_aPlasmaSidePanelKeepsItsDecorationInsideIt() {
+        // A Plasma-held panel 64 pixels thick inside a scene twice as deep:
+        // the raptor's dome, which reaches far into the screen, is drawn
+        // smaller so all of it stays inside the panel's thickness.
+        const geometry = Object.assign({}, rowGeometry(5), { height: 128 })
+        const renderer = made({ decoration: "raptor-hull", geometry: geometry, edge: "bottom", panelThickness: 64,
+                                iconCentres: centresOn(geometry, 5), animated: false })
+        tryVerify(function() { return renderer.rendererReady }, 30000)
+        compare(renderer.windowNear, 32)
+        compare(renderer.windowFar, 96)
+        const halo = renderer.baker.drawnHalfWidth * 1.4
+        const box = renderer.baker.bounds
+        verify(box.y + halo >= 32 - 2 && box.y + box.height - halo <= 96 + 2,
+               JSON.stringify(box) + " halo " + halo)
+    }
+
     function sceneDefinition(overrides) {
         return Object.assign({
             schemaVersion: 2, id: "free-test", edge: "bottom", layout: "horizontal", layoutScale: 1,

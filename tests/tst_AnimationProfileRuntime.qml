@@ -358,6 +358,30 @@ TestCase {
         verify(!controller.hasChannel("glyph", "rotate-z"))
     }
 
+    // The same profile handed over again, as a dock entry does when its
+    // scene settles, rests the runners made a moment before; they start
+    // again from their origin instead of standing still for good.
+    function test_aProfileHandedOverAgainKeepsAnimating() {
+        const looping = function() {
+            return [profile({
+                id: "turn",
+                tracks: [track({ id: "spin", property: "rotate-z", from: 0, to: 360,
+                                 duration: 300, repeat: -1 })]
+            })]
+        }
+        const controller = createController({ hovered: true, profiles: looping() })
+        controller.profiles = looping()
+        wait(0)
+        controller.profiles = looping()
+        tryVerify(function() {
+            return controller.channelValue("icon", "rotate-z") > 1
+        }, 2000, "the handed-over track runs")
+        const first = controller.channelValue("icon", "rotate-z")
+        tryVerify(function() {
+            return Math.abs(controller.channelValue("icon", "rotate-z") - first) > 1
+        }, 2000, "and keeps running")
+    }
+
     function test_additiveChannelsSumOntoTheRestingValue() {
         const controller = createController({
             hovered: true,

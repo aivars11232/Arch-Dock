@@ -343,14 +343,16 @@ PlasmaCore.Dialog {
                 return Math.max(0, Math.min(1, (centreOnScreen.y - place.y) / dockHalf * 0.5 + 0.5))
             }
             const anchorOf = function(place) { return iconUp + (anchorUp - iconUp) * standShare(place) }
-            // The child's body at a place on the curve, on the screen, and on
-            // a 3D panel its name as well, above the icon behind the dock's
-            // middle and below the stand before it.
-            function boxes(place) {
+            // The child's body at a place on the curve, on the screen, and its
+            // name: above the icon behind a 3D panel's middle, below the stand
+            // elsewhere. A flat or baked panel's curve keeps only the body
+            // clear of the dock; the window holds the name as well
+            // (`withName`), so no name is cut off at its edge.
+            function boxes(place, withName) {
                 const scale = Math.max(0.35, Number(place.scale) || 1)
                 const body = { x: place.x - bodyWidth * scale / 2, y: place.y - anchorOf(place) * scale,
                                width: bodyWidth * scale, height: bodyHeight * scale }
-                if (!hugging || !(nameHeight > 0)) return [body]
+                if (!(nameHeight > 0) || (!hugging && withName !== true)) return [body]
                 const above = screenDockMiddle !== null && place.y < screenDockMiddle.y
                 return [body, { x: place.x - content.cellWidth / 2, width: content.cellWidth, height: nameHeight,
                                 y: above ? body.y - nameHeight - 4 : body.y + body.height + 4 }]
@@ -517,7 +519,7 @@ PlasmaCore.Dialog {
             trackPitch = chosen.pitch || 0
             layout = chosen.layout
             for (const placed of layout.entries.concat(layout.ends || []))
-                for (const box of boxes(placed)) rectangles.push(box)
+                for (const box of boxes(placed, true)) rectangles.push(box)
         } else {
             trackPitch = 0
             const others = typeof obstacles === "function" ? obstacles().map(function(point) {

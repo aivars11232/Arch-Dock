@@ -70,10 +70,15 @@ QtObject {
     }
 
     // Stops cleanly at the track's own origin so a profile change never leaves
-    // a half-applied transform behind.
+    // a half-applied transform behind. A runner still active starts again
+    // from there: a profile change can reach the runners made for the new
+    // profiles a moment after they started, and stopped they would stay
+    // still for good, their `running` binding unchanged.
     function rest() {
         motion.stop()
         progress = startProgress
+        if (active && duration > 0)
+            motion.start()
     }
 
     property SequentialAnimation motion: SequentialAnimation {

@@ -1497,6 +1497,18 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             }
             field.insert(QStringLiteral("choices"), choices);
         }
+        else if (key == QStringLiteral("iconAnimation"))
+        {
+            // Idle rotate turns each icon on its upright axis over its stand,
+            // which a 3D panel draws; a flat panel could only spin the icon
+            // flat, stand and all, so it is offered on 3D panels alone.
+            if (tier != ArchDock::RendererTier::True3D
+                && candidate.motion.iconProfile != QStringLiteral("idle-rotate"))
+            {
+                choices.removeAll(QStringLiteral("idle-rotate"));
+                field.insert(QStringLiteral("choices"), choices);
+            }
+        }
         else if (key == QStringLiteral("iconStyle"))
         {
             choices.clear();
