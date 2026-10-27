@@ -340,6 +340,7 @@ private slots:
     void tiltEditorsFollowTheSelectedRenderer();
     void edgePanelIn3DOffersItsTiltAlone();
     void globalReducedMotionReachesEveryDock();
+    void emptyEdgePanelHoldsItsOwnItems();
     void idleRotateIsOfferedOnThreeDPanelsAlone();
     void platformOffRestoresTheCompleteFlatLook();
     void themeCardsResolveEachThemesOwnRenderer();
@@ -1974,6 +1975,65 @@ void PanelWindowCapabilityTest::globalReducedMotionReachesEveryDock()
         QCOMPARE(reduced("bottom"), on ? 1 : 0);
         QCOMPARE(reduced(free), on ? 1 : 0);
     }
+}
+
+// An Empty panel along an edge holds the folders and files dropped on it
+// alone: they are its own entries, which its own remove takes away again,
+// and the launchers the other edge panels share stay as they were. Panel
+// Studio offers an edge panel Empty, a bar not, and calls the hybrid type
+// Launcher + open apps.
+void PanelWindowCapabilityTest::emptyEdgePanelHoldsItsOwnItems()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    QTemporaryDir files;
+    QVERIFY(files.isValid());
+    const QString folder = files.filePath("Projects");
+    QVERIFY(QDir().mkpath(folder));
+    QFile note(files.filePath("note.txt"));
+    QVERIFY(note.open(QIODevice::WriteOnly));
+    note.write("note");
+    note.close();
+    const QString panel = registry->addPanel(QStringLiteral("top"), QStringLiteral("empty"));
+    QVERIFY(!panel.isEmpty());
+    QVERIFY(registry->panelDefinition(panel)->holdsOwnEntries());
+    const auto appIds = [](const QVariantList &entries) {
+        QStringList ids;
+        for (const QVariant &entry : entries)
+            ids.append(entry.toMap().value("appId").toString());
+        return ids;
+    };
+    const QStringList shared = appIds(backend.dockEntries(QStringLiteral("launcher")));
+    QVERIFY(backend.pinPanelUrls(panel, {QUrl::fromLocalFile(folder).toString(),
+                                         QUrl::fromLocalFile(note.fileName()).toString()}));
+    const QVariantList own = backend.dockEntriesForPanel(panel, QStringLiteral("empty"));
+    QCOMPARE(own.size(), 2);
+    for (const QVariant &value : own)
+    {
+        const QVariantMap entry = value.toMap();
+        QVERIFY(ArchDock::PanelContent::isUrlEntryId(entry.value("panelEntryId").toString()));
+        QVERIFY(!entry.value("running").toBool());
+    }
+    QCOMPARE(appIds(backend.dockEntries(QStringLiteral("launcher"))), shared);
+    QVERIFY(backend.removePanelContent(panel, own.first().toMap().value("panelEntryId").toString()));
+    QCOMPARE(backend.dockEntriesForPanel(panel, QStringLiteral("empty")).size(), 1);
+
+    const auto typeField = [&backend](const QString &id) {
+        return fieldByKey(backend.panelSettingsEditorSnapshot(id, "studio").value("panelFields").toList(), "type");
+    };
+    const QVariantMap type = typeField(panel);
+    QVERIFY(type.value("choices").toStringList().contains("empty"));
+    QString hybridName;
+    for (const QVariant &option : type.value("options").toList())
+        if (option.toMap().value("value").toString() == QLatin1String("hybrid"))
+            hybridName = option.toMap().value("label").toString();
+    QCOMPARE(hybridName, QStringLiteral("Launcher + open apps"));
+    const QString bar = backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher"));
+    QVERIFY(!bar.isEmpty());
+    QVERIFY(!typeField(bar).value("choices").toStringList().contains("empty"));
 }
 
 // Idle rotate turns each icon on its upright axis over its stand, which only
@@ -5592,16 +5652,16 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
     QVERIFY(!panelId.isEmpty());
     QCOMPARE(registry->panelDefinition(panelId)->content.type, QStringLiteral("empty"));
 
-    // Native panels never accept panel-specific content.
+    // An edge panel that is not Empty never accepts panel-specific content.
     QVERIFY(!window.addPanelEntries(QStringLiteral("bottom"), {alphaUrl.toString()}));
     QVERIFY(!window.movePanelEntryBefore(QStringLiteral("bottom"), alphaId, QString{}));
 
-    // Entries are stored even while the type is empty, but nothing is shown.
+    // An Empty panel holds the entries added to it and shows them.
     const quint64 revisionBefore = registry->panelDefinition(panelId)->settingsRevision;
     QVERIFY(window.addPanelEntries(panelId, {alphaUrl.toString(), folderUrl.toString()}));
     QCOMPARE(window.panelEntryOrder(panelId), QStringList({alphaId, folderId}));
     QCOMPARE(registry->panelDefinition(panelId)->settingsRevision, revisionBefore + 1);
-    QVERIFY(window.dockEntriesForPanel(panelId, QStringLiteral("hybrid")).isEmpty());
+    QCOMPARE(window.dockEntriesForPanel(panelId, QStringLiteral("hybrid")).size(), 2);
     // Missing files and unknown application ids add nothing and spend no revision.
     QVERIFY(!window.addPanelEntries(panelId, {QStringLiteral("file:///nonexistent/x.desktop"),
                                              QStringLiteral("org.example.unknown")}));
@@ -5693,6 +5753,15 @@ void PanelWindowCapabilityTest::freePanelContentFollowsItsRecordAndOrdersItsOwnE
     QCOMPARE(merged.value("windowPreviews").toList().size(), 2);
     QCOMPARE(merged.value("windowPreviews").toList().at(1).toMap()
                  .value("windowId").toString(), second.internalId);
+    // Empty shows the panel's own entries alone and never an open
+    // application: Alpha, open twice, is shown as it was, not running.
+    QVERIFY(setType(QStringLiteral("empty")));
+    QCOMPARE(shownIds(), QStringList({folderId, alphaId, betaId}));
+    const QVariantMap quiet = alphaSnapshot();
+    QVERIFY(!quiet.value("running").toBool());
+    QVERIFY(quiet.value("runningAppId").toString().isEmpty());
+    QVERIFY(quiet.value("windowPreviews").toList().isEmpty());
+    QVERIFY(setType(QStringLiteral("hybrid")));
     second.caption = QStringLiteral("Renamed Alpha document");
     QVERIFY(windows->updateWindow(second));
     QCOMPARE(alphaSnapshot().value("windowPreviews").toList().at(1).toMap()

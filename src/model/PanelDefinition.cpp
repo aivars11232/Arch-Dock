@@ -1716,6 +1716,13 @@ QVariant PanelDefinition::normalizeLegacyValue(const QString &key, const QVarian
     return PanelSettingsSchema::normalizePanelValue(key, value);
 }
 
+bool PanelDefinition::holdsOwnEntries() const
+{
+    if (host.kind == PanelHostKind::FreeDesktop)
+        return true;
+    return host.edgeHost != QLatin1String("bar") && content.type == QLatin1String("empty");
+}
+
 QString PanelDefinition::hostKindName(PanelHostKind kind)
 {
     return kind == PanelHostKind::FreeDesktop

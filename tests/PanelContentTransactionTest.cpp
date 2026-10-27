@@ -67,6 +67,7 @@ private slots:
     }
     void canonicalOrderCoversEveryEntryExactlyOnce();
     void nativePanelsRefuseEveryOperation();
+    void emptyEdgePanelsHoldTheirOwnEntries();
     void addAppendsNewUrlsAndSkipsDuplicates();
     void removeDropsExactlyOneEntry();
     void moveBeforeReordersDeterministically();
@@ -231,6 +232,29 @@ void PanelContentTransactionTest::nativePanelsRefuseEveryOperation()
         QVERIFY(!outcome.success);
         QCOMPARE(outcome.errorCode, QStringLiteral("native-content-unsupported"));
     }
+}
+
+// An Empty panel along an edge holds the folders, files and applications
+// added to it, as a free panel does; an Empty bar holds Plasma widgets only.
+void PanelContentTransactionTest::emptyEdgePanelsHoldTheirOwnEntries()
+{
+    PanelDefinition empty = PanelDefinition::defaults(
+        QStringLiteral("panel-top"), QStringLiteral("Top"), QStringLiteral("top"), false);
+    empty.content.type = QStringLiteral("empty");
+    PanelContentRequest request;
+    request.operation = PanelContentOperation::Add;
+    request.urls = {QStringLiteral("file:///tmp/a.desktop"), QStringLiteral("file:///tmp/notes.txt")};
+    PanelContentOutcome outcome;
+    const auto candidate = PanelContentTransaction::prepare(empty, request, &outcome);
+    QVERIFY(candidate.has_value());
+    QVERIFY(outcome.success);
+    QCOMPARE(candidate->content.canonicalEntryOrder().size(), 2);
+
+    PanelDefinition bar = empty;
+    bar.host.edgeHost = QStringLiteral("bar");
+    PanelContentOutcome barOutcome;
+    QVERIFY(!PanelContentTransaction::prepare(bar, request, &barOutcome).has_value());
+    QCOMPARE(barOutcome.errorCode, QStringLiteral("native-content-unsupported"));
 }
 
 void PanelContentTransactionTest::addAppendsNewUrlsAndSkipsDuplicates()

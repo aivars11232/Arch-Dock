@@ -67,11 +67,13 @@ inline bool isNativeDockPanelEdge(const QString &edge)
         edge == QStringLiteral("right");
 }
 
-// The content types drawn by Arch Dock's dock applet (org.archdock.dock). An
-// empty native panel is a Plasma panel without that applet.
+// The content types drawn by Arch Dock's dock applet (org.archdock.dock):
+// every one, an Empty panel holding the folders, files and applications
+// added to it. (A bar's host decides about its dock itself.)
 inline bool panelTypeNeedsDockApplet(const QString &type)
 {
-    return type == QStringLiteral("launcher") ||
+    return type == QStringLiteral("empty") ||
+        type == QStringLiteral("launcher") ||
         type == QStringLiteral("tasks") ||
         type == QStringLiteral("hybrid");
 }

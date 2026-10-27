@@ -94,22 +94,19 @@ QVariantList PanelWindow::dockEntries(const QString &panelType) const
     return m_dockModel.panelEntries(panelType);
 }
 
-// The free-panel content semantics: `empty` shows nothing, `launcher` shows
-// the panel's own ordered entries, `tasks` shows running applications, and
-// `hybrid` shows the panel's entries with running-only applications after
-// them. A running instance of a pinned desktop entry is merged into that
-// entry: the entry keeps its own identity, label and glyph, gains the running
-// state, and carries the application id under `runningAppId` so window
-// actions reach the application model.
+// The content of a panel that holds its own entries (a free panel, or an
+// Empty edge panel): `empty` and `launcher` show the panel's own ordered
+// entries and never an open application, `tasks` shows running
+// applications, and `hybrid` shows the panel's entries with running-only
+// applications after them. A running instance of a pinned desktop entry is
+// merged into that entry: the entry keeps its own identity, label and glyph,
+// gains the running state, and carries the application id under
+// `runningAppId` so window actions reach the application model.
 QVariantList PanelWindow::freePanelEntries(
     const ArchDock::PanelDefinition &definition) const
 {
     QVariantList entries;
     const QString contentType = definition.content.type;
-    if (contentType == QStringLiteral("empty"))
-    {
-        return entries;
-    }
 
     QHash<QString, int> panelIndexByIdentity;
     if (contentType != QStringLiteral("tasks"))
@@ -191,11 +188,12 @@ QVariantList PanelWindow::dockEntriesForPanel(const QString &panelId,
     QVariantList entries;
     const std::optional<ArchDock::PanelDefinition> definition =
         runtimePanelDefinition(panelId);
-    if (definition && definition->host.kind == ArchDock::PanelHostKind::FreeDesktop)
+    if (definition && definition->holdsOwnEntries())
     {
         // A free host's applet stores `panelType=empty` as an ownership
         // marker; the record's content type is authoritative for what it
-        // shows, so the requested type is deliberately ignored here.
+        // shows, so the requested type is deliberately ignored here. An
+        // Empty edge panel shows its own entries the same way.
         if (!definition.has_value())
         {
             return entries;
@@ -764,10 +762,12 @@ bool PanelWindow::pinDockUrls(const QStringList &urls)
     return pinnedAny;
 }
 
+// What is dropped on a panel holding its own entries is added to that panel
+// alone; on the other edge panels it joins the launchers they share.
 bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
 {
-    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
-        QStringLiteral("free"))
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition || !definition->holdsOwnEntries())
     {
         return pinDockUrls(urls);
     }
@@ -776,8 +776,8 @@ bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
 
 bool PanelWindow::removePanelContent(const QString &panelId, const QString &entryId)
 {
-    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
-        QStringLiteral("free"))
+    const auto definition = m_panelRegistry.panelDefinition(panelId);
+    if (!definition || !definition->holdsOwnEntries())
     {
         return false;
     }
@@ -933,7 +933,7 @@ bool PanelWindow::movePanelEntryBefore(const QString &panelId,
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition)
         return false;
-    if (definition->host.kind == ArchDock::PanelHostKind::NativeEdge)
+    if (!definition->holdsOwnEntries())
     {
         QHash<QString, QString> owners;
         for (const auto &value : dockEntriesForPanel(panelId, definition->content.type))

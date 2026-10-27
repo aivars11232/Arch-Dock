@@ -186,12 +186,13 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
 {
     const QStringList currentOrder = current.content.canonicalEntryOrder();
 
-    if (current.host.kind != PanelHostKind::FreeDesktop)
+    if (!current.holdsOwnEntries())
     {
         fail(outcome, currentOrder,
              QStringLiteral("native-content-unsupported"),
-             QStringLiteral("native panels use the shared application model; "
-                            "panel-specific content applies to free panels only"));
+             QStringLiteral("this panel shows the launchers its edge panels share; "
+                            "panel-specific content applies to free panels and "
+                            "Empty edge panels only"));
         return std::nullopt;
     }
     if (current.settingsRevision == std::numeric_limits<quint64>::max())

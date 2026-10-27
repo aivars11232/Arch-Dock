@@ -18,14 +18,17 @@ public:
     explicit DropBackend(QObject *parent = nullptr) : QObject(parent) {}
     QString lastError() const { return m_lastError; }
 
-    Q_INVOKABLE bool addUrls(const QString &panelId, bool freeSurface,
+    // A panel holding its own entries (a free panel, an Empty edge panel)
+    // takes what is dropped on it alone; the others add it to the launchers
+    // they share.
+    Q_INVOKABLE bool addUrls(const QString &panelId, bool ownEntries,
                             const QStringList &urls)
     {
-        if (urls.isEmpty() || (freeSurface && panelId.isEmpty()))
+        if (urls.isEmpty() || (ownEntries && panelId.isEmpty()))
             return fail(QStringLiteral("invalid-drop"));
-        return commit(freeSurface ? QStringLiteral("addPanelEntries")
-                                  : QStringLiteral("pinDockUrls"),
-                      freeSurface ? QVariantList{panelId, urls} : QVariantList{urls});
+        return commit(ownEntries ? QStringLiteral("addPanelEntries")
+                                 : QStringLiteral("pinDockUrls"),
+                      ownEntries ? QVariantList{panelId, urls} : QVariantList{urls});
     }
 
     Q_INVOKABLE bool moveEntry(const QString &panelId, const QString &entryId,

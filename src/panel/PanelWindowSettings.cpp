@@ -1616,10 +1616,12 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         else if (key == QStringLiteral("type") && !freeHost)
         {
-            // An edge panel of the "empty" type is a plain Plasma panel with
-            // no Arch Dock in it; the Studio only makes Arch Dock panels. The
-            // current type stays listed so the field shows it.
-            if (candidate.content.type != QStringLiteral("empty"))
+            // An Empty edge panel holds the folders, files and applications
+            // added to it. An Empty bar holds Plasma widgets only, so a bar is
+            // not offered it; one that is Empty keeps it listed so the field
+            // shows it.
+            if (candidate.host.edgeHost == QLatin1String("bar")
+                && candidate.content.type != QStringLiteral("empty"))
             {
                 choices.removeAll(QStringLiteral("empty"));
             }
@@ -1671,6 +1673,7 @@ QVariantList PanelWindow::panelSettingsEditorFields(
             // Plain names where the stored value is a code word.
             static const QHash<QString, QHash<QString, const char *>> labels{
                 {QStringLiteral("folderLayout"), {{QStringLiteral("track"), QT_TR_NOOP("Along the dock")}}},
+                {QStringLiteral("type"), {{QStringLiteral("hybrid"), QT_TR_NOOP("Launcher + open apps")}}},
                 // The surface a panel's own design gives it: its flat panelpaper
                 // on a generated platform, a decoration's artwork on its own
                 // mesh; and the picture the user imported, in every look list.

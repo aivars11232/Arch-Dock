@@ -472,6 +472,7 @@ private slots:
     void persistsAndResolvesIconOverridesAtomically();
     void persistsNativePanelRecoveryOutcomes();
     void persistsNativePanelRediscoveryOutcomes();
+    void emptyEdgePanelsCarryTheDock();
     void reconcilesNativeContainmentLifecycle();
     void classifiesNativeContainmentMatches();
     void selectsNativeContainmentLifecycleIntent();
@@ -1657,6 +1658,25 @@ void PanelRegistryTest::persistsNativePanelRediscoveryOutcomes()
              QStringLiteral("detached"));
     QCOMPARE(persistedConflict.panelValue(QStringLiteral("bottom"), QStringLiteral("nativeRecoveryError")).toString(),
              QStringLiteral("owned-host-not-found"));
+}
+
+// An Empty edge panel carries the dock applet like every other edge panel,
+// for the folders, files and applications added to it: its association
+// needs the applet, and one found again without it is recovering until the
+// applet is attached.
+void PanelRegistryTest::emptyEdgePanelsCarryTheDock()
+{
+    PanelRegistry registry;
+    const QString panel = registry.addPanel(QStringLiteral("top"), QStringLiteral("empty"));
+    QVERIFY(!panel.isEmpty());
+    QVERIFY(!registry.commitVerifiedNativePanelAssociation(panel, 42, -1, QStringLiteral("token-e")));
+    QVERIFY(registry.commitVerifiedNativePanelAssociation(panel, 42, 73, QStringLiteral("token-e")));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("nativeDockAppletId")).toInt(), 73);
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("ready"));
+    QVERIFY(registry.rebindRecoveredNativePanelAssociation(panel, 84, -1, QStringLiteral("token-e")));
+    QCOMPARE(registry.panelValue(panel, QStringLiteral("nativeRecoveryState")).toString(),
+             QStringLiteral("recovering"));
 }
 
 void PanelRegistryTest::reconcilesNativeContainmentLifecycle()

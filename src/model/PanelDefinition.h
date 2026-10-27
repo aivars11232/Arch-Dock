@@ -404,6 +404,11 @@ public:
         QString *errorMessage = nullptr);
     [[nodiscard]] PanelDefinition normalized() const;
     [[nodiscard]] bool isValid(QString *errorMessage = nullptr) const;
+    // Whether the panel shows the folders, files and applications added to it
+    // rather than the launchers its edge panels share: a free panel does,
+    // and so does an Empty panel along an edge. An Empty bar holds Plasma
+    // widgets only.
+    [[nodiscard]] bool holdsOwnEntries() const;
     [[nodiscard]] QVariantMap toLegacyMap() const;
     [[nodiscard]] QVariantMap toPersistedMap() const;
 

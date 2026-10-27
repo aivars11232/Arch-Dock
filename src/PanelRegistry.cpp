@@ -2231,9 +2231,10 @@ bool PanelRegistry::commitVerifiedNativePanelAssociation(
         return false;
     }
 
+    // Every edge panel Plasma holds for Arch Dock carries the dock applet, an
+    // Empty one too: it holds the folders, files and applications added to it.
     const QString type = panel->value(QStringLiteral("type")).toString();
-    if (!isPanelType(type) ||
-        (type == QStringLiteral("empty") ? dockAppletId != -1 : dockAppletId < 0))
+    if (!isPanelType(type) || dockAppletId < 0)
     {
         return false;
     }
@@ -2264,12 +2265,14 @@ bool PanelRegistry::rebindRecoveredNativePanelAssociation(
     }
 
     const QString type = panel->value(QStringLiteral("type")).toString();
-    if (!isPanelType(type) || (type == QStringLiteral("empty") && dockAppletId != -1))
+    if (!isPanelType(type))
     {
         return false;
     }
 
-    const bool rendererReady = type == QStringLiteral("empty") || dockAppletId >= 0;
+    // Found without its dock applet, a panel of any type is still recovering:
+    // the applet is attached again, an Empty panel's too.
+    const bool rendererReady = dockAppletId >= 0;
     return setPanelValuesChecked(
         panelId,
         {{QStringLiteral("nativePanelId"), containmentId},

@@ -113,7 +113,7 @@ def instrument_interaction_stage(stage):
         console.warn("ArchDockInteraction " + JSON.stringify({kind: "presentation", panel: root.panelId,
             at: Date.now(), state: root.reportedPresentation, hostConcealed: root.hostConcealed}));
 ''')
-    insert("main.qml", "const accepted = dropBackend.addUrls(panelId, freeSurface, values);", '''
+    insert("main.qml", "const accepted = dropBackend.addUrls(panelId, ownsEntries, values);", '''
         console.warn("ArchDockInteraction " + JSON.stringify({kind: "drop-result", panel: root.panelId,
             accepted: accepted, error: dropBackend.lastError, urls: values, at: Date.now()}));
 ''')

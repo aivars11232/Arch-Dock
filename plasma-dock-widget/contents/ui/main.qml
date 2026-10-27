@@ -111,6 +111,10 @@ PlasmoidItem {
         ? String(configuration.type || "empty")
         : ["empty", "launcher", "tasks", "hybrid"].includes(configuredPanelType)
             ? configuredPanelType : "hybrid"
+    // A free panel, or an Empty one along an edge, holds the folders, files
+    // and applications added to it alone; the other edge panels share their
+    // launchers.
+    readonly property bool ownsEntries: freeSurface || panelType === "empty"
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
     readonly property bool plasmaEditMode: {
         const containment = Plasmoid.containment;
@@ -570,7 +574,7 @@ PlasmoidItem {
             return;
         }
         if (!dockService.registered) {
-            if (!freeSurface)
+            if (!ownsEntries)
                 entries = [];
             else invalidateContentFeedback();
             requestFailed = false;
@@ -581,7 +585,7 @@ PlasmoidItem {
             entries = Array.isArray(value) ? value : [];
             requestFailed = false;
         }, function() {
-            if (!FreeEntryPolicy.keepEntriesOnServiceFailure(root.freeSurface))
+            if (!FreeEntryPolicy.keepEntriesOnServiceFailure(root.ownsEntries))
                 entries = [];
             else invalidateContentFeedback();
             requestFailed = true;
@@ -638,11 +642,11 @@ PlasmoidItem {
             activateEntry(appId, onOutcome);
             return;
         }
-        if (freeSurface) {
-            // Pinning on a free panel is panel-specific: an owned entry is
-            // removed from this panel only, and a running-only application is
-            // added to this panel as its desktop entry. The global pin list is
-            // never touched from a free surface.
+        if (ownsEntries) {
+            // Pinning on a panel holding its own entries is panel-specific: an
+            // owned entry is removed from this panel only, and a running-only
+            // application is added to this panel as its desktop entry. The
+            // shared pin list is never touched from such a panel.
             if (methodName === "togglePinnedDockEntry") {
                 const ownedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
                 if (ownedId.length > 0)
@@ -670,7 +674,7 @@ PlasmoidItem {
                 onOutcome({ outcome: outcome, reason: reason || "" });
         }
         let targetAppId = appId;
-        if (freeSurface) {
+        if (ownsEntries) {
             // A pinned desktop entry with a running instance activates that
             // instance through the application model; otherwise the entry's
             // own URL is opened.
@@ -722,9 +726,9 @@ PlasmoidItem {
         }
         let movedId = appId;
         let beforeId = beforeAppId;
-        if (freeSurface) {
-            // Free entries reorder within their own panel. A running-only
-            // entry is not owned by the panel and cannot be ordered.
+        if (ownsEntries) {
+            // A panel's own entries reorder within it. A running-only entry is
+            // not owned by the panel and cannot be ordered.
             movedId = FreeEntryPolicy.panelEntryId(root.entries, appId);
             beforeId = beforeAppId
                 ? FreeEntryPolicy.panelEntryId(root.entries, beforeAppId) : "";
@@ -741,16 +745,16 @@ PlasmoidItem {
 
     function pinDroppedUrls(urls) {
         if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
-                || !["launcher", "hybrid"].includes(panelType))
+                || !["empty", "launcher", "hybrid"].includes(panelType))
             return false;
         const values = [];
         for (const url of urls)
             values.push(url.toString());
-        const accepted = dropBackend.addUrls(panelId, freeSurface, values);
+        const accepted = dropBackend.addUrls(panelId, ownsEntries, values);
         if (accepted) refresh();
         else {
             console.warn("Arch Dock drop refused:", dropBackend.lastError);
-            if (freeSurface) explainRefusedDrop();
+            if (ownsEntries) explainRefusedDrop();
         }
         return accepted;
     }
@@ -1631,9 +1635,7 @@ PlasmoidItem {
                                 ? qsTr("Could not load dock entries")
                                 : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
                                     ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
-                                    : root.panelType === "empty"
-                                        ? qsTr("Choose Launcher or Hybrid in Panel Studio to show dropped items")
-                                        : qsTr("Drop applications or folders here, from the application menu or a file manager")
+                                    : qsTr("Drop applications or folders here, from the application menu or a file manager")
                     }
                     QQC2.Button {
                         anchors.horizontalCenter: parent.horizontalCenter

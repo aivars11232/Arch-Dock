@@ -123,6 +123,11 @@ std::optional<ArchDock::PresetPreviewSession::Prepared> PanelWindow::preparePres
             (snapshot->host.kind == PanelHostKind::NativeEdge && !isBar(*snapshot) &&
                 panelTypeNeedsDockApplet(snapshot->content.type) != panelTypeNeedsDockApplet(preset.panel.configuration.content.type));
         prepared.record.temporary = temporary;
+        // A preset gives a panel that already exists its look. What the panel
+        // holds - its type: its own folders, files and applications, the
+        // shared launchers, the open applications or both - stays its own.
+        if (!temporary)
+            preset.panel.configuration.content.type = snapshot->content.type;
         if (temporary)
         {
             const bool free = preset.panel.configuration.host.kind == PanelHostKind::FreeDesktop;

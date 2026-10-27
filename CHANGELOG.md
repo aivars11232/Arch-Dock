@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.1-51 — 2026-10-27
+
+- **Empty panels hold your own folders, files and applications.** An Empty
+  panel showed nothing at all, and along an edge it was a plain Plasma panel
+  with no Arch Dock in it; the edge panels that did hold items (Launcher and
+  Hybrid) all shared one list, and Hybrid - which an Arch Dock widget starts
+  as, and which nearly every panel preset set - also showed every open
+  application, so every panel worked as the same launcher. Now an Empty
+  panel, free or along an edge, holds what is dropped on it as its own:
+  removing or moving an item changes that panel only, and it never shows an
+  open application, which only the panels set to show them do. Panel Studio
+  offers Empty for edge panels too, and calls Hybrid "Launcher + open apps".
+  A preset applied to a panel gives it a look and keeps its type. An Empty
+  bar still holds Plasma widgets only.
+
 ## 0.1.1-50 — 2026-10-26
 
 - **Icon animations play again.** Every icon animation had stood still: when
