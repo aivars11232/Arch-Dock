@@ -273,6 +273,37 @@ Item {
     readonly property bool tileRenderingEnabled:
         resolvedIconStyle.tileEnabled === undefined
         ? true : Boolean(resolvedIconStyle.tileEnabled)
+    // Whether the icon style draws a tile of its own (its base layers).
+    // Without one, a shown tile is the panel's own (Icon Tiles: its fill,
+    // border and opacity): every icon shown with tiles stands in one.
+    readonly property bool styleDrawsTile: styledLayersActive && styleBase.layerCount > 0
+    readonly property bool panelTileDrawn: tileRenderingEnabled && (customTileActive || !styleDrawsTile)
+    // How wide a tile has to be to hold the icon whole, as a share of its
+    // cell: the picture at its size on the tile, moved by the tile's icon
+    // offsets, and as far as its own motion carries it past the tile's - a
+    // picture that swells more than its tile, moves or spins on it - with a
+    // margin for the outline, as a 3D panel's bubble holds its icon
+    // (PlatformGeometry.containingScale()). `atRest` leaves the tile options
+    // and the motion out: the picture as the icon style lays it out.
+    function tileHoldingShare(atRest) {
+        const glyphMotion = resolvedGlyphMotion, tileMotion = resolvedTileMotion
+        const swell = atRest ? 1 : Math.max(1, glyphMotion.scale * Math.max(glyphMotion.scaleX, glyphMotion.scaleY)
+            / Math.max(1e-6, tileMotion.scale * Math.min(tileMotion.scaleX, tileMotion.scaleY)))
+        const turn = atRest ? 0 : (glyphMotion.rotateZ - tileMotion.rotateZ) * Math.PI / 180
+        const spin = Math.abs(Math.cos(turn)) + Math.abs(Math.sin(turn))
+        const onTile = atRest || !tileRenderingEnabled ? 1 : tileValue("iconTileIconScale", 100, 25, 150) / 100
+        const stateScale = styleState.glyphScale === undefined ? 1 : Number(styleState.glyphScale)
+        const picture = Math.max(glyph.width, glyph.height) * stateScale * onTile
+        const cell = Math.max(1, logicalSize)
+        const shiftX = atRest ? 0 : tileValue("iconTileIconOffsetX", 0, -40, 40) + glyphMotion.x - tileMotion.x
+        const shiftY = atRest ? 0 : tileValue("iconTileIconOffsetY", 0, -40, 40) + glyphMotion.y - tileMotion.y
+        return 1.08 * PlatformGeometry.containingScale(resolvedIconStyle.iconShape || tileShape,
+            picture / cell * swell * spin, 2 * shiftX / cell, 2 * shiftY / cell)
+    }
+    readonly property real tileHolding: tileHoldingShare(false)
+    // How far an icon style's own tile grows to hold a picture that
+    // outgrew it.
+    readonly property real styleTileGrowth: Math.max(1, tileHolding / Math.max(1e-6, tileHoldingShare(true)))
     readonly property var effectiveIconStyleDefinition:
         resolvedIconStyle.styleDefinition || iconStyleDefinition
     readonly property string resolvedIconSource: String(
@@ -382,10 +413,10 @@ Item {
     // other its parts rounded); "rounded": the picture's parts inflated
     // into rounded volumes; "block": the picture cut out as a block.
     property string solidRelief: "auto"
-    // Inside a bubble tile (Icon Tiles > 3D tile form) a round picture
-    // keeps a flat back instead of rising as a ball: no bubble in the
-    // bubble.
-    readonly property bool bubbleTile: String((tileSettings || ({})).iconTileForm || "flat") === "bubble"
+    // Inside a 3D panel's bubble, where every icon shown with a tile stands,
+    // a round picture keeps a flat back instead of rising as a ball: no
+    // bubble in the bubble.
+    readonly property bool bubbleTile: meshVisualActive && tileRenderingEnabled
     onBubbleTileChanged: if (solidWanted) refreshSolid()
     // The same solid on a flat panel (Icons > 3D): drawn in a small 3D view
     // of its own in the picture's place, turned by Icon turn and lit as
@@ -1115,6 +1146,7 @@ Item {
                     id: styleBase
 
                     anchors.fill: parent
+                    scale: root.styleTileGrowth
                     styleDefinition: root.effectiveIconStyleDefinition
                     resolvedStyle: root.resolvedIconStyle
                     role: "base"
@@ -1128,16 +1160,16 @@ Item {
                     visible: root.styledLayersActive
                 }
 
+                // The panel's own tile, as large as its shape needs to be to
+                // hold the icon whole.
                 IconTile {
                     objectName: "icon-custom-tile"
                     anchors.centerIn: parent
                     anchors.alignWhenCentered: false
-                    width: Math.max(0, root.logicalSize - 2 * Math.max(1, root.logicalSize * 0.04))
-                        * Number(root.resolvedIconStyle.diameter || 1)
+                    width: Math.max(Math.max(0, root.logicalSize - 2 * Math.max(1, root.logicalSize * 0.04))
+                        * Number(root.resolvedIconStyle.diameter || 1), root.logicalSize * root.tileHolding)
                     height: width
-                    visible: root.tileRenderingEnabled && (root.customTileActive
-                        || (!root.styledLayersActive && (String(root.tileSettings.iconTileTexture || "none") !== "none"
-                            || root.tileValue("iconTileThickness", 0, 0, 24) > 0)))
+                    visible: root.panelTileDrawn
                     texture: String(root.tileSettings.iconTileTexture || "none")
                     thickness: root.meshVisualActive ? 0 : root.tileValue("iconTileThickness", 0, 0, 24)
                     bevel: 0
@@ -1155,11 +1187,13 @@ Item {
                     anchors.fill: parent
                     anchors.margins: Math.max(1, root.logicalSize * 0.04)
                     radius: root.tileRadius()
+                    // Over the panel's own tile it shows the icon's state
+                    // alone, never a second tile.
                     visible: root.tileRenderingEnabled && !root.customTileActive && !root.styledLayersActive
                         && (root.panelDecorated ? root.dropTarget
-                            : root.appearance === "plate"
-                            || root.appearance === "platform"
-                            || root.appearance === "floating-glass"
+                            : (!root.panelTileDrawn && (root.appearance === "plate"
+                                || root.appearance === "platform"
+                                || root.appearance === "floating-glass"))
                             || root.hovered || root.active || root.dropTarget)
                     color: root.active
                         ? root.alphaColor(Kirigami.Theme.highlightColor, 0.28)

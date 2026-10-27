@@ -532,7 +532,7 @@ run_private_session() {
     if [[ "${ARCHDOCK_RENDERING_TILES:-}" == '1' ]]; then
         printf 'Running ADREP-TASK-005 tile pixels, solid depth and upright orbit under private KWin.\n'
         ARCHDOCK_TEST_RHI=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
-            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" tileDepthMaterialsPlacementAndOrbitRenderUnderRhi \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" tileBubblesPlacementAndOrbitRenderUnderRhi \
                 >"$ARCHDOCK_RENDERING_LOG_DIR/tile-3d.log" 2>&1 || {
                     tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/tile-3d.log" >&2
                     return 1

@@ -871,19 +871,38 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 || key == QStringLiteral("iconTileElevation") || key == QStringLiteral("iconTileForm");
             if (available && tileParameter)
             {
-                const bool only3D = key == QStringLiteral("iconTileBevel")
-                    || key == QStringLiteral("iconTileMaterial") || key == QStringLiteral("iconTileElevation")
-                    || key == QStringLiteral("iconTileForm");
-                available = !only3D || tier == ArchDock::RendererTier::True3D;
-                if (available && (key == QStringLiteral("iconTileTexture")
-                         || key == QStringLiteral("iconTileThickness")))
-                    available = candidate.iconStyle.tileMode == QStringLiteral("custom")
+                // Every tile holds its icon like a bubble: on a 3D panel a
+                // glass shell, on a flat one the tile itself, so the flat 3D
+                // plate's form, bevel and material are gone. The elevation
+                // lifts a 3D panel's bubble; the texture and thickness belong
+                // to a flat panel's tile.
+                const bool true3D = tier == ArchDock::RendererTier::True3D;
+                if (key == QStringLiteral("iconTileForm") || key == QStringLiteral("iconTileBevel")
+                    || key == QStringLiteral("iconTileMaterial"))
+                    available = false;
+                else if (key == QStringLiteral("iconTileElevation"))
+                    available = true3D;
+                else if (key == QStringLiteral("iconTileTexture") || key == QStringLiteral("iconTileThickness"))
+                    available = !true3D && (candidate.iconStyle.tileMode == QStringLiteral("custom")
                         || !iconStyleDrawsLayers() || hasIconLayer([](const QVariantMap &layer) {
                             return layer.value(QStringLiteral("role")).toString() == QStringLiteral("base")
                                 && layer.value(QStringLiteral("followsIconShape")).toBool();
-                        });
-                inactive = available && (!drawsTiles || (key == QStringLiteral("iconTileBevel")
-                    && candidate.iconStyle.tileThickness <= 0));
+                        }));
+                inactive = available && !drawsTiles;
+            }
+            // The tile's fill colour, opacity and border colour the panel's
+            // own tile and a 3D panel's bubble; a flat panel showing an icon
+            // style's own tile keeps the style's colours.
+            const bool tileColour = key == QStringLiteral("iconTileColor") || key == QStringLiteral("iconTileOpacity")
+                || key == QStringLiteral("iconTileBorderColor") || key == QStringLiteral("iconTileBorderWidth");
+            if (available && tileColour)
+            {
+                const bool styleTile = candidate.iconStyle.tileMode != QStringLiteral("custom")
+                    && iconStyleDrawsLayers() && hasIconLayer([](const QVariantMap &layer) {
+                        return layer.value(QStringLiteral("role")).toString() == QStringLiteral("base");
+                    });
+                available = tier == ArchDock::RendererTier::True3D || !styleTile;
+                inactive = available && !drawsTiles;
             }
             const bool parameter = key == QStringLiteral("iconDiameter") || key == QStringLiteral("iconLogoSize")
                 || key == QStringLiteral("iconOutlineWidth") || key == QStringLiteral("iconBodyColor")

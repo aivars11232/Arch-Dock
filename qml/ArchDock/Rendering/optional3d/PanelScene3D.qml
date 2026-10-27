@@ -960,17 +960,17 @@ Item {
             bevel: 2 * Math.max(0, Math.min(12, root.number(values, "iconTileBevel", 0))) / logicalSize,
             diameter: diameter})
     })
-    // Whether an entry's tile is a bubble (Icon Tiles > 3D tile form).
+    // Whether an entry has a bubble: every icon shown with a tile stands in
+    // one, whatever the tile's shape.
     function bubbleWanted(visual) {
         return visual !== null && visual.tileRenderingEnabled
-            && String((visual.tileSettings || ({})).iconTileForm || "flat") === "bubble"
     }
     // How wide and how high an entry's bubble has to be to hold its icon
     // whole: wide enough for the icon's whole picture, whatever the shape
     // (a circle wider than the picture's diagonal, a diamond wider still),
-    // with a margin for the outline; high enough for the icon's volume and
-    // its rings at its depth, and never lower than nine tenths of the
-    // tile's half width. In the tile's frame (1 = half the cell).
+    // with a margin for the outline; as deep as it is wide, so it is round
+    // every way, and deeper still when the icon's volume and its rings at
+    // its depth need it. In the tile's frame (1 = half the cell).
     function bubbleFit(visual) {
         const values = visual ? visual.tileSettings || ({}) : ({})
         const logicalSize = Math.max(1, Number(visual && visual.logicalSize || 52))
@@ -985,9 +985,10 @@ Item {
         const reach = mesh ? Number(mesh.reach || mesh.depth || 0) : 0
         // The icon's frame is a hundred units over 0.72 of the cell: a unit
         // is 0.0144 of half the cell.
-        // Each half of the shell, from the icon's middle: past the icon's
-        // reach, never a thin pancake.
-        const height = Math.max(0.6, 0.15 + 1.25 * root.iconDepth * reach * 0.0144 * pictureScale)
+        // Each half of the shell, from the icon's middle: as deep as the
+        // bubble is wide (a ball round a circle, a rhombus with depth round a
+        // diamond, never a flat lens), and past the icon's reach.
+        const height = Math.max(diameter, 0.15 + 1.25 * root.iconDepth * reach * 0.0144 * pictureScale)
         // The icon's middle: its picture's plane plus half its volume, in
         // the tile's frame (the glyph's plane sits a hundredth of the cell
         // before the tile, the volume's back on it).
@@ -1000,15 +1001,30 @@ Item {
         const visual = entry ? entry.meshVisualItem : null
         if (!bubbleWanted(visual)) return null
         const fit = bubbleFit(visual)
-        return PlatformGeometry.bubble({shape: visual.resolvedIconStyle.iconShape, height: fit.height, diameter: fit.diameter})
+        return cachedBubble(String(visual.resolvedIconStyle.iconShape), fit.height, fit.diameter)
     })
-    // A bubble's glass: clear and glossy, a light tint of the tile's colour
-    // (glass is paler than what it stands on), as clear as the tile's
+    // Bubbles already built, by what shapes them: icons with alike bubbles
+    // share one, and whatever leaves an icon's bubble as it was (a hover, a
+    // press, a new size) hands back the same mesh and builds nothing.
+    property var bubbleCache: ({})
+    function cachedBubble(shape, height, diameter) {
+        const key = shape + "|" + height.toFixed(4) + "|" + diameter.toFixed(4)
+        if (!bubbleCache[key]) {
+            // A slider dragged through many sizes keeps only the latest.
+            const keys = Object.keys(bubbleCache)
+            if (keys.length >= 32) keys.forEach(function(old) { delete bubbleCache[old] })
+            bubbleCache[key] = PlatformGeometry.bubble({shape: shape,
+                height: Number(height.toFixed(4)), diameter: Number(diameter.toFixed(4))})
+        }
+        return bubbleCache[key]
+    }
+    // A bubble's glass: clear and glossy, a light tint of the tile's fill
+    // colour (glass is paler than what it stands on), as clear as the tile's
     // opacity allows.
     function bubbleMaterial(visual) {
         const values = visual ? visual.tileSettings || ({}) : ({})
         const base = tileMaterial(visual)
-        const tint = Qt.color(base.baseColor)
+        const tint = Qt.color(String(values.iconTileColor || "#334155"))
         return {format: "org.archdock.material",
             baseColor: Qt.rgba(0.62 + 0.38 * tint.r, 0.62 + 0.38 * tint.g, 0.62 + 0.38 * tint.b, 1),
             metalness: 0, roughness: 0.06,
@@ -3057,6 +3073,11 @@ Item {
                 readonly property real bubbleOutlineWidth: Math.max(0.5, Math.min(12,
                     root.number(visual ? visual.tileSettings : null, "iconTileBorderWidth", 1)))
                 readonly property bool tileShown: visual !== null && visual.tileRenderingEnabled
+                // An icon in a bubble faces the viewer: neither it nor its
+                // bubble turns about the upright axis (no Spin, Wobble or
+                // Swing turn, no hologram turning), so neither shows its thin
+                // side; Icon turn still shows a 3D icon's depth.
+                readonly property bool facesViewer: tileShown && bubbleMesh !== null
                 // Where the entry stands. On a generated platform the layout's
                 // own position, carried onto the platform's centre line: the
                 // platform is that layout's path. On a theme's mesh, its
@@ -3400,7 +3421,8 @@ Item {
                         // about the vertical axis here, the way a stand spins,
                         // instead of a roll of the picture; so does a hologram's
                         // turning, each icon a little after the one before it.
-                        eulerRotation: Qt.vector3d(0, root.number(entryNode.iconMotion, "rotateY", 0)
+                        eulerRotation: Qt.vector3d(0, entryNode.facesViewer ? 0
+                            : root.number(entryNode.iconMotion, "rotateY", 0)
                             + root.number(entryNode.iconMotion, "rotateZ", 0)
                             + (root.hologramTurn !== 0 ? root.hologramTurn
                                + (root.iconHologram.turning === "turn" ? entryNode.index * 37 : 0) : 0),
@@ -3453,49 +3475,48 @@ Item {
                                     * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
                         }
-                        // The bubble (Icon Tiles > 3D tile form): a closed glass
-                        // shell in the tile's shape round the icon, in the
-                        // tile's place, its middle on the icon's own middle so
-                        // the icon sits at its centre from every side, its
-                        // outline drawn round it (a shell a little larger, seen
-                        // only from inside) so the bubble shows for all its
-                        // clearness.
+                        // The bubble: a closed glass shell in the tile's shape
+                        // round the icon, in the tile's place, its middle on the
+                        // icon's own middle so the icon sits at its centre from
+                        // every side, its outline drawn round it (a shell a
+                        // little larger, seen only from inside) so the bubble
+                        // shows for all its clearness. It follows the tile and
+                        // grows as far as the icon swells past it, so the icon
+                        // never leaves it.
                         IconStyle3D {
+                            id: bubbleShell
                             objectName: "mesh-tile-bubble-" + entryNode.index
+                            readonly property real holdScale: Math.max(root.number(entryNode.tileMotion, "scale", 1),
+                                root.number(entryNode.glyphMotion, "scale", 1))
                             meshData: entryNode.bubbleMesh
                             materialData: entryNode.bubbleMaterial
+                            // Drawn after the icon inside it, whose middle it
+                            // shares, so the glass lies over the picture and never
+                            // hides it (see-through parts are drawn furthest first,
+                            // and a tie falls either way), and before its outline:
+                            // sorted a quarter of the icon nearer, far less than
+                            // lies between icons that overlap on the screen.
+                            depthBias: -Math.sqrt(0.25 * entryNode.size * Math.abs(sceneContent.scale.x))
                             visible: entryNode.tileShown && entryNode.bubbleMesh !== null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0),
                                 entryNode.bubbleMiddle * entryNode.size / 2)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.tileMotion, "rotateY", 0)
-                                + root.number(entryNode.tileMotion, "rotateZ", 0), 0)
-                            scale: Qt.vector3d(entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
+                            scale: Qt.vector3d(entryNode.size / 2 * holdScale
                                     * root.number(entryNode.tileMotion, "scaleX", 1),
-                                entryNode.size / 2 * root.number(entryNode.tileMotion, "scale", 1)
-                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2)
+                                entryNode.size / 2 * holdScale
+                                    * root.number(entryNode.tileMotion, "scaleY", 1), entryNode.size / 2 * holdScale)
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
                             Model {
-                                id: bubbleOutline
                                 objectName: "mesh-tile-bubble-outline-" + entryNode.index
-                                readonly property var mesh: entryNode.bubbleMesh
                                 readonly property real spread: 1 + 2 * entryNode.bubbleOutlineWidth / Math.max(1, entryNode.size)
-                                function toVectors(values, dimension) {
-                                    return (values || []).map(function(value) {
-                                        return dimension === 3 ? Qt.vector3d(value[0], value[1], value[2])
-                                                               : Qt.vector2d(value[0], value[1])
-                                    })
-                                }
                                 pickable: false
-                                visible: mesh !== null
+                                visible: entryNode.bubbleMesh !== null
+                                // After the glass, whose depth hides all of it but
+                                // the rim.
+                                depthBias: -Math.sqrt(0.3 * entryNode.size * Math.abs(sceneContent.scale.x))
                                 scale: Qt.vector3d(spread, spread, spread)
-                                geometry: ProceduralMesh {
-                                    positions: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.positions, 3) : []
-                                    normals: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.normals, 3) : []
-                                    uv0s: bubbleOutline.mesh ? bubbleOutline.toVectors(bubbleOutline.mesh.uv0s, 2) : []
-                                    indexes: bubbleOutline.mesh ? bubbleOutline.mesh.indexes : []
-                                    primitiveMode: ProceduralMesh.Triangles
-                                }
+                                // The glass's own mesh, not built a second time.
+                                geometry: bubbleShell.geometry
                                 materials: PrincipledMaterial {
                                     lighting: PrincipledMaterial.NoLighting
                                     baseColor: entryNode.bubbleOutlineColour
@@ -3504,13 +3525,26 @@ Item {
                                     cullMode: Material.FrontFaceCulling
                                 }
                             }
+                            // The tile's glow (Icon Tiles > Glow) round the bubble:
+                            // the glass's mesh a little larger, seen only from
+                            // inside, after the glass, whose depth keeps its light
+                            // round the bubble and never through it.
+                            Model {
+                                objectName: "mesh-tile-bubble-glow-" + entryNode.index
+                                pickable: false
+                                visible: root.tileGlowAmount > 0 && entryNode.bubbleMesh !== null
+                                depthBias: -Math.sqrt(0.35 * entryNode.size * Math.abs(sceneContent.scale.x))
+                                scale: Qt.vector3d(root.tileGlowSpread, root.tileGlowSpread, root.tileGlowSpread)
+                                geometry: bubbleShell.geometry
+                                materials: [tileGlowMaterial]
+                            }
                         }
                         Model {
                             objectName: "mesh-tile-glow-flat-" + entryNode.index
                             source: "#Rectangle"
                             pickable: false
                             visible: root.tileGlowAmount > 0 && entryNode.tileShown && entryNode.tileMesh === null
-                                && root.collapseProgress < 1
+                                && entryNode.bubbleMesh === null && root.collapseProgress < 1
                             position: Qt.vector3d(root.number(entryNode.tileMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.tileMotion, "y", 0), -entryNode.size * 0.004)
                             scale: Qt.vector3d(entryNode.size / 100 * root.tileGlowSpread,
@@ -3556,6 +3590,10 @@ Item {
                             readonly property var mesh: entryNode.visual ? entryNode.visual.solidMesh : null
                             readonly property bool shown: root.iconDepth > 0 && mesh !== null
                                 && entryNode.visual !== null && root.collapseProgress < 1
+                            // A 3D icon (or a 3D hologram), not a flat hologram's
+                            // thin card: an icon is one or the other, never a 3D
+                            // icon with a flat copy of its picture.
+                            readonly property bool threeD: root.iconSolid && shown
                             function toVectors(values, dimension) {
                                 return (values || []).map(function(value) {
                                     return dimension === 3 ? Qt.vector3d(value[0], value[1], value[2])
@@ -3615,6 +3653,49 @@ Item {
                                 cullMode: Material.BackFaceCulling
                             }
                             materials: root.iconHologram.on ? [hologramMaterial] : [litMaterial]
+                            // A 3D icon's glows (Icons > Glow, a hologram's glow):
+                            // its own solid a little larger, seen only from inside,
+                            // so the light shines round its shape from every side.
+                            Model {
+                                objectName: "mesh-icon-solid-glow-" + entryNode.index
+                                pickable: false
+                                visible: solidModel.threeD && root.iconGlowAmount > 0
+                                scale: Qt.vector3d(root.iconGlowSpread, root.iconGlowSpread, root.iconGlowSpread)
+                                geometry: solidModel.geometry
+                                materials: PrincipledMaterial {
+                                    baseColor: "#000000"
+                                    roughness: 1
+                                    specularAmount: 0
+                                    emissiveFactor: root.iconGlowLight
+                                    alphaMode: PrincipledMaterial.Blend
+                                    cullMode: Material.FrontFaceCulling
+                                }
+                            }
+                            Model {
+                                objectName: "mesh-hologram-solid-glow-" + entryNode.index
+                                readonly property real spread: 1.06 + 0.12 * root.iconHologram.glowReach
+                                // In the glow's colour, or the picture's own as one
+                                // colour, its mean: a solid's glow wears no picture.
+                                readonly property var glowRgb: root.iconHologramColours.glow
+                                    && root.iconHologramColours.glow.own && solidModel.mesh && solidModel.mesh.colour
+                                    ? solidModel.mesh.colour
+                                    : PlatformGeometry.parseColour(root.hologramColour(root.iconHologramColours.glow))
+                                        || [0.13, 0.85, 1, 1]
+                                pickable: false
+                                visible: solidModel.threeD && root.iconHologram.on && root.iconHologram.glow > 0
+                                scale: Qt.vector3d(spread, spread, spread)
+                                opacity: 0.85
+                                geometry: solidModel.geometry
+                                materials: PrincipledMaterial {
+                                    baseColor: "#000000"
+                                    roughness: 1
+                                    specularAmount: 0
+                                    emissiveFactor: root.glowLight(parent.glowRgb, root.iconHologram.glow)
+                                    alphaMode: PrincipledMaterial.Blend
+                                    cullMode: Material.FrontFaceCulling
+                                    depthDrawMode: Material.NeverDepthDraw
+                                }
+                            }
                         }
                         Model {
                             id: glyphModel
@@ -3626,7 +3707,8 @@ Item {
                             position: Qt.vector3d(root.number(entryNode.glyphMotion, "x", 0),
                                 entryNode.size / 2 - root.number(entryNode.glyphMotion, "y", 0),
                                 entryNode.size * 0.01)
-                            eulerRotation: Qt.vector3d(0, root.number(entryNode.glyphMotion, "rotateY", 0)
+                            eulerRotation: Qt.vector3d(0, entryNode.facesViewer ? 0
+                                : root.number(entryNode.glyphMotion, "rotateY", 0)
                                 + root.number(entryNode.glyphMotion, "rotateZ", 0), 0)
                             scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
                                     * root.number(entryNode.glyphMotion, "scaleX", 1),
@@ -3669,14 +3751,16 @@ Item {
                             }
                             materials: root.iconHologram.on ? [hologramMaterial] : [litMaterial]
                         }
-                        // A hologram's glow: its picture's shape, a little larger,
-                        // just behind it, brighter than white in the glow's colour
-                        // or the picture's own, which the view spreads round it.
+                        // A flat hologram's glow: its picture's shape, a little
+                        // larger, just behind it, brighter than white in the glow's
+                        // colour or the picture's own, which the view spreads round
+                        // it. A 3D hologram's is a shell of its solid.
                         Model {
                             objectName: "mesh-hologram-glow-" + entryNode.index
                             source: "#Rectangle"
                             pickable: false
                             visible: root.iconHologram.on && root.iconHologram.glow > 0 && glyphModel.visible
+                                && !solidModel.threeD
                             position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y, -entryNode.size * 0.02)
                             eulerRotation: glyphModel.eulerRotation
                             scale: Qt.vector3d(glyphModel.scale.x * (1.06 + 0.12 * root.iconHologram.glowReach),
@@ -3702,14 +3786,15 @@ Item {
                                 depthDrawMode: Material.NeverDepthDraw
                             }
                         }
-                        // The icon's glow (Icons > Glow): its picture's shape, a
+                        // A flat icon's glow (Icons > Glow): its picture's shape, a
                         // little larger, just behind it and brighter than white,
-                        // which the view spreads round the picture.
+                        // which the view spreads round the picture. A 3D icon's is
+                        // a shell of its solid.
                         Model {
                             objectName: "mesh-glyph-glow-" + entryNode.index
                             source: "#Rectangle"
                             pickable: false
-                            visible: root.iconGlowAmount > 0 && glyphModel.visible
+                            visible: root.iconGlowAmount > 0 && glyphModel.visible && !solidModel.threeD
                             position: Qt.vector3d(glyphModel.position.x, glyphModel.position.y, entryNode.size * 0.006)
                             eulerRotation: glyphModel.eulerRotation
                             scale: Qt.vector3d(glyphModel.scale.x * root.iconGlowSpread,

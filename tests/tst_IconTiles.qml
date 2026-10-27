@@ -205,7 +205,54 @@ TestCase {
         const cancelled = EditorModel.cancel(draft)
         verify(!EditorModel.dirty(cancelled))
         preview.panelDefinition = EditorModel.rendererCandidate(cancelled)
-        tryCompare(tile, "visible", false)
+        // Back to the icon style, which draws no tile of its own: the icon
+        // keeps the panel's tile, in its saved colour.
+        tryCompare(tile, "fillColor", "#334155")
+        verify(tile.visible)
         compare(EditorModel.panelCandidate(cancelled).iconTileColor, "#334155")
+    }
+
+    // A tile holds its icon whole, whatever its shape: a circle round a
+    // square picture grown to 150 % on its tile, and round one whose own
+    // motion swells it past its tile.
+    function test_tileHoldsTheWholeIcon() {
+        const icon = createTemporaryObject(iconComponent, testCase,
+            {tileSettings: {iconTileMode: "custom", iconTilesEnabled: true, iconShape: "circle",
+                            iconTileIconScale: 150}})
+        verify(waitForRendering(icon))
+        const tile = findChild(icon, "icon-custom-tile")
+        const glyph = icon.glyphItem
+        verify(tile.visible)
+        const inside = function() {
+            const radius = tile.width / 2
+            for (const corner of [[0, 0], [glyph.width, 0], [0, glyph.height], [glyph.width, glyph.height]]) {
+                const at = glyph.mapToItem(tile, corner[0], corner[1])
+                if (Math.hypot(at.x - tile.width / 2, at.y - tile.height / 2) > radius + 0.5)
+                    return false
+            }
+            return true
+        }
+        verify(inside(), "a picture at 150 % stays inside its circle tile")
+        verify(tile.width > icon.logicalSize, "the tile grew past its cell to hold it")
+        icon.tileSettings = {iconTileMode: "custom", iconTilesEnabled: true, iconShape: "circle"}
+        icon.tileMotion = {scale: 1.12}
+        icon.glyphMotion = {scale: 1.18}
+        verify(waitForRendering(icon))
+        verify(inside(), "a picture swelling past its tile stays inside it")
+    }
+
+    // With tiles shown, an icon whose style draws no tile of its own stands
+    // in the panel's tile, in its fill colour and opacity.
+    function test_iconsWithoutAStyleTileStandInThePanelsTile() {
+        const icon = createTemporaryObject(iconComponent, testCase,
+            {tileSettings: {iconTileMode: "style", iconTilesEnabled: true, iconTileColor: "#22aa66",
+                            iconTileOpacity: 0.5}})
+        verify(waitForRendering(icon))
+        const tile = findChild(icon, "icon-custom-tile")
+        verify(tile.visible)
+        compare(tile.fillColor, "#22aa66")
+        compare(tile.opacity, 0.5)
+        icon.tileSettings = {iconTileMode: "style", iconTilesEnabled: false}
+        verify(!tile.visible)
     }
 }

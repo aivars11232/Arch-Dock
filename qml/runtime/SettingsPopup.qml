@@ -1228,9 +1228,10 @@ Window {
         const custom = String(panelValue("iconTileMode", "style")) === "custom";
         const rows = [section(qsTr("Icon Tiles"), qsTr("Tiles currently applied to icons in the selected panel."), true),
             readOnlyRow(qsTr("Tile appearance"), custom ? qsTr("Custom tile") : qsTr("From icon style"))];
-        const keys = ["iconShape"].concat(custom ? ["iconTileColor", "iconTileOpacity", "iconTileBorderColor",
-            "iconTileBorderWidth"] : []).concat(["iconTileTexture", "iconTileThickness", "iconTileIconOffsetX",
-            "iconTileIconOffsetY", "iconTileIconScale", "iconTileMaterial", "iconTileElevation"])
+        // Each is listed where the panel offers it.
+        const keys = ["iconShape", "iconTileColor", "iconTileOpacity", "iconTileBorderColor",
+            "iconTileBorderWidth", "iconTileTexture", "iconTileThickness", "iconTileIconOffsetX",
+            "iconTileIconOffsetY", "iconTileIconScale", "iconTileElevation"]
             .concat(Number(panelValue("iconTileGlow", 0)) > 0
                 ? ["iconTileGlow", "iconTileGlowReach", "iconTileGlowColor"] : []);
         return rows.concat(summaryRows(keys));
@@ -1865,14 +1866,12 @@ Window {
         const rows = schemaSectionRows("icon-tiles", qsTr("Icon Tiles"),
             qsTr("Tile backgrounds for this panel. Preview changes here, then Apply to save."));
         const custom = String(panelValue("iconTileMode", "style")) === "custom";
-        // Fill, border and opacity belong to a custom tile. The shape is
-        // offered whenever a tile is drawn with it, after the tile appearance.
+        // The fill colour, opacity and border are offered wherever they
+        // colour the tile (the panel decides). The shape is offered whenever
+        // a tile is drawn with it, after the tile appearance.
         const shapeDescriptor = fieldDescriptor("iconShape", "panel");
         const shape = shapeDescriptor ? [editorRow(shapeDescriptor)] : [];
-        const filtered = rows.filter(function(row) {
-            return row.key !== "iconShape" && (custom
-                || !["iconTileColor", "iconTileOpacity", "iconTileBorderColor", "iconTileBorderWidth"].includes(row.key));
-        });
+        const filtered = rows.filter(function(row) { return row.key !== "iconShape"; });
         for (let index = 0; index < filtered.length; ++index) {
             if (filtered[index].key === "iconTileMode") {
                 filtered[index].options = [{value: "style", label: qsTr("From icon style")},

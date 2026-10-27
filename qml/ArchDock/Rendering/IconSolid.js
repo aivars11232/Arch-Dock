@@ -646,7 +646,23 @@ function iconMesh(data, width, height, relief, options) {
     }
     const mesh = kind === "block" ? solidMesh(data, width, height, settings) : reliefMesh(data, width, height, settings)
     mesh.kind = kind
+    mesh.colour = meanColour(data, width, height, settings.threshold)
     return mesh
+}
+
+// The picture's mean colour, its clear pixels left out: what a glow round
+// its solid shines in when it takes the picture's own colours, a solid's
+// glow being its shape and never a flat copy of the picture.
+function meanColour(data, width, height, threshold) {
+    const limit = threshold === undefined ? 96 : threshold
+    let red = 0, green = 0, blue = 0, weight = 0
+    for (let index = 0; index < width * height; ++index) {
+        const alpha = data[index * 4 + 3]
+        if (alpha <= limit) continue
+        red += data[index * 4] * alpha; green += data[index * 4 + 1] * alpha; blue += data[index * 4 + 2] * alpha
+        weight += alpha
+    }
+    return weight > 0 ? [red / weight / 255, green / weight / 255, blue / weight / 255, 1] : [1, 1, 1, 1]
 }
 
 // ---------------------------------------------------------------------

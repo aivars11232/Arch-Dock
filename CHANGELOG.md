@@ -14,6 +14,37 @@
   offers Empty for edge panels too, and calls Hybrid "Launcher + open apps".
   A preset applied to a panel gives it a look and keeps its type. An Empty
   bar still holds Plasma widgets only.
+- **Every icon tile is a bubble round its icon, and holds it whole.** On a
+  3D panel a tile was a flat card behind its icon (a plate when given a
+  thickness) unless its 3D tile form was set to Bubble, and the icon stood
+  out in front of it; on a flat panel a tile kept its size while the icon
+  on it grew (Icon scale on tile up to 150 %, or an animation such as
+  Enlarge, which swells the icon more than its tile), so the icon stuck out
+  of it; and an icon style without a tile of its own left its icons with
+  none. Now every icon shown with tiles stands in one, in every shape: on a
+  3D panel a glass bubble as deep as it is wide (a ball round a circle, a
+  rhombus with depth round a diamond, where a bubble was a thin lens 0.6 of
+  an icon deep however wide it grew), on a flat panel the tile itself, each
+  as large as its icon needs, its animation included. The tile's glow wraps
+  the bubble, where a flat glowing card stood inside it (a thin glowing wall
+  when the icon turned). The glass is drawn after the icon inside it, which
+  it could hide before, and alike bubbles are built once and shared, so a
+  hover builds none. The 3D tile form choice is gone,
+  and so are the flat plate's bevel and 3D material. On a 3D panel Fill
+  color tints the glass, Tile opacity sets how strong it is and Border
+  color and width draw its outline, with either tile appearance; on a flat
+  panel they color the panel's own tile, and an icon style's own tile keeps
+  the style's colours.
+- **An icon in a bubble faces you.** Neither it nor its bubble turns about
+  its upright axis any more (a Spin, Wobble or Swing turn, a hologram's
+  turning), so neither shows its thin side and a diamond stays a diamond;
+  Icon turn still shows a 3D icon's depth, and icons without tiles turn as
+  before.
+- **A 3D icon is never drawn with a flat copy of itself.** Its glow (Icons >
+  Glow) and a 3D hologram's glow were flat glowing copies of the picture
+  standing behind it; they now shine from a shell of the icon's own shape,
+  a hologram's in the glow's colour or the picture's own as one colour. An
+  icon is a flat icon, a 3D icon or a hologram of either.
 
 ## 0.1.1-50 — 2026-10-26
 

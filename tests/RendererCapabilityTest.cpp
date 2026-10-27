@@ -287,6 +287,12 @@ private slots:
         QTest::qWait(200); // Allow the asynchronous icon source to reach the mesh texture.
         const QImage first = pixels();
         QVERIFY(!first.isNull());
+        const QString evidenceRoot = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
+        const QString evidence = themeId == QStringLiteral("arc-platform-orange") && !evidenceRoot.isEmpty()
+            ? QDir(evidenceRoot).filePath(QStringLiteral("orange")) : evidenceRoot;
+        if (!evidence.isEmpty()) QVERIFY(QDir().mkpath(evidence));
+        if (!evidence.isEmpty())
+            QVERIFY(first.save(QDir(evidence).filePath(QStringLiteral("mesh-scene.png"))));
         int checkedIcons = 0;
         QObject *viewport = objectValue(renderer->property("viewport"));
         QVector3D hole;
@@ -338,12 +344,6 @@ private slots:
                 if (first.pixelColor(x, y).alpha() > 32)
                     ++visiblePixels;
         QVERIFY2(visiblePixels > 1000, qPrintable(QStringLiteral("Only %1 mesh pixels").arg(visiblePixels)));
-        const QString evidenceRoot = qEnvironmentVariable("ARCHDOCK_SCENE_EVIDENCE_DIR");
-        const QString evidence = themeId == QStringLiteral("arc-platform-orange") && !evidenceRoot.isEmpty()
-            ? QDir(evidenceRoot).filePath(QStringLiteral("orange")) : evidenceRoot;
-        if (!evidence.isEmpty()) QVERIFY(QDir().mkpath(evidence));
-        if (!evidence.isEmpty())
-            QVERIFY(first.save(QDir(evidence).filePath(QStringLiteral("mesh-scene.png"))));
         auto tiltedDefinition = plainValue(scene->property("panelDefinition")).toMap();
         for (const double pitch : {10.0, -35.0}) {
             tiltedDefinition.insert(QStringLiteral("scene3DCameraPitch"), pitch);
@@ -779,30 +779,33 @@ private slots:
         tiles.insert(QStringLiteral("iconTileBorderWidth"), 0.0);
         scene->setProperty("panelDefinition", tiles);
         QTest::qWait(100);
-        const auto magentaPixels = [](const QImage &image) {
+        // Seen in the bubble's glass, the magenta tile colour is a light
+        // pink: red and blue well above green.
+        const auto pinkPixels = [](const QImage &image) {
             int count = 0;
             for (int y = 0; y < image.height(); ++y)
                 for (int x = 0; x < image.width(); ++x) {
                     const auto color = image.pixelColor(x, y);
-                    count += color.red() > 200 && color.green() < 80 && color.blue() > 140;
+                    count += color.alpha() > 32 && color.red() - color.green() > 30
+                        && color.blue() - color.green() > 15;
                 }
             return count;
         };
         const auto customTiles = pixels();
-        QVERIFY(magentaPixels(customTiles) > 20);
-        QTRY_VERIFY(projectionMatches());
         if (!evidence.isEmpty()) QVERIFY(customTiles.save(QDir(evidence).filePath("mesh-custom-tiles.png")));
+        QVERIFY(pinkPixels(customTiles) > 20);
+        QTRY_VERIFY(projectionMatches());
         tiles.insert(QStringLiteral("iconShape"), QStringLiteral("circle"));
         scene->setProperty("panelDefinition", tiles);
         QTest::qWait(100);
         const auto circleTiles = pixels();
-        QVERIFY(magentaPixels(circleTiles) > 20);
+        QVERIFY(pinkPixels(circleTiles) > 20);
         QVERIFY(circleTiles != customTiles);
         QTRY_VERIFY(projectionMatches());
         tiles.insert(QStringLiteral("iconTilesEnabled"), false);
         scene->setProperty("panelDefinition", tiles);
         QTest::qWait(100);
-        QCOMPARE(magentaPixels(pixels()), 0);
+        QCOMPARE(pinkPixels(pixels()), 0);
         // Restore the default appearance before the existing motion matrix.
         tiles.remove(QStringLiteral("iconTileMode"));
         tiles.remove(QStringLiteral("iconTileColor"));
@@ -855,6 +858,12 @@ private slots:
             if (value.value(QStringLiteral("id")) == QStringLiteral("glow")) glow = value;
         }
         QVERIFY(!turn.isEmpty() && !glow.isEmpty());
+        // The turn is seen on an icon without a tile: one in a bubble faces
+        // the viewer (tileBubblesPlacementAndOrbitRenderUnderRhi).
+        QVariantMap untiled = plainValue(scene->property("panelDefinition")).toMap();
+        const QVariantMap tiled = untiled;
+        untiled.insert(QStringLiteral("iconTilesEnabled"), false);
+        scene->setProperty("panelDefinition", untiled);
         QVariantMap motion{{QStringLiteral("animationProfile"), turn},
                            {QStringLiteral("animationTrigger"), QStringLiteral("idle")}};
         scene->setProperty("animationProfiles", motion);
@@ -938,6 +947,7 @@ private slots:
         QTRY_COMPARE(plainValue(controller->property("activeTracks")).toList().size(), 0);
         QCOMPARE(glyph->property("eulerRotation").value<QVector3D>().y(), 0.0f);
 
+        scene->setProperty("panelDefinition", tiled);
         motion.insert(QStringLiteral("reducedMotion"), false);
         motion.insert(QStringLiteral("animationProfile"), glow);
         motion.insert(QStringLiteral("animationTrigger"), QStringLiteral("hover"));
@@ -1297,7 +1307,7 @@ private slots:
                 property real sceneFieldOfView: 40
                 property real sceneKeyLight: 1
                 property bool reduced: false
-                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120, iconTilesEnabled: false,
                                    scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
                                    scene3DScale: sceneScale, scene3DPositionX: scenePositionX,
                                    scene3DRoll: sceneRoll, scene3DTransitions: sceneTransitions,
@@ -1725,7 +1735,7 @@ private slots:
     // own stands on a platform generated along its own layout, in its own
     // colours, with upright icons on pedestals. Every supported shape, the
     // the baked blue ring and the steel octagon, drawn by the real RHI.
-    void tileDepthMaterialsPlacementAndOrbitRenderUnderRhi();
+    void tileBubblesPlacementAndOrbitRenderUnderRhi();
 
     // A panel decoration on a 3D panel stands as a solid of its own, drawn by
     // the real RHI: a soft one rounded (a nebula, in its own colours), walled
@@ -1833,7 +1843,7 @@ private slots:
                 property string direction: "inward"
                 property real contrast: 0.35
                 property string standPicture: ""
-                panelDefinition: Object.assign({rendererTier: "true3d", layout: layoutName, layoutRadius: 120,
+                panelDefinition: Object.assign({rendererTier: "true3d", layout: layoutName, layoutRadius: 120, iconTilesEnabled: false,
                                    scene3DQuality: "high", iconSize: 40, layoutPadding: 10,
                                    pathSides: 7, appearance: "neon", scene3DCameraPitch: pitch,
                                    scene3DTransitions: false, scene3DFold: fold, scene3DThickness: thickness,
@@ -3205,7 +3215,7 @@ private slots:
                 required property string glyphFixture
                 property real glow: 0
                 property string look: "lightning"
-                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120, iconTilesEnabled: false,
                                    scene3DQuality: "low", iconSize: 40, spacing: 8, layoutPadding: 10,
                                    scene3DTransitions: false, scene3DMaterial: look, scene3DTexture: look,
                                    panelLookBackground: 0.5, panelGlow: glow, panelGlowReach: 0.7,
@@ -3447,7 +3457,7 @@ private slots:
     }
 };
 
-void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
+void RendererCapabilityTest::tileBubblesPlacementAndOrbitRenderUnderRhi()
 {
     if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
         return; // Executed by the private KWin installed-module harness.
@@ -3516,30 +3526,23 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
         return count;
     };
     QTest::qWait(200);
-    const QImage flat = capture("flat"); QVERIFY(!flat.isNull());
-    QVariantMap values{{"iconTileThickness", 8.0}, {"iconTileBevel", 3.0}};
-    scene->setProperty("tileValues", values);
-    const QImage solid = capture("solid"); QVERIFY(changed(flat,solid) >= 20);
-    auto *tile = renderer->findChild<QObject *>("mesh-tile-solid-0"); QVERIFY(tile);
-    const auto mesh = plainValue(tile->property("meshData")).toMap();
-    double minimumZ = 0;
-    for (const QVariant &point : mesh.value("positions").toList())
-        minimumZ = qMin(minimumZ, point.toList().value(2).toDouble());
-    QVERIFY(qAbs(minimumZ * tile->property("scale").value<QVector3D>().z() + 8) < 0.001);
-    QVERIFY(renderer->property("geometryWithinBudget").toBool());
-    // A bubble (3D tile form): a closed glass shell in the tile's shape
-    // round the icon, in the tile's place, its outline round it, draws
-    // differently from the tile.
-    values.insert("iconTileForm", "bubble"); scene->setProperty("tileValues", values);
+    // Every tile is a bubble round its icon: a closed glass shell in the
+    // tile's shape with its outline round it, and no flat plate, whatever
+    // a tile's thickness, bevel or old flat form ask for.
     auto *bubble = renderer->findChild<QObject *>("mesh-tile-bubble-0"); QVERIFY(bubble);
+    auto *plate = renderer->findChild<QObject *>("mesh-tile-solid-0");
     QTRY_VERIFY(bubble->property("visible").toBool());
-    QTRY_VERIFY(!tile->property("visible").toBool());
+    QVERIFY(!plate || !plate->property("visible").toBool());
     QVERIFY(renderer->findChild<QObject *>("mesh-tile-bubble-outline-0"));
-    const QImage bubbled = capture("bubble"); QVERIFY(changed(solid, bubbled) >= 20);
+    QVariantMap values{{"iconTileThickness", 8.0}, {"iconTileBevel", 3.0}, {"iconTileForm", "flat"}};
+    scene->setProperty("tileValues", values);
+    QTest::qWait(100);
+    QVERIFY(bubble->property("visible").toBool());
+    QVERIFY(!plate || !plate->property("visible").toBool());
+    QVERIFY(renderer->property("geometryWithinBudget").toBool());
     // A circle bubble grows past the tile's own width to hold the icon's
     // whole picture, and the bubble sits on the icon's middle, before the
     // tile's face.
-    values.insert("iconShape", "circle"); scene->setProperty("tileValues", values);
     const auto widest = [](const QVariantMap &mesh) {
         double widest = 0;
         for (const QVariant &point : mesh.value("positions").toList())
@@ -3548,51 +3551,90 @@ void RendererCapabilityTest::tileDepthMaterialsPlacementAndOrbitRenderUnderRhi()
     };
     QTRY_VERIFY(widest(plainValue(bubble->property("meshData")).toMap()) > 1.0);
     QVERIFY(bubble->property("position").value<QVector3D>().z() > 0);
-    QVERIFY(!capture("bubble-circle").isNull());
-    values.insert("iconShape", "rounded");
-    values.insert("iconTileForm", "flat"); scene->setProperty("tileValues", values);
-    QTRY_VERIFY(!bubble->property("visible").toBool());
-    QTRY_VERIFY(tile->property("visible").toBool());
+    // Each bubble is as deep as it is wide, round every way: a ball round a
+    // circle, a rhombus with depth round a diamond, never a flat lens.
+    const auto deepest = [](const QVariantMap &mesh) {
+        double deepest = 0;
+        for (const QVariant &point : mesh.value("positions").toList())
+            deepest = qMax(deepest, qAbs(point.toList().value(2).toDouble()));
+        return deepest;
+    };
     for (const QString &shape : {QStringLiteral("rounded"), QStringLiteral("square"), QStringLiteral("squircle"),
             QStringLiteral("circle"), QStringLiteral("hexagon"), QStringLiteral("diamond")}) {
         values.insert("iconShape", shape); scene->setProperty("tileValues", values);
-        QVERIFY(!capture("shape-" + shape).isNull());
-        QVERIFY(plainValue(tile->property("meshData")).toMap().value("indexes").toList().size() > 12);
+        QVERIFY(!capture("bubble-" + shape).isNull());
+        QVERIFY2(bubble->property("visible").toBool(), qPrintable(shape));
+        const QVariantMap mesh = plainValue(bubble->property("meshData")).toMap();
+        QVERIFY(mesh.value("indexes").toList().size() > 12);
+        QVERIFY2(qAbs(deepest(mesh) - widest(mesh)) < 0.01, qPrintable(shape));
     }
+    // The icon at 150 % widens its bubble, which deepens with it.
+    values.insert("iconShape", "circle"); values.insert("iconTileIconScale", 150.0);
+    scene->setProperty("tileValues", values);
+    QTRY_VERIFY(widest(plainValue(bubble->property("meshData")).toMap()) > 1.6);
+    QVERIFY(qAbs(deepest(plainValue(bubble->property("meshData")).toMap())
+        - widest(plainValue(bubble->property("meshData")).toMap())) < 0.01);
+    values.remove("iconTileIconScale");
+    // The tile's glow wraps the bubble; no flat glowing card stands in it.
+    values.insert("iconTileGlow", 0.2); scene->setProperty("tileValues", values);
+    auto *bubbleGlow = renderer->findChild<QObject *>("mesh-tile-bubble-glow-0"); QVERIFY(bubbleGlow);
+    QTRY_VERIFY(bubbleGlow->property("visible").toBool());
+    auto *flatGlow = renderer->findChild<QObject *>("mesh-tile-glow-flat-0");
+    QVERIFY(!flatGlow || !flatGlow->property("visible").toBool());
+    values.remove("iconTileGlow");
+    // An icon is a flat icon, a 3D icon or a hologram of either, never a 3D
+    // icon with a flat copy of its picture: a 3D icon's glows are shells of
+    // its solid, a flat icon's (a flat hologram's thin card too) the flat
+    // glows.
+    const auto shown = [&renderer](const char *name) {
+        auto *model = renderer->findChild<QObject *>(QString::fromLatin1(name));
+        return model && model->property("visible").toBool();
+    };
+    for (const bool hologram : {false, true}) {
+        QVariantMap parts = values;
+        parts.insert("scene3DIconSolid", true); parts.insert("scene3DIconDepth", 0.3);
+        parts.insert("hologramIcons", hologram); parts.insert("hologramIconGlow", 1.0);
+        parts.insert("iconGlow", 0.5);
+        scene->setProperty("tileValues", parts);
+        QTRY_VERIFY(shown("mesh-icon-solid-0"));
+        QTRY_VERIFY(shown("mesh-icon-solid-glow-0"));
+        QVERIFY(!shown("mesh-glyph-glow-0"));
+        QVERIFY(!shown("mesh-hologram-glow-0"));
+        QCOMPARE(shown("mesh-hologram-solid-glow-0"), hologram);
+        QCOMPARE(renderer->findChild<QObject *>("mesh-glyph-0")->property("opacity").toDouble(), 0.0);
+        parts.insert("scene3DIconSolid", false);
+        scene->setProperty("tileValues", parts);
+        QTRY_VERIFY(shown("mesh-glyph-glow-0"));
+        QVERIFY(!shown("mesh-icon-solid-glow-0"));
+        QVERIFY(!shown("mesh-hologram-solid-glow-0"));
+        QCOMPARE(shown("mesh-hologram-glow-0"), hologram);
+    }
+    // An icon in a bubble faces the viewer, a turning hologram too, and so
+    // does its bubble; without tiles the hologram turns.
+    QVariantMap turning = values;
+    turning.insert("hologramIcons", true); turning.insert("hologramIconTurning", "turn");
+    scene->setProperty("tileValues", turning);
+    auto *body = renderer->findChild<QObject *>("mesh-icon-body-0"); QVERIFY(body);
+    QTest::qWait(600);
+    QCOMPARE(body->property("eulerRotation").value<QVector3D>().y(), 0.0f);
+    QCOMPARE(bubble->property("eulerRotation").value<QVector3D>().y(), 0.0f);
+    turning.insert("iconTilesEnabled", false);
+    scene->setProperty("tileValues", turning);
+    QTRY_VERIFY(qAbs(body->property("eulerRotation").value<QVector3D>().y()) > 0.5);
     values.insert("iconShape", "circle"); scene->setProperty("tileValues", values);
     const QImage baseline = capture("baseline"); QVERIFY(!baseline.isNull());
-    for (const QString &look : {QStringLiteral("glass"), QStringLiteral("crystal"), QStringLiteral("neon"),
-            QStringLiteral("minimal"), QStringLiteral("plasma"), QStringLiteral("lime"), QStringLiteral("floating-glass"),
-            QStringLiteral("metallic"), QStringLiteral("futuristic"), QStringLiteral("organic"),
-            QStringLiteral("platform"), QStringLiteral("plate"), QStringLiteral("pedestal")}) {
-        values.insert("iconTileTexture", look); scene->setProperty("tileValues", values);
-        QVERIFY2(changed(baseline,capture("texture-"+look)) >= 20, qPrintable(look));
-        values.insert("iconTileTexture", "none"); values.insert("iconTileMaterial", look);
-        scene->setProperty("tileValues", values);
-        const auto image = capture("material-"+look); QVERIFY(!image.isNull());
-        if (look != "minimal") QVERIFY2(changed(baseline,image) >= 20, qPrintable(look));
-        values.insert("iconTileMaterial", "minimal");
-    }
-    scene->setProperty("tileValues", values);
-    QVector3D opacityWorld, opacityScreen;
-    QVERIFY(QMetaObject::invokeMethod(tile, "mapPositionToScene", Q_RETURN_ARG(QVector3D, opacityWorld),
-        Q_ARG(QVector3D, QVector3D(0.78f,0,0))));
-    QVERIFY(projectScenePoint(view, opacityWorld, opacityScreen));
-    const QPoint opacityPoint(qRound(opacityScreen.x()), qRound(opacityScreen.y()));
-    const auto opaque = capture("opacity-100");
-    QVERIFY(opaque.rect().contains(opacityPoint));
-    // The point lies near the tile's bevel, where a pixel may be only partly
-    // covered; half the opacity is half of whatever the full tile gives there.
-    const int full = opaque.pixelColor(opacityPoint).alpha();
-    QVERIFY2(full > 150, qPrintable(QStringLiteral("opaque tile alpha was %1").arg(full)));
+    // The glass takes a light tint of the tile's fill colour and is as clear
+    // as the tile's opacity says.
+    const auto glass = [&bubble]() { return plainValue(bubble->property("materialData")).toMap(); };
+    QVERIFY(glass().value("baseColor").value<QColor>().redF() < glass().value("baseColor").value<QColor>().greenF());
+    values.insert("iconTileColor", "#c02060"); scene->setProperty("tileValues", values);
+    QTRY_VERIFY(glass().value("baseColor").value<QColor>().redF() > glass().value("baseColor").value<QColor>().greenF());
+    QVERIFY(changed(baseline, capture("bubble-tinted")) >= 20);
+    const double clearest = glass().value("opacity").toDouble();
     values.insert("iconTileOpacity", 0.5); scene->setProperty("tileValues", values);
-    const auto half = capture("opacity-50"); QVERIFY(!half.isNull());
-    QVERIFY2(qAbs(half.pixelColor(opacityPoint).alpha() - full / 2) <= 15,
-        qPrintable(QStringLiteral("tile 50 percent alpha was %1 of %2").arg(half.pixelColor(opacityPoint).alpha()).arg(full)));
-    values.insert("iconTileOpacity", 0.0); scene->setProperty("tileValues", values);
-    const auto clear = capture("opacity-0"); QVERIFY(!clear.isNull());
-    QVERIFY(clear.pixelColor(opacityPoint).alpha() < 32);
-    values.insert("iconTileOpacity", 1.0); scene->setProperty("tileValues", values);
+    QTRY_VERIFY(qAbs(glass().value("opacity").toDouble() - clearest / 2) < 0.001);
+    values.insert("iconTileColor", "#7895b0"); values.insert("iconTileOpacity", 1.0);
+    scene->setProperty("tileValues", values);
     auto *entry = renderer->findChild<QObject *>("mesh-entry-0"); QVERIFY(entry);
     const QVector3D before = entry->property("position").value<QVector3D>();
     values.insert("iconTileElevation", 12.0); scene->setProperty("tileValues", values);
