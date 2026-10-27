@@ -303,6 +303,14 @@ preset_icons_group() {
         "{'type': <'launcher'>, 'layout': <'circular'>, 'layoutRadius': <150>, 'iconSize': <52>, 'spacing': <9>}" '{}')"
     [[ "$reply" == *"'success': <true>"* ]] || { printf '%s\n' "$reply" >&2; return 1; }
     require_true_reply "$(panel_call pinPanelUrls "$id" "['file:///usr/share/applications/firefox.desktop', 'file:///usr/share/applications/org.kde.dolphin.desktop', 'file:///usr/share/applications/org.kde.kate.desktop']")"
+    # The pictures compare what each action leaves drawn. An icon animation
+    # that runs by itself (Slow turn turns its icons all the time) would be
+    # caught at a different moment in every picture, so the group takes them
+    # with reduced motion, which holds such an animation still; the projected
+    # motion profile is still checked for every preset.
+    revision="$(panel_registry_value "$id" settingsRevision)"
+    reply="$(panel_call applyPanelSettingsTransaction "$id" "uint64 $revision" '{}' "{'reducedMotion': <true>}")"
+    [[ "$reply" == *"'success': <true>"* ]] || { printf '%s\n' "$reply" >&2; return 1; }
     builtins="$(find "$ARCHDOCK_PRESET_BUILTIN_ROOT/icons" -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum)"
     defaults_file="$XDG_DATA_HOME/Arch Dock/Arch Dock/presets/defaults.json"
     local index=0 selection='.presets[0:5][]'

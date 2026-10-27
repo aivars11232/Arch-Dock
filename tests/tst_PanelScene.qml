@@ -632,6 +632,26 @@ TestCase {
         compare(free.surfaceLightness, -1)
     }
 
+    // A Plasma-held edge panel draws its look as the panel itself, as a bar
+    // does: a band as deep as the panel but for a little room at its sides,
+    // its line from one end of the dock to the other between its round ends'
+    // middles - not only between the end icons' middles, which hid its ends.
+    function test_plasmaEdgePanelBandRunsTheWholePanel() {
+        const scene = createScene({ panelDefinition: definition({}), panelThickness: 44 })
+        verify(scene.edgePanelBand)
+        verify(!scene.surfaceSpanned)
+        verify(waitForRendering(scene))
+        const surface = scene.visualPanel
+        compare(Number(surface.geometry.bandWidth), 36)
+        const points = surface.surfacePath.points
+        fuzzyCompare(points[0].x, 18, 0.01)
+        fuzzyCompare(points[points.length - 1].x, surface.width - 18, 0.01)
+        // Elsewhere the look keeps its own line, from the first icon's middle.
+        const plain = createScene({ panelDefinition: definition({}) })
+        verify(!plain.edgePanelBand)
+        verify(plain.visualPanel.surfacePath.points[0].x > 18)
+    }
+
     // A skin along a bar is drawn whole, as deep as the bar: its ends and
     // rims keep the bar's widgets in its content region, a dock at the bar's
     // end keeps clear of its ends, and the icons are drawn small enough to

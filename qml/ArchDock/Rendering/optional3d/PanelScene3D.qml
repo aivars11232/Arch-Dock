@@ -127,6 +127,10 @@ Item {
     readonly property real edgeBandReach: PlatformGeometry.maximumBand
         + (PlatformGeometry.innerBevel + PlatformGeometry.outerBevel) / 2
     readonly property real edgeUnit: edgeAcross / 2 / edgeBandReach
+    // It is a thin plate: tilted far, a slab's near wall comes into view as
+    // large as its top and looks like the top itself, the panel then seeming
+    // tilted the other way.
+    readonly property real edgePlateThickness: 0.25
     // The platform's frame: its top in the panel's own plane and its outer
     // edge on the screen's edge, turned about that edge by the tilt. Its near
     // wall then shows below its top, so it moves in by as much; where its far
@@ -137,11 +141,11 @@ Item {
         const theta = edgeTilt * Math.PI / 180
         const sine = Math.sin(theta), cosine = Math.cos(theta)
         const across = edgeAcross, depth = cameraDistance
-        const wall = (PlatformGeometry.topHeight - PlatformGeometry.bottomHeight) * edgeUnit
+        const wall = (PlatformGeometry.topHeight - PlatformGeometry.bottomHeight) * edgeUnit * edgePlateThickness
         const reach = (across * cosine + wall * sine) * depth - across * across / 2 * sine
         const scale = reach > across * depth ? across * depth / reach : 1
         const inward = scale * wall * sine
-        const top = PlatformGeometry.topHeight * edgeUnit
+        const top = PlatformGeometry.topHeight * edgeUnit * edgePlateThickness
         const frames = {
             bottom: { hinge: [0, -across / 2], inward: [0, 1], turn: Qt.vector3d(-edgeTilt, 0, 0) },
             top: { hinge: [0, across / 2], inward: [0, -1], turn: Qt.vector3d(edgeTilt, 0, 0) },
@@ -316,7 +320,7 @@ Item {
     }
     readonly property real resolvedBand: edgePanel ? PlatformGeometry.maximumBand
         : bandAuto ? flatLineBand : bandSetting
-    readonly property real platformThickness: edgePanel ? 1 : transformValue("thickness", 1, 0.05, 20)
+    readonly property real platformThickness: edgePanel ? edgePlateThickness : transformValue("thickness", 1, 0.05, 20)
         * (bandAuto ? Math.max(0.4, Math.min(1, resolvedBand / 0.11)) : 1)
     // A platform wearing a picture wears it as a real surface, its
     // brightness its height (PictureRelief), as deep as Relief depth: traced
@@ -838,10 +842,23 @@ Item {
     // round the ring shows the panel's own orientation rather than each a
     // slightly different side of itself.
     function toEntryFrame(point) {
-        const offset = point.minus(sceneContent.position).times(1 / Math.max(1e-6, sceneContent.scale.x))
+        const offset = edgePanel && edgeFrame ? edgeContentPoint(point)
+            : point.minus(sceneContent.position).times(1 / Math.max(1e-6, sceneContent.scale.x))
         const turn = root.layoutAngle * Math.PI / 180
         return Qt.vector3d(offset.x * Math.cos(turn) - offset.y * Math.sin(turn),
                            offset.x * Math.sin(turn) + offset.y * Math.cos(turn), offset.z)
+    }
+    // A point of the scene in an edge panel's content, its turn about the
+    // screen's edge, its scale and its move undone (edgeFrame). It turns about
+    // one axis only, x or y.
+    function edgeContentPoint(point) {
+        const moved = point.minus(edgeFrame.position)
+        const ax = edgeFrame.turn.x * Math.PI / 180, ay = edgeFrame.turn.y * Math.PI / 180
+        const x = moved.x * Math.cos(ay) - moved.z * Math.sin(ay)
+        const z = moved.x * Math.sin(ay) + moved.z * Math.cos(ay)
+        const unturned = Qt.vector3d(x, moved.y * Math.cos(ax) + z * Math.sin(ax),
+                                     -moved.y * Math.sin(ax) + z * Math.cos(ax))
+        return unturned.times(1 / Math.max(1e-6, edgeFrame.scale)).plus(edgeFrame.pivot)
     }
     readonly property vector3d cameraInEntries: toEntryFrame(camera.scenePosition)
     readonly property vector3d sightCentreInEntries: toEntryFrame(Qt.vector3d(0, 0, 0))
@@ -2892,7 +2909,7 @@ Item {
                 // and nothing of the band cuts through them. The stand lies on
                 // the face, on the right side of the band already.
                 readonly property real depthPush: {
-                    if (!riding) return 1
+                    if (!riding) return root.edgePanel ? edgePush : 1
                     const camera = root.cameraInEntries, ahead = root.iconForward
                     const right = root.iconRight, upward = root.iconUp
                     const rest = position
@@ -2987,6 +3004,22 @@ Item {
                 // That move, in the entry's own turned frame.
                 readonly property vector3d depthShift: surfaceTurn.inverted()
                     .times(root.cameraInEntries.minus(position).times(1 - depthPush))
+                // On an edge panel the same move brings the stand and the icon
+                // in front of the tilted platform: the platform lies behind
+                // the panel's own plane (its near edge in it), so they come
+                // forward of that plane by an icon's size, which their own
+                // depth does not reach back through. Moving the way they are
+                // seen and shrinking in step, they stay where they are on the
+                // screen and as large; a free panel's clearance move, along
+                // the camera's axis, would enlarge them under an edge panel's
+                // near camera.
+                readonly property real edgePush: {
+                    if (!root.edgePanel) return 1
+                    const camera = root.cameraDistance
+                    const front = Math.min(size, camera / 2)
+                    const depth = scenePosition.z
+                    return depth < front ? (camera - front) / Math.max(1e-6, camera - depth) : 1
+                }
                 // On a bent band the stand and its icon rise to the band's
                 // highest point beneath the stand.
                 readonly property real bendRise: root.platformBendSlope > 0 && root.pedestalDrawn
@@ -3008,7 +3041,7 @@ Item {
                     return Math.max(0, -lowest)
                 }
                 // Riding a Möbius strip, `depthPush` keeps them clear instead.
-                readonly property real clearanceTravel: riding ? 0
+                readonly property real clearanceTravel: riding || root.edgePanel ? 0
                     : facingClearance / Math.max(0.3, Math.abs(facingForward.z))
                 readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
                     root.number(visual.tileSettings, "iconTileElevation", 0)))

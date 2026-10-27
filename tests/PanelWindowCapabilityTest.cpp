@@ -339,6 +339,7 @@ private slots:
     void studioPanelMotionControls();
     void tiltEditorsFollowTheSelectedRenderer();
     void edgePanelIn3DOffersItsTiltAlone();
+    void globalReducedMotionReachesEveryDock();
     void idleRotateIsOfferedOnThreeDPanelsAlone();
     void platformOffRestoresTheCompleteFlatLook();
     void themeCardsResolveEachThemesOwnRenderer();
@@ -1948,6 +1949,31 @@ void PanelWindowCapabilityTest::edgePanelIn3DOffersItsTiltAlone()
     QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
         {{"scene3DCameraPitch", 45.0}}).value("success").toBool());
     QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("cameraPitch").toDouble(), 45.0);
+}
+
+// Reduced motion is one global setting: every dock, edge or free, is told of
+// it, and its icon animations hold still. A panel's record keeps a flag of
+// its own, which once hid the global setting from every dock.
+void PanelWindowCapabilityTest::globalReducedMotionReachesEveryDock()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString free = registry->addFreePanel();
+    const auto reduced = [&](const QString &panel) {
+        const bool dock = backend.dockConfiguration(panel).value("reducedMotion").toBool();
+        const bool renderer = backend.panelRendererConfiguration(panel).value("reducedMotion").toBool();
+        return dock && renderer ? 1 : !dock && !renderer ? 0 : -1;
+    };
+    for (const bool on : {true, false})
+    {
+        QVERIFY(backend.applyPanelSettingsTransaction("bottom", registry->panelDefinition("bottom")->settingsRevision,
+            {}, {{"reducedMotion", on}}).value("success").toBool());
+        QCOMPARE(reduced("bottom"), on ? 1 : 0);
+        QCOMPARE(reduced(free), on ? 1 : 0);
+    }
 }
 
 // Idle rotate turns each icon on its upright axis over its stand, which only

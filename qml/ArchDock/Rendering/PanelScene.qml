@@ -1563,6 +1563,17 @@ Item {
     readonly property var spannedRendererGeometry: Object.assign({}, rendererGeometry, {
         width: surfaceBox.width, height: surfaceBox.height, bandWidth: surfaceBand
     })
+    // A Plasma-held edge panel draws its look as the panel itself, as a bar
+    // does: a band as deep as the panel but for a little room at its sides,
+    // from one end of the dock to the other, its ends round. The look's own
+    // line ran only between the end icons' middles, hidden under them, and
+    // was cut flat along the panel.
+    readonly property bool edgePanelBand: !freeHost && !inBar && panelThickness > 0
+        && ["horizontal", "vertical", "adaptive"].includes(layoutPath)
+        && resolvedRendererTier === "procedural2d" && !segmentedScene
+    readonly property var edgePanelGeometry: Object.assign({}, rendererGeometry, {
+        bandWidth: Math.max(1, panelThickness - 8), bandToEnds: true
+    })
     // The surface's motion as the surface has it: a clip (an opening or
     // closing panel's) reaching this box's sides reaches the surface's.
     readonly property var spannedMotionTracks: {
@@ -2138,7 +2149,8 @@ Item {
         edgePanelThickness: root.freeHost ? 0 : root.inBar ? root.surfaceSpanThickness : root.panelThickness
         iconCentres: root.surfaceIconCentres
         restEntryCentres: root.restEntryCentres
-        geometry: root.surfaceSpanned ? root.spannedRendererGeometry : root.rendererGeometry
+        geometry: root.surfaceSpanned ? root.spannedRendererGeometry
+            : root.edgePanelBand ? root.edgePanelGeometry : root.rendererGeometry
         layoutAngle: root.effectiveLayoutAngle
         restingAngle: root.layoutAngle
         polygonSides: root.polygonSides

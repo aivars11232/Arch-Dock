@@ -26,20 +26,34 @@
 - **Edge panels can be drawn in 3D.** On a Plasma-held edge panel or an
   Arch Dock bar, Panel Studio's 3D page offers the 3D switch and one
   setting, Tilt, 0 to 60 degrees (25 to begin with). The panel is drawn as
-  a straight 3D platform as large as the panel, tilted from its screen edge
-  toward the middle: a bottom panel's upper side, a top panel's lower
+  a thin straight 3D plate as large as the panel, tilted from its screen
+  edge toward the middle: a bottom panel's upper side, a top panel's lower
   side, a left panel's right side and a right panel's left side go into
   the screen. Its icons stay upright, centred on their places, smaller as
-  the platform takes them away, and the platform and its icons stay inside
-  the panel. The panel's own colour still colours the platform. An edge
+  the plate takes them away, and the plate and its icons stay inside the
+  panel. The panel's own colour still colours the platform. An edge
   panel that opens and closes is not offered 3D (a generated platform has
   no parts to open and close with), nor is one wearing a skin. Free panels
   are unchanged.
+- **Reduced motion reaches the docks.** Arch Dock's global reduced-motion
+  setting never reached a dock: each panel's record keeps a reduced-motion
+  flag of its own, which was laid over the global settings, so with reduced
+  motion on, icon animations still moved (a Slow turn icon kept turning).
+  Every dock now follows the global setting, or its own flag where that is
+  on.
 - **No Plasma panel behind an edge panel.** Plasma drew its theme's own
   panel background behind a Plasma-held edge panel (a white or grey bar in
   the default theme). While the dock stands in a Plasma panel it now turns
   that background off, and gives it back if it leaves; Plasma's saved panel
   settings are not changed.
+- **A flat edge panel's look runs the whole panel.** On a flat Plasma-held
+  edge panel the look was drawn only along the line from the first icon to
+  the last, and only as thick as that line, so the panel looked cut off at
+  both ends and, in the thinner looks, along its long sides too. The look
+  now runs from one end of the panel to the other with rounded ends, nearly
+  as thick as the panel, and its light (lightning bolts, the aurora's glow)
+  stays inside it. Arch Dock bars, free panels, decorations and 3D panels
+  are unchanged.
 
 ## 0.1.1-49 — 2026-10-26
 

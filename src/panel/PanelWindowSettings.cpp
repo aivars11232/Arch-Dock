@@ -250,6 +250,10 @@ QVariantMap PanelWindow::dockConfiguration(const QString &panelId) const
     {
         configuration.insert(it.key(), it.value());
     }
+    // Reduced motion is a global setting. A panel's record keeps a flag of its
+    // own, which, laid over the global settings, hid them from every dock.
+    configuration.insert(QStringLiteral("reducedMotion"), m_settings.reducedMotion()
+        || panel.value(QStringLiteral("reducedMotion")).toBool());
     configuration.insert(QStringLiteral("panel"), panel);
     configuration.insert(
         QStringLiteral("globalSettings"), m_settings.transactionSnapshot());
@@ -312,6 +316,11 @@ QVariantMap PanelWindow::panelRendererConfiguration(const QString &panelId) cons
     {
         configuration.insert(it.key(), it.value());
     }
+    // Reduced motion is a global setting; the panel's own flag must not hide
+    // it (as in dockConfiguration).
+    configuration.insert(QStringLiteral("reducedMotion"),
+        drawnGlobalSettings().value(QStringLiteral("reducedMotion")).toBool()
+            || panelValues.value(QStringLiteral("reducedMotion")).toBool());
     // The panel shows its 3D gizmo only while Panel Studio holds a desktop
     // 3D edit of it.
     configuration.insert(QStringLiteral("sceneEditActive"), sceneEditActive(panelId));

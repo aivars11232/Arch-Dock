@@ -93,8 +93,22 @@ Item {
     }
 
     readonly property bool rendererReady: width > 0 && height > 0
-    readonly property var surfacePath: LayoutEngine.surface(
-        layout, geometry, drawnAngle, polygonSides)
+    readonly property var surfacePath: geometry.bandToEnds === true ? edgeBandPath
+        : LayoutEngine.surface(layout, geometry, drawnAngle, polygonSides)
+    // On a Plasma-held edge panel the band is the panel itself: its line runs
+    // from one end of the box to the other, between the middles of its round
+    // ends, and every pass of the look follows it.
+    readonly property var edgeBandPath: {
+        const radius = Number(geometry.bandWidth || 0) / 2
+        const vertical = layout === "vertical"
+        const extent = vertical ? height : width
+        const points = []
+        for (let index = 0; index < 72; ++index) {
+            const at = radius + Math.max(0, extent - 2 * radius) * index / 71
+            points.push(vertical ? { x: width / 2, y: at } : { x: at, y: height / 2 })
+        }
+        return { points: points, closed: false }
+    }
     // The look's band, as wide as a bar holding widgets asks (bandWidth) so
     // that they stand inside it.
     readonly property var surfaceStyle: {
