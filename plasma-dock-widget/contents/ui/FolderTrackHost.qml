@@ -604,6 +604,18 @@ PlasmaCore.Dialog {
             }
             rectangles.push(shape.bounds)
         }
+        screenSamples = samples
+        screenShape = shape
+        screenOutline = shape ? shape.outline : null
+        screenOrigin = Qt.point(centre.x, centre.y)
+        // Everything the opening draws over its motion, as the contents lay
+        // it out where it belongs on the screen: each child's icon with its
+        // stand and its name, swinging past its place and grown as the
+        // motion swings, and the outline growing with them. The window
+        // holds all of it, so nothing is cut off at its edge.
+        const drawn = content.drawnBounds()
+        if (drawn)
+            rectangles.push({ x: drawn.x + root.x, y: drawn.y + root.y, width: drawn.width, height: drawn.height })
         const bounds = LayoutEngine.unitedBounds(rectangles)
         // The window stays on the screen, where Plasma puts it as asked: one
         // that reached past an edge would be moved, or flipped to the
@@ -612,10 +624,6 @@ PlasmaCore.Dialog {
         const top = Math.max(area.y, bounds.y - margin)
         const right = Math.min(area.x + area.width, bounds.x + bounds.width + margin)
         const bottom = Math.min(area.y + area.height, bounds.y + bounds.height + margin)
-        screenSamples = samples
-        screenShape = shape
-        screenOutline = shape ? shape.outline : null
-        screenOrigin = Qt.point(centre.x, centre.y)
         windowSize = Qt.size(Math.max(1, Math.floor(right - left)), Math.max(1, Math.floor(bottom - top)))
         // Against the top of an attachment centred under the window's bottom
         // edge: the window's top-left lands on (left, top). The attachment is

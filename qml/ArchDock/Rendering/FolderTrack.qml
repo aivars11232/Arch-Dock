@@ -114,11 +114,110 @@ Item {
     property real travelTarget: 0
     // Wheel input not yet worth a whole step.
     property real wheelRemainder: 0
-    readonly property var track: gridCells ? LayoutEngine.gridTrackLayout(gridCells, entries.length, trackOffset)
-        : LayoutEngine.folderTrackLayout(
-        samples, entries.length, pitch, trackOffset,
-        { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings,
-          unscaled: measureAsDrawn, ringLimits: ringLimits, lobes: lobedPath })
+    readonly property var track: trackAt(trackOffset)
+    // The children's places on the path, the wheel having moved them
+    // `offset` places along it.
+    function trackAt(offset) {
+        return gridCells ? LayoutEngine.gridTrackLayout(gridCells, entries.length, offset)
+            : LayoutEngine.folderTrackLayout(
+            samples, entries.length, pitch, offset,
+            { closed: closedPath, start: startAtFolder ? "start" : "centre", capacity: pathCapacity, rings: rings,
+              unscaled: measureAsDrawn, ringLimits: ringLimits, lobes: lobedPath })
+    }
+    // How a child is drawn at a point of the opening's motion, `progress`
+    // (the eased phase, beyond 1 where the motion swings past the place):
+    // the children are drawn by these, and drawnBounds() finds by them
+    // everything they draw over the whole motion.
+    // The opening's growth: a motion that swings past its place swings the
+    // size with it.
+    function grownScaleAt(progress) {
+        return 0.3 + 0.7 * Math.max(0, Math.min(1.3, progress))
+    }
+    // The icon's centre, travelling from the folder icon to its place.
+    function centreAt(placed, progress) {
+        return Qt.point(expansionOrigin.x + (placed.x - expansionOrigin.x) * progress,
+                        expansionOrigin.y + (placed.y - expansionOrigin.y) * progress)
+    }
+    // How much of the way from the icon's middle to the stand's base the
+    // standing point is: all of it behind a tilted dock's middle or on any
+    // drawn band, none of it before the middle or off a band.
+    function standShareAt(centreY) {
+        if (!standsOnPath) return 0
+        return isFinite(dockMiddleY) && dockHalfHeight > 0
+            ? Math.max(0, Math.min(1, (dockMiddleY - centreY) / dockHalfHeight * 0.5 + 0.5)) : 1
+    }
+    // A child on the far side of a tilted ring carries its name above its
+    // icon, away from the ring.
+    function nameAboveAt(centreY) {
+        return isFinite(dockMiddleY) && centreY < dockMiddleY
+    }
+    // The top of a child's cell, hung from its standing point: the icon's
+    // middle on the place, or the stand's base, or between.
+    function cellTopAt(centreY, drawnScale) {
+        return centreY - (iconSize / 2 + standLayout.above
+                          + (standFoot - iconSize / 2 - standLayout.above) * standShareAt(centreY)) * drawnScale
+    }
+    // Everything the opening draws over its whole motion, opening and
+    // closing, in this item's pixels: each child's icon with its stand and
+    // its name, from the folder icon to as far past its place as the motion
+    // swings, grown with it; the children where the wheel has moved them
+    // half a place; and the outline, which grows from the folder with them.
+    // Null when nothing is drawn. The host makes its window this large, so
+    // nothing is cut off at the window's edge.
+    function drawnBounds() {
+        const progresses = [1]
+        if (!reducedMotion)
+            for (let step = 1; step <= 40; ++step)
+                progresses.push(MotionChannels.folderEasing(easing, step / 40))
+        const farthest = Math.max.apply(null, progresses)
+        const boxes = []
+        const add = function(x, y, width, height) {
+            if (isFinite(x) && isFinite(y) && width > 0 && height > 0)
+                boxes.push({ x: x, y: y, width: width, height: height })
+        }
+        const childAt = function(child, placed, progress) {
+            const grown = grownScaleAt(progress)
+            const scale = Math.max(0.35, Number(placed.scale) || 1) * grown
+            const centre = centreAt(placed, progress)
+            const top = cellTopAt(centre.y, scale)
+            // The icon with its stand, from the cell's top: an icon that
+            // floats over its stand rises into the room above it.
+            const standBottom = Math.max(1, child ? child.standBottomShare : 1) * iconSize * scale
+            const wide = Math.max(iconSize, Number(standLayout.width) || 0) * scale
+            add(centre.x - wide / 2, top, wide, standLayout.above * scale + standBottom)
+            if (!showNames) return
+            // The name keeps a cell's width and grows with the child, from
+            // its top, or from its bottom above the icon.
+            const height = child ? child.nameDrawnHeight : nameHeight
+            const above = nameAboveAt(centre.y)
+            const nameTop = above ? top - height - 4
+                : top + Math.max((iconSize + standLayout.above + standLayout.below) * scale,
+                                 standLayout.above * scale + standBottom) + 4
+            add(centre.x - cellWidth * grown / 2 - 1, (above ? nameTop + height * (1 - grown) : nameTop) - 1,
+                cellWidth * grown + 2, height * grown + 2)
+        }
+        const start = trackAt(0), between = trackAt(0.5)
+        for (let index = 0; index < entries.length; ++index) {
+            const child = childRepeater.itemAt(index)
+            const placed = start.entries[index]
+            if (placed && placed.visibility > 0)
+                for (const progress of progresses) childAt(child, placed, progress)
+            const passing = between.entries[index]
+            if (passing && passing.visibility > 0) childAt(child, passing, 1)
+        }
+        // The outline, its line and glow, grows from the folder as well.
+        const reach = Math.max(1, outlineStyle ? (Number(outlineStyle.lineWidth) || 0) / 2
+                                                 + (Number(outlineStyle.blur) || 0) : 0)
+        const ribbon = outline && outline.ribbon ? outline.ribbon.left.concat(outline.ribbon.right) : []
+        const points = outline ? (outline.points || []).concat(...(outline.loops || []), ribbon) : []
+        for (const point of points)
+            for (const progress of [1, farthest]) {
+                const x = expansionOrigin.x + (point.x - expansionOrigin.x) * progress
+                const y = expansionOrigin.y + (point.y - expansionOrigin.y) * progress
+                add(x - reach, y - reach, 2 * reach, 2 * reach)
+            }
+        return boxes.length ? LayoutEngine.unitedBounds(boxes) : null
+    }
     // What the popup reports about its layout, for the same consumers.
     readonly property var geometry: ({ layout: shape, side: "track" })
     signal childSelected(string childId)
@@ -458,6 +557,7 @@ Item {
         styleColor: palette.base
     }
     Repeater {
+        id: childRepeater
         model: root.entries
         delegate: Item {
             id: child
@@ -465,30 +565,23 @@ Item {
             required property int index
             readonly property var placed: root.track.entries[index] || ({ x: 0, y: 0, scale: 1,
                 onTrack: false, visibility: 0 })
-            // The opening's growth: a motion that swings past its place
-            // swings the size with it.
-            readonly property real grownScale: 0.3 + 0.7 * Math.max(0, Math.min(1.3, root.openingProgress))
+            readonly property real grownScale: root.grownScaleAt(root.openingProgress)
             // The icon's drawn size: its depth on a tilted or projected
             // panel, and the growth.
             readonly property real drawnScale: Math.max(0.35, Number(placed.scale) || 1) * grownScale
-            readonly property bool nameAbove: isFinite(root.dockMiddleY) && centreY < root.dockMiddleY
-            // How much of the way from the icon's middle to the stand's base
-            // the standing point is: all of it behind a tilted dock's middle
-            // or on any drawn band, none of it before the middle or off a band.
-            readonly property real standShare: !root.standsOnPath ? 0
-                : isFinite(root.dockMiddleY) && root.dockHalfHeight > 0
-                    ? Math.max(0, Math.min(1, (root.dockMiddleY - centreY) / root.dockHalfHeight * 0.5 + 0.5)) : 1
+            readonly property bool nameAbove: root.nameAboveAt(centreY)
+            readonly property real standShare: root.standShareAt(centreY)
             objectName: "folder-child-" + index
-            // The icon's centre travels from the folder icon to its place.
-            readonly property real centreX: root.expansionOrigin.x
-                + (placed.x - root.expansionOrigin.x) * root.openingProgress
-            readonly property real centreY: root.expansionOrigin.y
-                + (placed.y - root.expansionOrigin.y) * root.openingProgress
+            readonly property point centre: root.centreAt(placed, root.openingProgress)
+            readonly property real centreX: centre.x
+            readonly property real centreY: centre.y
+            // Its name's height as laid out, and how far down its icon's
+            // square its stand is drawn, for drawnBounds().
+            readonly property real nameDrawnHeight: nameLabel.implicitHeight
+            readonly property real standBottomShare: iconView.height > 0
+                ? iconView.standDrawnBottom / iconView.height : 1
             x: centreX - width / 2
-            // The cell hung from its standing point: the icon's middle on the
-            // place, or the stand's base, or between.
-            y: centreY - (root.iconSize / 2 + root.standLayout.above
-                          + (root.standFoot - root.iconSize / 2 - root.standLayout.above) * standShare) * drawnScale
+            y: root.cellTopAt(centreY, drawnScale)
             width: root.cellWidth * drawnScale
             height: root.cellHeight * drawnScale
             opacity: placed.visibility * Math.max(0, Math.min(1, root.openingProgress * 1.5))
@@ -522,6 +615,7 @@ Item {
                                                       { size: root.iconSize })
             }
             QQC2.Label {
+                id: nameLabel
                 objectName: "folder-name-" + child.index
                 // The name keeps the dock's own letter size and its cell's
                 // width wherever its child stands along the depth: only the

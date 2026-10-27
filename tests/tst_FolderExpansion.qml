@@ -591,6 +591,88 @@ TestCase {
         host.mainItem.dismissRequested()
         tryCompare(host, "visible", false)
     }
+    // A child's icon and its name's text as drawn, in `item`'s pixels.
+    function drawnParts(item, child, index) {
+        const size = item.iconSize * child.drawnScale
+        const name = findChild(child, "folder-name-" + index)
+        return [["icon", child.mapToItem(item, (child.width - size) / 2,
+                                         item.standLayout.above * child.drawnScale, size, size)],
+                ["name", name.mapToItem(item, (name.width - name.contentWidth) / 2, 0,
+                                        name.contentWidth, name.contentHeight)]]
+    }
+    // drawnBounds() holds everything the children draw over the whole
+    // opening, every frame of it, as far past their places as the motion
+    // swings.
+    function test_trackDrawnBoundsHoldTheWholeOpening() {
+        const item = track(5, false, true)
+        const bounds = item.drawnBounds()
+        verify(bounds !== null)
+        let frames = 0, farthest = 0
+        do {
+            farthest = Math.max(farthest, item.openingProgress)
+            for (let index = 0; index < 5; ++index) {
+                const child = findChild(item, "folder-child-" + index)
+                for (const [part, rect] of drawnParts(item, child, index))
+                    verify(rect.x >= bounds.x - 0.5 && rect.y >= bounds.y - 0.5
+                           && rect.x + rect.width <= bounds.x + bounds.width + 0.5
+                           && rect.y + rect.height <= bounds.y + bounds.height + 0.5,
+                           "child " + index + "'s " + part + " at frame " + frames)
+            }
+            ++frames
+            wait(10)
+        } while (item.openingInProgress)
+        verify(farthest > 1.05, "the motion swung past the places")
+    }
+    // The window holds everything the opening draws while it moves: though
+    // the children swing past their places as they open (a spring, a quarter
+    // of the way past), no icon and no two-line name reaches past its edge
+    // at any frame.
+    function test_trackHostWindowHoldsTheOpeningMotion() {
+        const window = createTemporaryObject(anchorComponent, null)
+        const icon = findChild(window, "anchor")
+        const screen = window.screen
+        window.x = screen.virtualX
+        window.y = screen.virtualY
+        icon.x = screen.width / 2 - icon.width / 2
+        icon.y = screen.height / 2 - icon.height / 2
+        const dock = Qt.point(icon.x + icon.width / 2 - 150, icon.y + icon.height / 2)
+        const samples = []
+        for (let k = 0; k < 91; ++k) {
+            const a = -Math.PI / 3 + 2 * Math.PI / 3 * k / 90
+            samples.push({ x: dock.x + 214 * Math.cos(a), y: dock.y + 214 * Math.sin(a), scale: 1 })
+        }
+        const entries = rows(3).map(function(row, index) {
+            return Object.assign({}, row, { displayName: "A folder with a rather long name " + index })
+        })
+        const host = createTemporaryObject(trackHostComponent, testCase, {
+            folderItem: icon, iconSize: 48, reducedMotion: false, showNames: true,
+            folderSpeed: 600, folderEasing: "spring",
+            trackSamples: function() { return samples },
+            snapshot: { status: "ready", entries: entries }
+        })
+        verify(host.openFolder())
+        const content = host.mainItem
+        tryVerify(function() { return host.visible && content.openingInProgress }, 3000)
+        compare(findChild(content, "folder-name-0").lineCount, 2, "the names take two lines")
+        let frames = 0, farthest = 0
+        while (content.openingInProgress) {
+            farthest = Math.max(farthest, content.openingProgress)
+            for (let index = 0; index < 3; ++index) {
+                const child = findChild(content, "folder-child-" + index)
+                if (child.opacity < 0.05) continue
+                for (const [part, rect] of drawnParts(content, child, index))
+                    verify(rect.x >= -0.5 && rect.y >= -0.5 && rect.x + rect.width <= content.width + 0.5
+                           && rect.y + rect.height <= content.height + 0.5,
+                           "child " + index + "'s " + part + " inside the window at frame " + frames)
+            }
+            ++frames
+            wait(10)
+        }
+        verify(frames > 3)
+        verify(farthest > 1.2, "the children swung past their places")
+        content.dismissRequested()
+        tryCompare(host, "visible", false)
+    }
     function test_nativeHostLifecycle() {
         const window = createTemporaryObject(anchorComponent, null)
         verify(window !== null)

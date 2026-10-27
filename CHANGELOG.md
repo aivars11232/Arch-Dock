@@ -54,6 +54,17 @@
   as thick as the panel, and its light (lightning bolts, the aurora's glow)
   stays inside it. Arch Dock bars, free panels, decorations and 3D panels
   are unchanged.
+- **Folder openings are no longer cut off.** On a free panel a folder opens
+  in a window of its own, sized for its children at rest and a little room
+  round them. While the folder opens and closes, its children swing past
+  their places and grow a little (more with Spring and Elastic), so the
+  outer icons, their names and a ring's band were cut off at the window's
+  edge for a moment; on a 3D panel a two-line name could be cut off even at
+  rest, the window having counted names smaller with their depth. The
+  window now takes the size of everything the opening draws over its whole
+  motion - each icon with its stand, each name as drawn, and the band - so
+  nothing reaches past its edge. Popup openings (a grid on a flat panel,
+  any edge panel's folder) already held their contents and are unchanged.
 
 ## 0.1.1-49 — 2026-10-26
 
