@@ -743,9 +743,12 @@ PlasmoidItem {
         return accepted;
     }
 
+    // The panels that take applications, folders and files dropped on them:
+    // an Empty one, as its own items, and those holding launchers; not one
+    // showing open applications alone.
+    readonly property bool takesDroppedItems: ["empty", "launcher", "hybrid"].includes(panelType)
     function pinDroppedUrls(urls) {
-        if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops
-                || !["empty", "launcher", "hybrid"].includes(panelType))
+        if (!dockService.registered || plasmaEditMode || !configuration.acceptDrops || !takesDroppedItems)
             return false;
         const values = [];
         for (const url of urls)
@@ -1719,7 +1722,7 @@ PlasmoidItem {
                     anchors.fill: parent
                     containmentMask: root.freeSurface ? drawnArea : null
                     enabled: Boolean(root.configuration.acceptDrops) && !root.plasmaEditMode
-                        && root.sceneInputEnabled && ["launcher", "hybrid"].includes(root.panelType)
+                        && root.sceneInputEnabled && root.takesDroppedItems
                     keys: ["text/uri-list"]
                     onContainsDragChanged: root.panelDropActive = containsDrag
                     onDropped: drop => {
