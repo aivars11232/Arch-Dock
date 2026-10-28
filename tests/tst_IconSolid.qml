@@ -147,6 +147,23 @@ TestCase {
         }
     }
 
+    function test_aRoundedOutlineIsSmooth() {
+        // A slanted edge is drawn as the slant it stands for, not as the
+        // pixels' steps: its corners on the edge lie on one straight line.
+        const width = 32, height = 32
+        const data = coloured(width, height, function(x, y) { return x + y <= 22 ? [40, 90, 200] : null })
+        const mesh = IconSolid.reliefMesh(data, width, height)
+        const sums = []
+        for (const point of mesh.positions) {
+            if (point[2] !== 0) continue
+            const x = (point[0] / 100 + 0.5) * width, y = (0.5 - point[1] / 100) * height
+            if (x > 5 && x < 18 && y > 5 && y < 18) sums.push(x + y)
+        }
+        verify(sums.length >= 10, "corners along the slant: " + sums.length)
+        for (const sum of sums)
+            fuzzyCompare(sum, 23.5, 0.02, "on the line halfway between the pixels' steps")
+    }
+
     function test_aPartInsideAnotherStandsAStepUp() {
         const width = 32, height = 32
         const data = coloured(width, height, function(x, y) {

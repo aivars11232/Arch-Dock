@@ -7,7 +7,9 @@ import QtQuick3D.Helpers
 // (IconSolid.js), seen in a small 3D view of the icon's size in the
 // picture's place. Its back lies where the flat picture lay; Icon turn and
 // the icon's own turning motion turn it about its upright axis, so its depth
-// shows. Lit by the 3D panel's own key and fill lights.
+// shows. Lit by the 3D panel's own key and fill lights; as a hologram, made
+// of light, with its glow round it (the view then a little larger than the
+// icon, to hold the glow).
 View3D {
     id: root
 
@@ -16,6 +18,13 @@ View3D {
     readonly property var mesh: icon ? icon.solidMesh : null
     readonly property real depth: icon ? Number(icon.solidDepth || 0) : 0
     readonly property real lighting: icon ? Number(icon.solidLighting) : 0.5
+    readonly property bool hologram: icon ? icon.hologramDrawn === true : false
+    readonly property var hologramColours: icon ? icon.hologramColours || ({}) : ({})
+    // The view's size in icons.
+    readonly property real frame: icon && icon.logicalSize > 0 ? Math.max(1, width / icon.logicalSize) : 1
+    function hologramColour(part) {
+        return (part && part.colour) ? part.colour : "#ffffff"
+    }
 
     function toVectors(values, dimension) {
         return (values || []).map(function(value) {
@@ -31,12 +40,12 @@ View3D {
         antialiasingQuality: SceneEnvironment.High
     }
 
-    // Far off with a narrow view: the solid's back fills the view as the
-    // picture filled the icon, and its near side shows only a little larger.
+    // Far off with a narrow view: the solid's back fills the icon's square
+    // as the picture filled it, and its near side shows only a little larger.
     PerspectiveCamera {
         id: camera
         fieldOfView: 20
-        position: Qt.vector3d(0, 0, 50 / Math.tan(10 * Math.PI / 180))
+        position: Qt.vector3d(0, 0, 50 * root.frame / Math.tan(10 * Math.PI / 180))
         clipNear: 10
         clipFar: 1000
     }
@@ -65,6 +74,7 @@ View3D {
     readonly property real tilt: 24 * Math.PI / 180
     readonly property real turnAngle: (icon ? Number(icon.solidTurn) + Number(icon.glyphTurnAngle) : 0) * Math.PI / 180
     Model {
+        id: solid
         objectName: "flat-icon-solid"
         visible: root.mesh !== null && root.depth > 0
         readonly property real lift: (root.mesh ? root.mesh.depth : 50) * root.depth
@@ -83,7 +93,7 @@ View3D {
         }
         // As on a 3D panel: the light models the parts as far as Icon
         // lighting says; the rest is the picture's own brightness.
-        materials: PrincipledMaterial {
+        property Material litMaterial: PrincipledMaterial {
             lighting: PrincipledMaterial.FragmentLighting
             baseColorMap: picture
             emissiveMap: picture
@@ -95,6 +105,40 @@ View3D {
             metalness: 0
             cullMode: Material.BackFaceCulling
         }
-    }
+        // As a hologram, as on a 3D panel: the solid made of light.
+        property Material hologramMaterial: HologramSolid {
+            objectName: "flat-icon-solid-hologram"
+            picture.texture: picture
+            outlineColour: root.hologramColour(root.hologramColours.outline)
+            inlineColour: root.hologramColour(root.hologramColours.inline)
+            volumeColour: root.hologramColour(root.hologramColours.volume)
+            own: Qt.vector4d(root.hologramColours.outline && root.hologramColours.outline.own ? 1 : 0,
+                             root.hologramColours.inline && root.hologramColours.inline.own ? 1 : 0,
+                             root.hologramColours.volume && root.hologramColours.volume.own ? 1 : 0, 0)
+            time: root.icon ? root.icon.hologramTime : 0
+            flicker: root.icon && root.icon.hologramMoving ? root.icon.hologram.flicker : 0
+            seed: root.icon ? root.icon.hologramSeed : 0
+            brightness: 1 + 0.6 * (root.icon ? root.icon.hologram.glow : 0)
+        }
+        materials: root.hologram ? [hologramMaterial] : [litMaterial]
+        // The hologram's glow (Icons > Hologram > Glow), in its colour or
+        // in the picture's own as one colour, its mean: its solid a little
+        // larger round it.
+        Model {
+            id: halo
+            objectName: "flat-icon-solid-glow"
+            readonly property var glow: root.hologramColours.glow || ({})
+            readonly property real reach: root.icon ? Number(root.icon.hologram.glowReach) : 0.75
+            readonly property real spread: 1.12 + 0.25 * reach
+            visible: root.hologram && root.icon !== null && root.icon.hologram.glow > 0
+            scale: Qt.vector3d(spread, spread, spread)
+            geometry: solid.geometry
+            materials: HologramHalo {
+                glowColour: halo.glow.own && root.mesh && root.mesh.colour
+                    ? Qt.rgba(root.mesh.colour[0], root.mesh.colour[1], root.mesh.colour[2], 1)
+                    : root.hologramColour(halo.glow)
+                strength: 0.9 * (root.icon ? root.icon.hologram.glow : 0)
+            }
+        }
     }
 }

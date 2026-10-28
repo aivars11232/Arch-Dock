@@ -332,7 +332,10 @@ private slots:
                         && color.redF() < 0.35 && color.greenF() < 0.6
                         && color.blueF() > color.greenF() + 0.1;
                 }
-            QVERIFY2(glyphPixels > 100, qPrintable(QStringLiteral(
+            // Fewer for a picture drawn smaller in its bubble.
+            const double share = renderer->findChild<QObject *>(QStringLiteral("mesh-entry-%1").arg(index))
+                ->property("iconShare").toDouble();
+            QVERIFY2(glyphPixels > 100 * share * share, qPrintable(QStringLiteral(
                 "Entry %1 glyph was covered by the platform: %2 visible pixels")
                 .arg(model->objectName()).arg(glyphPixels)));
             ++checkedIcons;
@@ -1748,6 +1751,9 @@ private slots:
     void hologramsDrawAsLight_data();
     void hologramsDrawAsLight();
     void flatHologramsKeepTheirSize();
+    // A 3D icon as a hologram on a flat panel is its solid made of light in
+    // the icon's own small 3D view, not its flat picture made light.
+    void threeDHologramsOnFlatPanels();
     void turningPanelKeepsItsLayout();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
@@ -3621,6 +3627,36 @@ void RendererCapabilityTest::tileBubblesPlacementAndOrbitRenderUnderRhi()
     turning.insert("iconTilesEnabled", false);
     scene->setProperty("tileValues", turning);
     QTRY_VERIFY(qAbs(body->property("eulerRotation").value<QVector3D>().y()) > 0.5);
+    // The icon stands in its bubble's middle, a hologram too, a little
+    // smaller in a bubble with straight sides than in a ball; the pointer
+    // keeps its whole picture square.
+    QVariantMap centred = values;
+    centred.insert("iconShape", "rounded");
+    centred.insert("scene3DIconSolid", true); centred.insert("scene3DIconDepth", 1.0);
+    auto *solid = renderer->findChild<QObject *>("mesh-icon-solid-0"); QVERIFY(solid);
+    auto *picture = renderer->findChild<QObject *>("mesh-glyph-0"); QVERIFY(picture);
+    for (const bool hologram : {true, false}) {
+        centred.insert("hologramIcons", hologram);
+        scene->setProperty("tileValues", centred);
+        QTRY_VERIFY(solid->property("visible").toBool() && bubble->property("visible").toBool());
+        QTRY_VERIFY2(qAbs(bubble->property("position").value<QVector3D>().z()
+            - solid->property("position").value<QVector3D>().z()) < 0.05, hologram ? "hologram" : "solid");
+    }
+    const double straight = picture->property("scale").value<QVector3D>().x();
+    // The pointer still finds the icon near its whole picture square's
+    // edge, past the smaller picture drawn in the bubble.
+    const auto edgeHits = [&]() {
+        const QVariantMap rest = plainValue(renderer->property("projectedEntryGeometry")).toList().value(0).toMap();
+        QVariant hit;
+        QMetaObject::invokeMethod(renderer, "containsInputPoint", Q_RETURN_ARG(QVariant, hit),
+            Q_ARG(QVariant, QVariant(QPointF(rest.value("centerX").toDouble() + 0.46 * rest.value("width").toDouble(),
+                rest.value("centerY").toDouble()))));
+        return hit.toBool();
+    };
+    QTRY_VERIFY(edgeHits());
+    centred.insert("iconShape", "circle");
+    scene->setProperty("tileValues", centred);
+    QTRY_VERIFY(qAbs(straight / picture->property("scale").value<QVector3D>().x() - 0.85) < 0.01);
     values.insert("iconShape", "circle"); scene->setProperty("tileValues", values);
     const QImage baseline = capture("baseline"); QVERIFY(!baseline.isNull());
     // The glass takes a light tint of the tile's fill colour and is as clear
@@ -3803,6 +3839,9 @@ void RendererCapabilityTest::hologramsDrawAsLight_data()
     QTest::newRow("decorated-panel") << QVariantMap{{QStringLiteral("hologramIcons"), true},
         {QStringLiteral("panelDecoration"), QStringLiteral("carina-nebula")},
         {QStringLiteral("hologramPanel"), true}};
+    // 3D icons as holograms: each icon's solid made of light.
+    QTest::newRow("3d-icons") << QVariantMap{{QStringLiteral("hologramIcons"), true},
+        {QStringLiteral("scene3DIconSolid"), true}, {QStringLiteral("scene3DIconDepth"), 0.6}};
 }
 
 void RendererCapabilityTest::hologramsDrawAsLight()
@@ -3911,6 +3950,21 @@ void RendererCapabilityTest::hologramsDrawAsLight()
         QVERIFY2((opening && opening->property("visible").toBool())
                      || (openingFacing && openingFacing->property("visible").toBool()),
                  qPrintable(QStringLiteral("lens %1").arg(index)));
+    }
+    // A 3D icon's hologram is its solid made of light, seen from both sides;
+    // a flat hologram's thin card wears its picture's light.
+    const bool solidIcons = settings.value(QStringLiteral("scene3DIconSolid")).toBool();
+    for (int index = 0; index < 6; ++index)
+    {
+        auto *solid = renderer->findChild<QObject *>(QStringLiteral("mesh-icon-solid-%1").arg(index));
+        QVERIFY(solid);
+        QTRY_VERIFY2_WITH_TIMEOUT(solid->property("visible").toBool(), qPrintable(QStringLiteral("solid %1").arg(index)),
+                                  10000);
+        QQmlListReference materials(solid, "materials");
+        QVERIFY(materials.isValid() && materials.count() == 1);
+        QCOMPARE(materials.at(0)->objectName() == QStringLiteral("mesh-icon-solid-hologram-%1").arg(index), solidIcons);
+        if (solidIcons)
+            QCOMPARE(materials.at(0)->property("cullMode").toInt(), 3); // Material.NoCulling
     }
     for (int k = 0; k < 6; ++k)
     {
@@ -4159,6 +4213,139 @@ void RendererCapabilityTest::flatHologramsKeepTheirSize()
             }
         }
     }
+}
+
+void RendererCapabilityTest::threeDHologramsOnFlatPanels()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // A flat panel's 3D icons are drawn only in the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    QTest::failOnWarning(QRegularExpression(
+        QStringLiteral("Failed to compile|Failed to parse shader|Failed to build graphics pipeline")));
+    QStringList glyphs;
+    for (const char *name : {"data/truth-glyph-terminal.svg", "data/truth-glyph-files.svg", "data/truth-glyph-logo.svg"})
+    {
+        const QString file = QFINDTESTDATA(name);
+        QVERIFY2(!file.isEmpty(), name);
+        glyphs << QUrl::fromLocalFile(file).toString();
+    }
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property var glyphs
+            property var settings: ({})
+            panelDefinition: Object.assign({rendererTier: "procedural2d", layout: "horizontal", iconSize: 44,
+                                            layoutPadding: 10, appearance: "glass"}, settings)
+            entryDelegateContext: ({hostKind: "free"})
+            orderedEntries: [0, 1, 2].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphs[index]}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/FlatSolidHologramConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    // Only the 3D icons and their hologram: no projector light under them.
+    QVariantMap settings{{QStringLiteral("hologramIcons"), true}, {QStringLiteral("hologramBeam"), false},
+        {QStringLiteral("scene3DIconSolid"), true}, {QStringLiteral("scene3DIconDepth"), 0.6}};
+    QQuickWindow window;
+    const QColor background(QStringLiteral("#1b2333"));
+    window.setColor(background);
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("glyphs"), glyphs}, {QStringLiteral("settings"), settings}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QVERIFY(scene);
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()) + 160, qCeil(scene->height()) + 160);
+    scene->setPosition(QPointF(80, 80));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    const std::function<void(QQuickItem *, const QString &, QList<QQuickItem *> &)> collect =
+        [&collect](QQuickItem *item, const QString &name, QList<QQuickItem *> &found) {
+            if (!item) return;
+            if (item->objectName() == name) found << item;
+            for (QQuickItem *child : item->childItems()) collect(child, name, found);
+        };
+    const auto items = [&](const QString &name) {
+        QList<QQuickItem *> found;
+        collect(scene, name, found);
+        return found;
+    };
+    const auto allShown = [&](const QString &name, bool shown) {
+        const QList<QQuickItem *> found = items(name);
+        return found.size() == 3 && std::all_of(found.cbegin(), found.cend(), [shown](QQuickItem *item) {
+            return item->isVisible() == shown;
+        });
+    };
+    // Each icon's solid in its own view, and its model's material.
+    const auto solidMaterial = [&](int index) -> QString {
+        const QList<QQuickItem *> layers = items(QStringLiteral("icon-layer-solid"));
+        if (index >= layers.size()) return QStringLiteral("(no layer)");
+        for (QQuickItem *child : layers.at(index)->childItems())
+        {
+            QQuickItem *view = qvariant_cast<QQuickItem *>(child->property("item"));
+            QObject *model = view ? view->findChild<QObject *>(QStringLiteral("flat-icon-solid")) : nullptr;
+            if (!model) continue;
+            QQmlListReference materials(model, "materials");
+            return materials.isValid() && materials.count() == 1 ? materials.at(0)->objectName() : QStringLiteral("(none)");
+        }
+        return QStringLiteral("(no view)");
+    };
+    const auto drawn = [&](const QString &name) {
+        for (int k = 0; k < 6; ++k)
+        {
+            QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+            window.update();
+            if (!swapped.wait(5000)) return QImage();
+        }
+        QTest::qWait(300);
+        const QImage frame = window.grabWindow();
+        const QString evidence = qEnvironmentVariable("ARCHDOCK_RENDERING_LOG_DIR");
+        if (!evidence.isEmpty()) frame.save(QDir(evidence).filePath(QStringLiteral("flat-solid-hologram-%1.png").arg(name)));
+        return frame;
+    };
+
+    // The hologram is each icon's solid made of light; its flat picture made
+    // light is not drawn.
+    QTRY_VERIFY_WITH_TIMEOUT(allShown(QStringLiteral("icon-layer-solid"), true), 10000);
+    QVERIFY(allShown(QStringLiteral("icon-hologram"), false));
+    for (int index = 0; index < 3; ++index)
+        QTRY_COMPARE_WITH_TIMEOUT(solidMaterial(index), QStringLiteral("flat-icon-solid-hologram"), 5000);
+    // Its light is added where each icon stands.
+    const QImage frame = drawn(QStringLiteral("on"));
+    QVERIFY(!frame.isNull());
+    const double scale = frame.width() / std::max(1.0, double(window.width()));
+    for (QQuickItem *layer : items(QStringLiteral("icon-layer-solid")))
+    {
+        int lit = 0;
+        for (int dy = -6; dy <= 6; ++dy)
+            for (int dx = -6; dx <= 6; ++dx)
+            {
+                const QPointF at = layer->mapToScene(QPointF(layer->width() * (0.5 + dx / 16.0),
+                                                             layer->height() * (0.5 + dy / 16.0)));
+                const QPoint pixel = (at * scale).toPoint();
+                if (!frame.rect().contains(pixel)) continue;
+                const QColor c = frame.pixelColor(pixel);
+                lit += c.red() + c.green() + c.blue() > background.red() + background.green() + background.blue() + 90;
+            }
+        QVERIFY2(lit >= 12, qPrintable(QStringLiteral("only %1 lit points on an icon").arg(lit)));
+    }
+    // Without the hologram the solid is lit as a 3D icon again.
+    settings.insert(QStringLiteral("hologramIcons"), false);
+    object->setProperty("settings", settings);
+    for (int index = 0; index < 3; ++index)
+        QTRY_VERIFY_WITH_TIMEOUT(solidMaterial(index) != QStringLiteral("flat-icon-solid-hologram"), 5000);
+    // Without 3D icons the hologram is the flat picture made light.
+    settings.insert(QStringLiteral("hologramIcons"), true);
+    settings.insert(QStringLiteral("scene3DIconSolid"), false);
+    object->setProperty("settings", settings);
+    QTRY_VERIFY_WITH_TIMEOUT(allShown(QStringLiteral("icon-hologram"), true), 5000);
+    QVERIFY(allShown(QStringLiteral("icon-layer-solid"), false));
+    drawn(QStringLiteral("flat"));
 }
 
 // A 3D panel turned with the mouse wheel keeps its layout: its platform's

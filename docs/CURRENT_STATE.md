@@ -310,7 +310,16 @@ Report `docs/repairs/OWNER-LIST-PIECE-8.md`; the checkpoint's handoff
   (`hologram-light.frag`, `mesh-hologram-light-N`), `HologramOpening.qml`
   (`mesh-hologram-opening-*-N`), stand and platform shells, and a 3D
   decoration's solid and tubes (`PanelDecoration3D.hologram`,
-  `hologram-folded.vert` folding with the platform). Stands by screen edge:
+  `hologram-folded.vert` folding with the platform). A 3D icon (Icons >
+  3D) as a hologram is its solid made of light, `optional3d/HologramSolid.qml`
+  (`hologram-solid.vert/.frag`: drawn from both sides, the far side its
+  outline only, a light from above the eye modelling the rounded parts,
+  scan lines as slanted planes in the solid's own frame, the picture's
+  inner lines and edge read from the picture, not the screen), on a 3D
+  panel (`mesh-icon-solid-hologram-N`) and on a flat panel in the icon's
+  own view (`IconSolidView`, `flat-icon-solid-hologram`, its glow
+  `HologramHalo.qml`/`hologram-halo.frag`, the view 1.6 icons wide), where
+  IconScene hides the flat hologram while the solid shows. Stands by screen edge:
   `PlatformGeometry.standDirection(edge)` turns IconScene's `standFrame`
   (bottom 0, top 180, left 90, right -90) and the icon is offset by its
   raise; `standsOnPanel` puts a stand on the panel and `standFit` (at most

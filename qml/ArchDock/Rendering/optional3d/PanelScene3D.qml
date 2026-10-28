@@ -960,6 +960,13 @@ Item {
             bevel: 2 * Math.max(0, Math.min(12, root.number(values, "iconTileBevel", 0))) / logicalSize,
             diameter: diameter})
     })
+    // How large an icon is drawn in its bubble: a little smaller in a bubble
+    // with straight sides, which hug the icon's own, so it stands clear of
+    // them; a ball round it is wider than the icon by its corners and
+    // leaves room enough as it is.
+    function bubbleIconShare(shape) {
+        return String(shape) === "circle" ? 1 : 0.85
+    }
     // Whether an entry has a bubble: every icon shown with a tile stands in
     // one, whatever the tile's shape.
     function bubbleWanted(visual) {
@@ -991,8 +998,10 @@ Item {
         const height = Math.max(diameter, 0.15 + 1.25 * root.iconDepth * reach * 0.0144 * pictureScale)
         // The icon's middle: its picture's plane plus half its volume, in
         // the tile's frame (the glyph's plane sits a hundredth of the cell
-        // before the tile, the volume's back on it).
+        // before the tile, the volume's back on it; a hologram's volume
+        // stands half as far forward), at the size it is drawn in its bubble.
         const middle = 0.02 + 0.02 * (mesh ? Number(mesh.depth || 0) : 0) * root.iconDepth
+            * (root.iconHologram.on ? 0.5 : 1) * bubbleIconShare(shape)
         return { diameter: diameter, height: height, middle: middle }
     }
     // The bubble over each tile: the tile's outline risen as a dome round
@@ -1491,6 +1500,12 @@ Item {
     readonly property var pictureQuad: ({ positions: [[-50, -50, 0], [50, -50, 0], [50, 50, 0], [-50, 50, 0]],
                                           indexes: [0, 1, 2, 0, 2, 3] })
     readonly property var pictureTriangles: flatTriangles(pictureQuad)
+    // An icon drawn smaller in its bubble keeps its full picture square for
+    // the pointer.
+    readonly property var bubblePictureQuad: ({ positions: [[-50 / 0.85, -50 / 0.85, 0], [50 / 0.85, -50 / 0.85, 0],
+                                                [50 / 0.85, 50 / 0.85, 0], [-50 / 0.85, 50 / 0.85, 0]],
+                                                indexes: [0, 1, 2, 0, 2, 3] })
+    readonly property var bubblePictureTriangles: flatTriangles(bubblePictureQuad)
     // The icons' pictures under a point, nearest first, through the camera's
     // own frame like the platform's. Qt's picking (View3D.pickAll) answers
     // with the projection from before the view last changed shape until it
@@ -1501,7 +1516,9 @@ Item {
         for (let index = 0; index < worldEntries.count; ++index) {
             const node = worldEntries.objectAt(index)
             if (!node || !node.visible || !node.glyphModel || !node.glyphModel.visible) continue
-            const distance = meshHitDistance(node.glyphModel, pictureQuad, point, pictureTriangles)
+            const shrunk = node.iconShare < 1
+            const distance = meshHitDistance(node.glyphModel, shrunk ? bubblePictureQuad : pictureQuad, point,
+                shrunk ? bubblePictureTriangles : pictureTriangles)
             if (Number.isFinite(distance)) hits.push({ index: index, distance: distance })
         }
         hits.sort(function(a, b) { return a.distance - b.distance })
@@ -3078,6 +3095,8 @@ Item {
                 // Swing turn, no hologram turning), so neither shows its thin
                 // side; Icon turn still shows a 3D icon's depth.
                 readonly property bool facesViewer: tileShown && bubbleMesh !== null
+                readonly property real iconShare: facesViewer && visual
+                    ? root.bubbleIconShare(visual.resolvedIconStyle.iconShape) : 1
                 // Where the entry stands. On a generated platform the layout's
                 // own position, carried onto the platform's centre line: the
                 // platform is that layout's path. On a theme's mesh, its
@@ -3638,7 +3657,8 @@ Item {
                                 metalness: 0
                                 cullMode: Material.BackFaceCulling
                             }
-                            // As a hologram: its picture drawn as light.
+                            // As a flat hologram's thin card: its picture drawn
+                            // as light.
                             property Material hologramMaterial: HologramSurface {
                                 picture.texture: glyphTexture
                                 usePicture: 1
@@ -3652,7 +3672,22 @@ Item {
                                 brightness: 1 + 0.6 * root.iconHologram.glow
                                 cullMode: Material.BackFaceCulling
                             }
-                            materials: root.iconHologram.on ? [hologramMaterial] : [litMaterial]
+                            // As a 3D hologram: the solid itself made of light,
+                            // its shape showing from every side.
+                            property Material solidHologramMaterial: HologramSolid {
+                                objectName: "mesh-icon-solid-hologram-" + entryNode.index
+                                picture.texture: glyphTexture
+                                outlineColour: root.hologramColour(root.iconHologramColours.outline)
+                                inlineColour: root.hologramColour(root.iconHologramColours.inline)
+                                volumeColour: root.hologramColour(root.iconHologramColours.volume)
+                                own: root.hologramOwn(root.iconHologramColours)
+                                time: root.iconHologramTime
+                                flicker: root.hologramMoving ? root.iconHologram.flicker : 0
+                                seed: entryNode.index * 1.37
+                                brightness: 1 + 0.6 * root.iconHologram.glow
+                            }
+                            materials: !root.iconHologram.on ? [litMaterial]
+                                : threeD ? [solidHologramMaterial] : [hologramMaterial]
                             // A 3D icon's glows (Icons > Glow, a hologram's glow):
                             // its own solid a little larger, seen only from inside,
                             // so the light shines round its shape from every side.
@@ -3675,10 +3710,12 @@ Item {
                                 objectName: "mesh-hologram-solid-glow-" + entryNode.index
                                 readonly property real spread: 1.06 + 0.12 * root.iconHologram.glowReach
                                 // In the glow's colour, or the picture's own as one
-                                // colour, its mean: a solid's glow wears no picture.
-                                readonly property var glowRgb: root.iconHologramColours.glow
-                                    && root.iconHologramColours.glow.own && solidModel.mesh && solidModel.mesh.colour
-                                    ? solidModel.mesh.colour
+                                // colour, its mean, as bright as a flat hologram's glow
+                                // in its picture's colours: a solid's glow wears no
+                                // picture.
+                                readonly property bool ownGlow: Boolean(root.iconHologramColours.glow
+                                    && root.iconHologramColours.glow.own && solidModel.mesh && solidModel.mesh.colour)
+                                readonly property var glowRgb: ownGlow ? solidModel.mesh.colour
                                     : PlatformGeometry.parseColour(root.hologramColour(root.iconHologramColours.glow))
                                         || [0.13, 0.85, 1, 1]
                                 pickable: false
@@ -3690,7 +3727,11 @@ Item {
                                     baseColor: "#000000"
                                     roughness: 1
                                     specularAmount: 0
-                                    emissiveFactor: root.glowLight(parent.glowRgb, root.iconHologram.glow)
+                                    emissiveFactor: parent.ownGlow
+                                        ? Qt.vector3d(1.4 * root.iconHologram.glow * parent.glowRgb[0],
+                                                      1.4 * root.iconHologram.glow * parent.glowRgb[1],
+                                                      1.4 * root.iconHologram.glow * parent.glowRgb[2])
+                                        : root.glowLight(parent.glowRgb, root.iconHologram.glow)
                                     alphaMode: PrincipledMaterial.Blend
                                     cullMode: Material.FrontFaceCulling
                                     depthDrawMode: Material.NeverDepthDraw
@@ -3710,9 +3751,12 @@ Item {
                             eulerRotation: Qt.vector3d(0, entryNode.facesViewer ? 0
                                 : root.number(entryNode.glyphMotion, "rotateY", 0)
                                 + root.number(entryNode.glyphMotion, "rotateZ", 0), 0)
-                            scale: Qt.vector3d(entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                            // In a bubble at the share it is drawn at there; its
+                            // solid, glows and mirror image take their size from it.
+                            scale: Qt.vector3d(entryNode.size / 100 * entryNode.iconShare
+                                    * root.number(entryNode.glyphMotion, "scale", 1)
                                     * root.number(entryNode.glyphMotion, "scaleX", 1),
-                                entryNode.size / 100 * root.number(entryNode.glyphMotion, "scale", 1)
+                                entryNode.size / 100 * entryNode.iconShare * root.number(entryNode.glyphMotion, "scale", 1)
                                     * root.number(entryNode.glyphMotion, "scaleY", 1), 1)
                             // The picture's own opacity, which its solid, its glow
                             // and its mirror image share.

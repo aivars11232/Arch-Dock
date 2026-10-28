@@ -119,6 +119,9 @@ Item {
     readonly property real standHologramTime: hologramMoving ? HologramClock.time * standHologram.speed : 0
     readonly property bool hologramLightMoving: hologramMoving
         && HologramLook.beamMotionFlags(hologram.beamMotion).moving
+    // How far the hologram floats up and down where Float is on.
+    readonly property real hologramFloating: hologramDrawn && hologram.float
+        ? Math.sin(hologramTime * 1.3 + hologramSeed) * logicalSize * 0.025 : 0
     property bool holdingHologramClock: false
     function holdHologramClock(wanted) {
         if (wanted === holdingHologramClock)
@@ -420,12 +423,13 @@ Item {
     onBubbleTileChanged: if (solidWanted) refreshSolid()
     // The same solid on a flat panel (Icons > 3D): drawn in a small 3D view
     // of its own in the picture's place, turned by Icon turn and lit as
-    // Icon lighting says. A hologram icon stays light; without Qt Quick 3D
-    // the flat picture stays.
+    // Icon lighting says; a hologram icon's solid made of light, a 3D
+    // hologram, not its flat picture made light. Without Qt Quick 3D the
+    // flat picture stays.
     property bool solidOnFlat: false
     property real solidTurn: 15
     property real solidLighting: 0.5
-    readonly property bool flatSolidWanted: solidOnFlat && !meshVisualActive && !hologramDrawn && solidDepth > 0
+    readonly property bool flatSolidWanted: solidOnFlat && !meshVisualActive && solidDepth > 0
     readonly property bool flatSolidShown: flatSolidWanted && solidMesh !== null && solidPictureUrl.length > 0
         && flatSolidLoader.status === Loader.Ready
     // The picture a flat panel's solid wears: a copy of the icon's picture
@@ -1425,7 +1429,7 @@ Item {
                 },
                 Translate {
                     x: root.resolvedGlyphMotion.x
-                    y: root.resolvedGlyphMotion.y
+                    y: root.resolvedGlyphMotion.y + root.hologramFloating
                 }
             ]
 
@@ -1433,6 +1437,9 @@ Item {
                 id: flatSolidLoader
 
                 anchors.fill: parent
+                // A hologram's view is larger than the icon, to hold its
+                // glow round it.
+                anchors.margins: root.hologramDrawn ? -0.3 * root.logicalSize : 0
                 active: root.flatSolidWanted
                 source: Qt.resolvedUrl("optional3d/IconSolidView.qml")
                 onLoaded: item.icon = root
@@ -1449,10 +1456,10 @@ Item {
 
             objectName: "icon-hologram"
             anchors.fill: parent
-            visible: root.hologramDrawn
+            // A 3D icon's hologram is its solid, drawn as light above.
+            visible: root.hologramDrawn && !root.flatSolidShown
             opacity: root.resolvedGlyphMotion.opacity
-            readonly property real floating: root.hologram.float
-                ? Math.sin(root.hologramTime * 1.3 + root.hologramSeed) * root.logicalSize * 0.025 : 0
+            readonly property real floating: root.hologramFloating
             transform: [
                 Matrix4x4 {
                     matrix: root.glyphTurnActive

@@ -25,7 +25,10 @@
   3D panel a glass bubble as deep as it is wide (a ball round a circle, a
   rhombus with depth round a diamond, where a bubble was a thin lens 0.6 of
   an icon deep however wide it grew), on a flat panel the tile itself, each
-  as large as its icon needs, its animation included. The tile's glow wraps
+  as large as its icon needs, its animation included. In its bubble an icon
+  stands in the middle, a 3D hologram too, and in a bubble with straight
+  sides (every shape but the ball) it is drawn a little smaller, clear of
+  them, and is clicked over its whole square as before. The tile's glow wraps
   the bubble, where a flat glowing card stood inside it (a thin glowing wall
   when the icon turned). The glass is drawn after the icon inside it, which
   it could hide before, and alike bubbles are built once and shared, so a
@@ -45,6 +48,22 @@
   standing behind it; they now shine from a shell of the icon's own shape,
   a hologram's in the glow's colour or the picture's own as one colour. An
   icon is a flat icon, a 3D icon or a hologram of either.
+- **3D icons as holograms are 3D holograms.** With Icons > 3D and Icons >
+  Hologram both on, a flat panel drew the icon's flat picture as light, and
+  a 3D panel drew the solid in its picture's light with nothing to show its
+  shape, so it read as a flat picture too, most of all held facing you.
+  Now on every panel the solid itself is made of light: its far side shows
+  through its near side, a light from above models its rounded parts, and
+  the scan lines lie across it, bending over what rises toward you and
+  running on round its sides. On a flat panel it stands in the icon's own
+  small 3D view, with its glow round its shape. The 3D icons on a flat
+  panel were not drawn at all since 0.1.1-35 (the view's file did not
+  load, one closing brace too many); they are again.
+- **Rounded 3D icons have smooth edges.** A rounded 3D icon (Firefox's
+  globe, VS Code's arms) is cut from a small copy of its picture, and its
+  outline followed that copy's pixels, so its slanted and curved edges came
+  out in steps. Each point of the outline now lies on the slant or curve
+  the steps stand for.
 
 ## 0.1.1-50 — 2026-10-26
 

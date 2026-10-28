@@ -542,6 +542,32 @@ function reliefMesh(data, width, height, options) {
                 uv.push([(x + 0.5 * dx / length) / width, 1 - (y + 0.5 * dy / length) / height])
             }
         }
+    // The outline drawn smooth: each corner on the picture's edge moved
+    // halfway toward the middle of its two neighbours along the edge,
+    // twice, so the pixels' steps become the slants and curves they stand
+    // for. A corner where the edge meets itself stays.
+    const solid = function(x, y) { return cell(x, y) >= 0 }
+    const placeX = new Float32Array(columns * rows), placeY = new Float32Array(columns * rows)
+    const rim = []
+    for (let y = 0; y < rows; ++y)
+        for (let x = 0; x < columns; ++x) {
+            const corner = y * columns + x
+            placeX[corner] = x; placeY[corner] = y
+            if (!used[corner] || (solid(x - 1, y - 1) && solid(x, y - 1) && solid(x - 1, y) && solid(x, y))) continue
+            const next = []
+            if (solid(x, y - 1) !== solid(x, y)) next.push(corner + 1)
+            if (solid(x - 1, y - 1) !== solid(x - 1, y)) next.push(corner - 1)
+            if (solid(x - 1, y) !== solid(x, y)) next.push(corner + columns)
+            if (solid(x - 1, y - 1) !== solid(x, y - 1)) next.push(corner - columns)
+            if (next.length === 2) rim.push([corner, next[0], next[1]])
+        }
+    for (let pass = 0; pass < 2; ++pass) {
+        const moved = rim.map(function(entry) {
+            return [0.5 * placeX[entry[0]] + 0.25 * (placeX[entry[1]] + placeX[entry[2]]),
+                    0.5 * placeY[entry[0]] + 0.25 * (placeY[entry[1]] + placeY[entry[2]])]
+        })
+        rim.forEach(function(entry, index) { placeX[entry[0]] = moved[index][0]; placeY[entry[0]] = moved[index][1] })
+    }
     const positions = [], normals = [], uv0s = [], indexes = []
     const front = new Int32Array(columns * rows).fill(-1), back = new Int32Array(columns * rows).fill(-1)
     const at = function(x, y) { return x < 0 || y < 0 || x >= columns || y >= rows ? 0 : z[y * columns + x] }
@@ -553,7 +579,7 @@ function reliefMesh(data, width, height, options) {
             const slopeY = (at(x, y - 1) - at(x, y + 1)) / (2 * unit)
             const length = Math.hypot(slopeX, slopeY, 1)
             const normal = [-slopeX / length, -slopeY / length, 1 / length]
-            const px = (x / width - 0.5) * 100, py = (0.5 - y / height) * 100
+            const px = (placeX[corner] / width - 0.5) * 100, py = (0.5 - placeY[corner] / height) * 100
             front[corner] = positions.length
             positions.push([px, py, z[corner]]); normals.push(normal); uv0s.push(uv[corner])
             back[corner] = positions.length
