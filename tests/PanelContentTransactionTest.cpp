@@ -235,7 +235,8 @@ void PanelContentTransactionTest::nativePanelsRefuseEveryOperation()
 }
 
 // An Empty panel along an edge holds the folders, files and applications
-// added to it, as a free panel does; an Empty bar holds Plasma widgets only.
+// added to it, as a free panel does, and so does an Empty bar, beside its
+// Plasma widgets.
 void PanelContentTransactionTest::emptyEdgePanelsHoldTheirOwnEntries()
 {
     PanelDefinition empty = PanelDefinition::defaults(
@@ -253,8 +254,10 @@ void PanelContentTransactionTest::emptyEdgePanelsHoldTheirOwnEntries()
     PanelDefinition bar = empty;
     bar.host.edgeHost = QStringLiteral("bar");
     PanelContentOutcome barOutcome;
-    QVERIFY(!PanelContentTransaction::prepare(bar, request, &barOutcome).has_value());
-    QCOMPARE(barOutcome.errorCode, QStringLiteral("native-content-unsupported"));
+    const auto barCandidate = PanelContentTransaction::prepare(bar, request, &barOutcome);
+    QVERIFY(barCandidate.has_value());
+    QVERIFY(barOutcome.success);
+    QCOMPARE(barCandidate->content.canonicalEntryOrder().size(), 2);
 }
 
 void PanelContentTransactionTest::addAppendsNewUrlsAndSkipsDuplicates()

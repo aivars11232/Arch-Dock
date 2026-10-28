@@ -1720,7 +1720,7 @@ bool PanelDefinition::holdsOwnEntries() const
 {
     if (host.kind == PanelHostKind::FreeDesktop)
         return true;
-    return host.edgeHost != QLatin1String("bar") && content.type == QLatin1String("empty");
+    return content.type == QLatin1String("empty");
 }
 
 QString PanelDefinition::hostKindName(PanelHostKind kind)

@@ -110,11 +110,13 @@ private slots:
         QCOMPARE(first.at(0).plugin, QStringLiteral("org.kde.plasma.kickoff"));
         QVERIFY(first.at(1).dock());
         QCOMPARE(first.at(2).plugin, QStringLiteral("org.kde.plasma.digitalclock"));
-        // Without a list a bar holds its dock alone; an empty bar no dock.
+        // Without a list a bar holds its dock alone; an Empty bar holds its
+        // dock too, which shows the bar's own items.
         QCOMPARE(records.at(1).widgets.size(), 1);
         QVERIFY(records.at(1).widgets.first().dock());
-        QCOMPARE(records.at(2).widgets.size(), 1);
-        QCOMPARE(records.at(2).widgets.first().key, QStringLiteral("w1"));
+        QCOMPARE(records.at(2).widgets.size(), 2);
+        QVERIFY(records.at(2).widgets.first().dock());
+        QCOMPARE(records.at(2).widgets.last().key, QStringLiteral("w1"));
     }
 
     // A widget moved from a Plasma panel brings its settings, by group, to

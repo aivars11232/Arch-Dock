@@ -1635,15 +1635,9 @@ QVariantList PanelWindow::panelSettingsEditorFields(
         }
         else if (key == QStringLiteral("type") && !freeHost)
         {
-            // An Empty edge panel holds the folders, files and applications
-            // added to it. An Empty bar holds Plasma widgets only, so a bar is
-            // not offered it; one that is Empty keeps it listed so the field
-            // shows it.
-            if (candidate.host.edgeHost == QLatin1String("bar")
-                && candidate.content.type != QStringLiteral("empty"))
-            {
-                choices.removeAll(QStringLiteral("empty"));
-            }
+            // Every edge panel and bar is offered Empty: it holds the folders,
+            // files and applications added to it, beside its Plasma widgets,
+            // and never an open application.
             field.insert(QStringLiteral("choices"), choices);
         }
         else if (key == QStringLiteral("edge"))

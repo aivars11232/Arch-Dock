@@ -149,8 +149,7 @@ QString PanelWindow::barHostRecordsJson() const
             || (placement.reservedSpace == ArchDock::NativePanelReservedSpace::Automatic
                 && placement.visibilityMode == ArchDock::NativePanelVisibilityMode::Always);
         QJsonArray widgets;
-        const auto held = ArchDock::Bars::barWidgetsFromEntries(
-            definition->content.barWidgets, definition->content.type != QLatin1String("empty"));
+        const auto held = ArchDock::Bars::barWidgetsFromEntries(definition->content.barWidgets);
         for (const ArchDock::Bars::BarWidget &widget : held)
         {
             if (widget.dock())
@@ -207,8 +206,7 @@ bool PanelWindow::showEdgePanelAsBar(const QString &panelId)
 QList<ArchDock::Bars::BarWidget> PanelWindow::barWidgetsOf(const QString &panelId) const
 {
     return ArchDock::Bars::barWidgetsFromEntries(
-        m_panelRegistry.panelValue(panelId, QStringLiteral("barWidgets")).toStringList(),
-        m_panelRegistry.panelValue(panelId, QStringLiteral("type")).toString() != QLatin1String("empty"));
+        m_panelRegistry.panelValue(panelId, QStringLiteral("barWidgets")).toStringList());
 }
 
 bool PanelWindow::setBarWidgets(const QString &panelId, const QList<ArchDock::Bars::BarWidget> &widgets)
@@ -432,8 +430,7 @@ if (!panel) {
         if (!kept.isEmpty())
             settings.insert(key, kept);
     }
-    const bool holdsDock = m_panelRegistry.panelValue(panelId, QStringLiteral("type")).toString() != QLatin1String("empty");
-    const QStringList entries = ArchDock::Bars::barWidgetEntries(ArchDock::Bars::normalizedBarWidgets(widgets, holdsDock));
+    const QStringList entries = ArchDock::Bars::barWidgetEntries(ArchDock::Bars::normalizedBarWidgets(widgets));
 
     // The Plasma panel goes first: a bar has none to remove.
     if (!removeNativeKdePanel(panelId))

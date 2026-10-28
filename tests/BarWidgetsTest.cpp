@@ -16,7 +16,7 @@ private slots:
     {
         const QStringList entries{QStringLiteral("w1:org.kde.plasma.kickoff"), QStringLiteral("dock"),
                                   QStringLiteral("w2:org.kde.plasma.digitalclock")};
-        const QList<BarWidget> widgets = barWidgetsFromEntries(entries, true);
+        const QList<BarWidget> widgets = barWidgetsFromEntries(entries);
         QCOMPARE(widgets.size(), 3);
         QCOMPARE(widgets.at(0), (BarWidget{QStringLiteral("w1"), QStringLiteral("org.kde.plasma.kickoff")}));
         QVERIFY(widgets.at(1).dock());
@@ -24,22 +24,21 @@ private slots:
         QCOMPARE(barWidgetEntries(widgets), entries);
     }
 
-    void theDockIsThereOnceUnlessTheBarHoldsNone()
+    void theDockIsThereOnce()
     {
         // Missing: first.
-        QList<BarWidget> widgets = barWidgetsFromEntries({QStringLiteral("w1:org.kde.plasma.digitalclock")}, true);
+        QList<BarWidget> widgets = barWidgetsFromEntries({QStringLiteral("w1:org.kde.plasma.digitalclock")});
         QCOMPARE(widgets.size(), 2);
         QVERIFY(widgets.first().dock());
         // Twice: once, where it first was.
         widgets = barWidgetsFromEntries({QStringLiteral("w1:org.kde.plasma.digitalclock"), QStringLiteral("dock"),
-                                         QStringLiteral("dock")}, true);
+                                         QStringLiteral("dock")});
         QCOMPARE(widgets.size(), 2);
         QVERIFY(widgets.last().dock());
-        // An empty bar holds none.
-        widgets = barWidgetsFromEntries({QStringLiteral("dock"), QStringLiteral("w1:org.kde.plasma.digitalclock")}, false);
+        // Every bar holds it, an Empty one too, whose dock shows its own items.
+        widgets = barWidgetsFromEntries({});
         QCOMPARE(widgets.size(), 1);
-        QVERIFY(!widgets.first().dock());
-        QVERIFY(barWidgetsFromEntries({}, false).isEmpty());
+        QVERIFY(widgets.first().dock());
     }
 
     void badEntriesAndRepeatedKeysAreLeftOut()
@@ -54,9 +53,11 @@ private slots:
             QStringLiteral("dock:org.kde.plasma.digitalclock"),
             QStringLiteral("w4:org.kde.plasma.digitalclock"),
             QStringLiteral("w4:org.kde.plasma.kickoff"),
-        }, false);
-        QCOMPARE(widgets.size(), 1);
-        QCOMPARE(widgets.first(), (BarWidget{QStringLiteral("w4"), QStringLiteral("org.kde.plasma.digitalclock")}));
+        });
+        // The dock, first as it was missing, and the one good widget.
+        QCOMPARE(widgets.size(), 2);
+        QVERIFY(widgets.first().dock());
+        QCOMPARE(widgets.last(), (BarWidget{QStringLiteral("w4"), QStringLiteral("org.kde.plasma.digitalclock")}));
         QVERIFY(!validWidgetKey(QString(65, QLatin1Char('a'))));
         QVERIFY(validWidgetKey(QString(64, QLatin1Char('a'))));
     }

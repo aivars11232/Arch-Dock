@@ -14,10 +14,10 @@ namespace ArchDock::Bars
 struct BarRecord
 {
     QString id;
-    // What Arch Dock's dock in it shows; an empty bar holds no dock.
+    // What Arch Dock's dock in it shows; an empty bar's shows the bar's own
+    // items.
     QString type = QStringLiteral("hybrid");
-    // What it holds, in order along it: the dock (unless it is an empty bar)
-    // and Plasma widgets.
+    // What it holds, in order along it: the dock and Plasma widgets.
     QList<BarWidget> widgets{BarWidget{BarWidget::dockKey(), {}}};
     // Its screen: by the screen's lasting name, else by its place in the
     // screen list (ScreenIdentity).

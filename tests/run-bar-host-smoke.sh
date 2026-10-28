@@ -150,13 +150,14 @@ printf 'import QtQuick\nimport QtQuick.Window\nWindow { title: "bar-smoke-window
 window_pid=$!
 expect 'a maximised window stops at the bars' '50|0|1230|644' test_window
 
-# The bar holding Arch Dock's dock tells it which panel it is; the empty
-# bars hold nothing.
+# Every bar holds Arch Dock's dock, told which panel it is and what it
+# shows: an Empty bar's shows the bar's own items.
 layout="$XDG_CONFIG_HOME/arch-dock-bars-appletsrc"
-[[ "$(grep -c '^plugin=org.archdock.dock$' "$layout")" == 1 ]] \
+[[ "$(grep -c '^plugin=org.archdock.dock$' "$layout")" == 3 ]] \
     && grep -qx 'panelId=bar-b' "$layout" && grep -qx 'panelType=launcher' "$layout" \
-    || fail "the bars' layout does not hold the one dock it should: $(tr '\n' ' ' <"$layout")"
-printf 'PASS: the dock widget is in its bar, told its panel\n'
+    && grep -qx 'panelId=bar-a' "$layout" && grep -qx 'panelType=empty' "$layout" \
+    || fail "the bars' layout does not hold a dock in each bar: $(tr '\n' ' ' <"$layout")"
+printf 'PASS: a dock widget is in each bar, told its panel\n'
 
 # The list changes: the left bar goes, and the first bar moves to the middle,
 # where it would cover the end bar; it stands aside of it, a gap away.

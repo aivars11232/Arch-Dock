@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.1-52 — 2026-10-28
+
+- **Empty on every panel.** Panel Studio offered Empty on the panels along
+  the screen edges but not on Arch Dock's own bars, where Empty meant
+  Plasma widgets only. Now every panel, at the top, bottom, left or right,
+  a Plasma panel or an Arch Dock bar, can be Empty: it holds the
+  applications, folders and files dropped on it, beside its Plasma
+  widgets, and never shows an open application, which only the panels set
+  to show them do. A free panel always holds its own items.
+- **An empty panel's sign fits it.** With nothing on it, a panel along an
+  edge or a bar showed a sign and four lines of words, which spilled out of
+  a thin panel and lay over a bar's clock. It now shows the sign alone,
+  sized to the panel, with the words when the pointer rests on it, and a
+  bar keeps a small room for it among its widgets. A free panel keeps the
+  words.
+
 ## 0.1.1-51 — 2026-10-27
 
 - **Empty panels hold your own folders, files and applications.** An Empty

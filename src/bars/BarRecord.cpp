@@ -65,7 +65,7 @@ QList<BarRecord> parseBarRecords(const QByteArray &json, QString *error)
                             widget.value(QLatin1String("plugin")).toString().trimmed(),
                             widget.value(QLatin1String("settings")).toObject().toVariantMap()});
         }
-        record.widgets = normalizedBarWidgets(widgets, record.type != QStringLiteral("empty"));
+        record.widgets = normalizedBarWidgets(widgets);
         record.screenId = object.value(QLatin1String("screenId")).toString().trimmed();
         record.screenIndex = number(object, "screen", 0, 0, 64);
         record.alignment = choice(object, "alignment",

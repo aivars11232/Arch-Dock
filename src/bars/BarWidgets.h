@@ -33,13 +33,14 @@ bool validWidgetKey(const QString &key);
 bool validWidgetPlugin(const QString &plugin);
 
 // The list as a bar keeps it: widgets with a bad key or plugin id, and later
-// ones with a key already used, are left out; the dock is there once (first
-// when it was missing) if the bar holds one, and not at all otherwise.
-QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets, bool holdsDock);
+// ones with a key already used, are left out; the dock is there once, first
+// when it was missing. Every bar holds its dock: an Empty bar's shows the
+// bar's own items.
+QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets);
 
 // The list read from a panel record's entries, "dock" and "<key>:<plugin
 // id>", and written back the same way.
-QList<BarWidget> barWidgetsFromEntries(const QStringList &entries, bool holdsDock);
+QList<BarWidget> barWidgetsFromEntries(const QStringList &entries);
 QStringList barWidgetEntries(const QList<BarWidget> &widgets);
 
 // A key no widget in the list has yet.

@@ -1356,10 +1356,14 @@ PlasmoidItem {
                          Number(panelScene.effectBounds.height || 0))
 
             // An edge panel is as long again as its decoration's ends reach.
-            implicitWidth: root.freeSurface
-                ? sceneEffectWidth : panelScene.width + Number(panelScene.decorationAlongRoom.width || 0)
-            implicitHeight: root.freeSurface
-                ? sceneEffectHeight : panelScene.height + Number(panelScene.decorationAlongRoom.height || 0)
+            // Holding nothing, it keeps a square of its thickness, where the
+            // sign inviting drops stands, clear of the widgets beside it.
+            implicitWidth: root.freeSurface ? sceneEffectWidth
+                : Math.max(panelScene.width + Number(panelScene.decorationAlongRoom.width || 0),
+                           root.entries.length === 0 && !root.vertical ? height : 0)
+            implicitHeight: root.freeSurface ? sceneEffectHeight
+                : Math.max(panelScene.height + Number(panelScene.decorationAlongRoom.height || 0),
+                           root.entries.length === 0 && root.vertical ? width : 0)
             Layout.minimumWidth: implicitWidth
             Layout.minimumHeight: implicitHeight
 
@@ -1606,43 +1610,85 @@ PlasmoidItem {
                 }
 
                 Column {
+                    id: emptyHint
+
+                    objectName: "dock-empty-hint"
                     anchors.centerIn: parent
+                    // In a bar, in the room the bar keeps for the dock's icons
+                    // among its widgets.
+                    anchors.horizontalCenterOffset: root.drawsBarSurface && !root.vertical ? barSlotOffset(parent.width) : 0
+                    anchors.verticalCenterOffset: root.drawsBarSurface && root.vertical ? barSlotOffset(parent.height) : 0
                     z: 20
                     spacing: Kirigami.Units.smallSpacing
                     visible: root.entries.length === 0
+                    // Along an edge or in a bar the panel is too thin for words:
+                    // its sign alone, sized to the panel, the words when the
+                    // pointer rests on it, and a click on it does what Retry
+                    // would.
+                    readonly property bool compact: !root.freeSurface
+                    readonly property bool retries: !dockService.registered || root.requestFailed
+                    // A widget added from Plasma's widget list has no panel
+                    // behind it and never gets one by itself (its bootstrap
+                    // is off); it must not invite drops.
+                    readonly property bool unbound: root.panelId.length === 0
+                        && !Plasmoid.configuration.bootstrapFreeDock
+                    readonly property string message: !dockService.registered
+                        ? qsTr("Arch Dock service is unavailable")
+                        : root.requestFailed
+                            ? qsTr("Could not load dock entries")
+                            : unbound
+                                ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
+                                : qsTr("Drop applications or folders here, from the application menu or a file manager")
+                    function retry() {
+                        if (dockService.registered)
+                            root.refresh()
+                        else
+                            resumeCommand.connectSource("arch-dock --resume")
+                    }
+                    // From the middle of the dock's room (`room` long) to the
+                    // middle of the place the bar keeps for its icons.
+                    function barSlotOffset(room) {
+                        const group = (root.barGroups || [])[0]
+                        const place = group ? Number((root.barGroupPlaces || ({}))[group.id]) : NaN
+                        return isFinite(place) ? place + Number(group.length || 0) / 2 - room / 2 : 0
+                    }
 
                     Kirigami.Icon {
+                        objectName: "dock-empty-hint-sign"
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: Kirigami.Units.iconSizes.medium
+                        width: emptyHint.compact
+                            ? Math.max(Kirigami.Units.iconSizes.small, Math.min(Kirigami.Units.iconSizes.medium,
+                                Math.min(emptyHint.parent.width, emptyHint.parent.height) - 2 * Kirigami.Units.smallSpacing))
+                            : Kirigami.Units.iconSizes.medium
                         height: width
-                        // A widget added from Plasma's widget list has no panel
-                        // behind it and never gets one by itself (its bootstrap
-                        // is off); it must not invite drops.
-                        readonly property bool unbound: root.panelId.length === 0
-                            && !Plasmoid.configuration.bootstrapFreeDock
                         source: dockService.registered
-                            ? (root.requestFailed ? "data-error" : unbound ? "dialog-information" : "list-add")
+                            ? (root.requestFailed ? "data-error" : emptyHint.unbound ? "dialog-information" : "list-add")
                             : "network-disconnect"
+                        HoverHandler {
+                            id: emptyHintHover
+                            enabled: emptyHint.compact
+                        }
+                        TapHandler {
+                            enabled: emptyHint.compact && emptyHint.retries
+                            onTapped: emptyHint.retry()
+                        }
+                        QQC2.ToolTip.visible: emptyHint.compact && emptyHintHover.hovered
+                        QQC2.ToolTip.text: emptyHint.message
+                        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                     }
                     QQC2.Label {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        visible: !emptyHint.compact
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         width: Math.min(implicitWidth, Math.max(120, parent.width - 2 * Kirigami.Units.largeSpacing))
-                        text: !dockService.registered
-                            ? qsTr("Arch Dock service is unavailable")
-                            : root.requestFailed
-                                ? qsTr("Could not load dock entries")
-                                : root.panelId.length === 0 && !Plasmoid.configuration.bootstrapFreeDock
-                                    ? qsTr("This widget has no panel. Create one in Panel Studio: Panels, then New free panel at the end of the panel list, or with Add Panel > Arch Dock Circular Free Dock; then remove this widget.")
-                                    : qsTr("Drop applications or folders here, from the application menu or a file manager")
+                        text: emptyHint.message
                     }
                     QQC2.Button {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: qsTr("Retry")
-                        visible: !dockService.registered || root.requestFailed
-                        onClicked: dockService.registered ? root.refresh()
-                            : resumeCommand.connectSource("arch-dock --resume")
+                        visible: !emptyHint.compact && emptyHint.retries
+                        onClicked: emptyHint.retry()
                     }
                 }
 

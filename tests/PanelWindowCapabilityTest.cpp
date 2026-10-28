@@ -1980,8 +1980,9 @@ void PanelWindowCapabilityTest::globalReducedMotionReachesEveryDock()
 // An Empty panel along an edge holds the folders and files dropped on it
 // alone: they are its own entries, which its own remove takes away again,
 // and the launchers the other edge panels share stay as they were. Panel
-// Studio offers an edge panel Empty, a bar not, and calls the hybrid type
-// Launcher + open apps.
+// Studio offers Empty on every edge panel and on a bar, which then holds its
+// own items beside its widgets too, and calls the hybrid type Launcher +
+// open apps.
 void PanelWindowCapabilityTest::emptyEdgePanelHoldsItsOwnItems()
 {
     QQmlApplicationEngine engine;
@@ -2031,9 +2032,25 @@ void PanelWindowCapabilityTest::emptyEdgePanelHoldsItsOwnItems()
         if (option.toMap().value("value").toString() == QLatin1String("hybrid"))
             hybridName = option.toMap().value("label").toString();
     QCOMPARE(hybridName, QStringLiteral("Launcher + open apps"));
+    // Every edge offers it, whatever the panel shows now.
+    for (const QString &edge : {QStringLiteral("bottom"), QStringLiteral("left"), QStringLiteral("right")})
+    {
+        const QString other = registry->addPanel(edge, QStringLiteral("hybrid"));
+        QVERIFY2(!other.isEmpty(), qPrintable(edge));
+        QVERIFY2(typeField(other).value("choices").toStringList().contains("empty"), qPrintable(edge));
+    }
+    // So does a bar, and an Empty bar holds its own items, its dock kept.
     const QString bar = backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher"));
     QVERIFY(!bar.isEmpty());
-    QVERIFY(!typeField(bar).value("choices").toStringList().contains("empty"));
+    QVERIFY(typeField(bar).value("choices").toStringList().contains("empty"));
+    QVERIFY(backend.applyPanelSettingsTransaction(bar, registry->panelDefinition(bar)->settingsRevision,
+        {{QStringLiteral("type"), QStringLiteral("empty")}}).value("success").toBool());
+    QVERIFY(registry->panelDefinition(bar)->holdsOwnEntries());
+    QVERIFY(backend.pinPanelUrls(bar, {QUrl::fromLocalFile(folder).toString()}));
+    const QVariantList barOwn = backend.dockEntriesForPanel(bar, QStringLiteral("empty"));
+    QCOMPARE(barOwn.size(), 1);
+    QVERIFY(!barOwn.first().toMap().value("running").toBool());
+    QCOMPARE(appIds(backend.dockEntries(QStringLiteral("launcher"))), shared);
 }
 
 // Idle rotate turns each icon on its upright axis over its stand, which only

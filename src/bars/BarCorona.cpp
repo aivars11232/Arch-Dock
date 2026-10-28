@@ -182,18 +182,13 @@ void BarCorona::followRecord(Plasma::Containment *containment, const BarRecord &
     containment->setLocation(location(record.edge));
     trimMenus(containment);
 
+    // Every bar holds its dock; an Empty bar's shows the bar's own items.
     Plasma::Applet *dock = dockApplet(containment);
-    const bool wantsDock = record.type != QStringLiteral("empty");
-    if (wantsDock && !dock)
+    if (!dock)
     {
         m_creating = true;
         dock = containment->createApplet(QLatin1String(DockPlugin));
         m_creating = false;
-    }
-    else if (!wantsDock && dock)
-    {
-        dock->destroy();
-        dock = nullptr;
     }
     if (dock)
     {

@@ -20,7 +20,7 @@ bool validWidgetPlugin(const QString &plugin)
         && grammar.match(plugin).hasMatch();
 }
 
-QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets, bool holdsDock)
+QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets)
 {
     QList<BarWidget> result;
     QSet<QString> keys;
@@ -29,7 +29,7 @@ QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets, bool hold
     {
         if (widget.dock())
         {
-            if (holdsDock && !dock)
+            if (!dock)
                 result.append({BarWidget::dockKey(), {}});
             dock = true;
             continue;
@@ -39,12 +39,12 @@ QList<BarWidget> normalizedBarWidgets(const QList<BarWidget> &widgets, bool hold
         keys.insert(widget.key);
         result.append(widget);
     }
-    if (holdsDock && !dock)
+    if (!dock)
         result.prepend({BarWidget::dockKey(), {}});
     return result;
 }
 
-QList<BarWidget> barWidgetsFromEntries(const QStringList &entries, bool holdsDock)
+QList<BarWidget> barWidgetsFromEntries(const QStringList &entries)
 {
     QList<BarWidget> widgets;
     for (const QString &entry : entries)
@@ -59,7 +59,7 @@ QList<BarWidget> barWidgetsFromEntries(const QStringList &entries, bool holdsDoc
         if (colon > 0)
             widgets.append({trimmed.left(colon), trimmed.mid(colon + 1)});
     }
-    return normalizedBarWidgets(widgets, holdsDock);
+    return normalizedBarWidgets(widgets);
 }
 
 QStringList barWidgetEntries(const QList<BarWidget> &widgets)

@@ -1328,6 +1328,10 @@ Item {
     // puts the groups by those places, so the places must not feed back.
     readonly property var barGroups: {
         if (!inBar) return []
+        // Holding nothing, the dock keeps one icon's room among the bar's
+        // widgets, where its sign inviting drops stands.
+        if (orderedEntries.length === 0)
+            return [{ id: "main", length: iconSize }]
         if (!segmentedScene)
             return [{ id: "main", length: rectsExtent(entryRects, null) }]
         const packed = LayoutEngine.segmentGeometry(

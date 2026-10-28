@@ -137,7 +137,7 @@ public slots:
     // Adds a Plasma widget at the end of a bar; the new widget's key, or
     // nothing when the panel is no bar or no such widget is installed.
     QString addBarWidget(const QString &panelId, const QString &plugin);
-    // Takes a widget out of a bar (the dock stays: an empty bar holds none).
+    // Takes a widget out of a bar (the dock stays).
     bool removeBarWidget(const QString &panelId, const QString &key);
     // Moves a widget, or the dock, to another place along its bar.
     bool moveBarWidget(const QString &panelId, const QString &key, int index);
