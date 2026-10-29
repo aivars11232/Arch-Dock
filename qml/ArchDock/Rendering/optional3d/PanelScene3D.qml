@@ -119,11 +119,13 @@ Item {
     readonly property real edgeAcross: Math.max(1, Math.min(edgeStanding ? width : height,
         panelThickness > 0 ? panelThickness : Infinity))
     readonly property real edgeAlong: Math.max(1, edgeStanding ? height : width)
-    // How far it tilts: 0 faces the viewer; at 60 degrees its icons still
-    // fit in the panel.
+    // How far it tilts, and which way: 0 faces the viewer; above 0 its side
+    // toward the screen's middle goes into the screen, below 0 its side on
+    // the screen's edge does, the panel leaning the other way. At 60 degrees
+    // either way its icons still fit in the panel.
     readonly property real edgeTiltLimit: 60
     readonly property real edgeTilt: edgePanel
-        ? Math.max(0, Math.min(edgeTiltLimit, bounded("cameraPitch", 25, -180, 180))) : 0
+        ? Math.max(-edgeTiltLimit, Math.min(edgeTiltLimit, bounded("cameraPitch", 25, -180, 180))) : 0
     // The platform's band across the panel, in its own units, bevels
     // included; its pixels per unit fill the panel's thickness with it.
     readonly property real edgeBandReach: PlatformGeometry.maximumBand
@@ -133,14 +135,16 @@ Item {
     // large as its top and looks like the top itself, the panel then seeming
     // tilted the other way.
     readonly property real edgePlateThickness: 0.25
-    // The platform's frame: its top in the panel's own plane and its outer
-    // edge on the screen's edge, turned about that edge by the tilt. Its near
-    // wall then shows below its top, so it moves in by as much; where its far
-    // side would still reach out of the panel (at a small tilt, the near wall
-    // pushing it out), the whole is drawn a little smaller.
+    // The platform's frame: its top in the panel's own plane, turned by the
+    // tilt about the edge that stays in that plane - its outer edge, on the
+    // screen's edge, when its far side goes in toward the middle, its inner
+    // edge when it leans the other way. Its near wall then shows past that
+    // edge, so it moves in by as much; where its far side would still reach
+    // out of the panel (at a small tilt, the near wall pushing it out), the
+    // whole is drawn a little smaller.
     readonly property var edgeFrame: {
         if (!edgePanel) return null
-        const theta = edgeTilt * Math.PI / 180
+        const theta = Math.abs(edgeTilt) * Math.PI / 180
         const sine = Math.sin(theta), cosine = Math.cos(theta)
         const across = edgeAcross, depth = cameraDistance
         const wall = (PlatformGeometry.topHeight - PlatformGeometry.bottomHeight) * edgeUnit * edgePlateThickness
@@ -155,10 +159,12 @@ Item {
             right: { hinge: [across / 2, 0], inward: [-1, 0], turn: Qt.vector3d(0, -edgeTilt, 0) }
         }
         const frame = frames[screenEdge]
+        // Leaning the other way, the same turn about the opposite edge.
+        const side = edgeTilt < 0 ? -1 : 1
         return {
-            position: Qt.vector3d(frame.hinge[0] + frame.inward[0] * inward,
-                                  frame.hinge[1] + frame.inward[1] * inward, 0),
-            pivot: Qt.vector3d(frame.hinge[0], frame.hinge[1], top),
+            position: Qt.vector3d(side * (frame.hinge[0] + frame.inward[0] * inward),
+                                  side * (frame.hinge[1] + frame.inward[1] * inward), 0),
+            pivot: Qt.vector3d(side * frame.hinge[0], side * frame.hinge[1], top),
             turn: frame.turn,
             scale: scale
         }
@@ -765,6 +771,17 @@ Item {
     // How far a hologram icon floats over its light's opening, in icon
     // sizes (Light height), and the light's motion.
     readonly property real hologramLift: iconHologram.beam ? 0.95 * iconHologram.beamHeight : 0
+    // An edge panel's hologram light is a free panel's, the icon floating as
+    // high in it, only it leaves its lens away from the screen's edge (in the
+    // icons' frame: x right, y up the screen; PlatformGeometry.standDirection):
+    // a top panel's icons hang from their light and a side panel's float
+    // beside it, toward the screen's middle. Null on a free panel, whose
+    // light rises.
+    readonly property var edgeHologramWay: {
+        if (!edgePanel) return null
+        const way = PlatformGeometry.standDirection(screenEdge, false)
+        return Qt.vector2d(way.x, -way.y)
+    }
     readonly property var hologramLightFlags: HologramLook.beamMotionFlags(iconHologram.beamMotion)
     // A colour as the shaders take it.
     function hologramColour(part) {
@@ -2879,9 +2896,24 @@ Item {
                 // place, as on the flat panel, rather than standing on it, and
                 // grows about its middle.
                 readonly property bool edgeCentred: root.edgePanel && !root.pedestalDrawn && !hologramLightShown
-                readonly property real footLift: hologramLightShown ? openingInIcon.y + root.hologramLift * size
+                // On an edge panel the icon's near side floats as far past the
+                // opening, the way the light leaves it: its middle half an
+                // icon further on.
+                readonly property bool edgeHologram: hologramLightShown && root.edgeHologramWay !== null
+                readonly property vector2d edgeHologramMiddle: edgeHologram ? Qt.vector2d(
+                    openingInIcon.x + root.edgeHologramWay.x * (root.hologramLift + 0.5) * size,
+                    openingInIcon.y + root.edgeHologramWay.y * (root.hologramLift + 0.5) * size)
+                    : Qt.vector2d(0, 0)
+                readonly property real footLift: edgeHologram ? edgeHologramMiddle.y - size / 2
+                    : hologramLightShown ? openingInIcon.y + root.hologramLift * size
                     : edgeCentred ? -size / 2 : standFootLift
-                readonly property real iconX: hologramLightShown ? openingInIcon.x : pedestalTopX
+                readonly property real iconX: edgeHologram ? edgeHologramMiddle.x
+                    : hologramLightShown ? openingInIcon.x : pedestalTopX
+                // There it grows about its side nearest the light, from its
+                // foot's middle, so it stays hanging from it or beside it.
+                readonly property vector2d edgeHologramHold: edgeHologram
+                    ? Qt.vector2d(-root.edgeHologramWay.x * size / 2, (1 - root.edgeHologramWay.y) * size / 2)
+                    : Qt.vector2d(0, 0)
                 // The lens the hologram's light leaves, in its colour or its
                 // icon's main colour.
                 property Material openingMaterial: HologramOpening {
@@ -3406,12 +3438,30 @@ Item {
                         pickable: false
                         visible: entryNode.hologramLightShown
                         readonly property vector3d from: entryNode.openingInIcon
-                        readonly property vector3d to: Qt.vector3d(entryNode.iconX,
-                            entryNode.footLift + entryNode.size * 0.42, 0)
-                        readonly property real length: Math.max(1, Math.hypot(to.y - from.y, to.z - from.z))
+                        // On an edge panel the light runs the way it leaves the
+                        // lens, as far into the icon's near part.
+                        readonly property var edgeWay: entryNode.edgeHologram ? root.edgeHologramWay : null
+                        readonly property vector3d to: edgeWay
+                            ? Qt.vector3d(from.x + edgeWay.x * (root.hologramLift + 0.42) * entryNode.size,
+                                          from.y + edgeWay.y * (root.hologramLift + 0.42) * entryNode.size, 0)
+                            : Qt.vector3d(entryNode.iconX, entryNode.footLift + entryNode.size * 0.42, 0)
+                        readonly property real length: edgeWay ? Math.max(1, to.minus(from).length())
+                            : Math.max(1, Math.hypot(to.y - from.y, to.z - from.z))
                         readonly property real sheet: 2 * Math.max(entryNode.openingRadius * 1.04, entryNode.size * 0.59)
-                        position: Qt.vector3d(from.x, (from.y + to.y) / 2, (from.z + to.z) / 2)
-                        eulerRotation.x: Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI
+                        position: edgeWay ? from.plus(to).times(0.5)
+                            : Qt.vector3d(from.x, (from.y + to.y) / 2, (from.z + to.z) / 2)
+                        // There the strip is rolled about the line of sight to the
+                        // light's way, then leaned toward the viewer as far as the
+                        // lens lies behind the icon. The way runs straight down,
+                        // up or sideways, so after the roll the lean is a turn
+                        // about the screen's x or y axis (Euler order Z, X, Y).
+                        readonly property real edgeRoll: edgeWay ? Math.atan2(from.x - to.x, to.y - from.y) : 0
+                        readonly property real edgeLean: edgeWay
+                            ? Math.atan2(to.z - from.z, Math.hypot(to.x - from.x, to.y - from.y)) * 180 / Math.PI : 0
+                        eulerRotation.x: edgeWay ? Math.cos(edgeRoll) * edgeLean
+                            : Math.atan2(to.z - from.z, to.y - from.y) * 180 / Math.PI
+                        eulerRotation.y: edgeWay ? Math.sin(edgeRoll) * edgeLean : 0
+                        eulerRotation.z: edgeWay ? edgeRoll * 180 / Math.PI : 0
                         scale: Qt.vector3d(sheet / 100, length / 100, 1)
                         materials: HologramLight {
                             picture.texture: glyphTexture
@@ -3432,11 +3482,17 @@ Item {
                     Node {
                         objectName: "mesh-icon-body-" + entryNode.index
                         // Its foot floats over the stand's top, centred on it,
-                        // or over its hologram's light.
-                        x: entryNode.iconX
+                        // or over its hologram's light; on an edge panel by its
+                        // light, grown about its side nearest it.
+                        x: entryNode.iconX - (entryNode.edgeHologram
+                            ? (entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
+                               * root.number(entryNode.iconMotion, "scaleX", 1) - 1) * entryNode.edgeHologramHold.x : 0)
                         y: entryNode.footLift + entryNode.hologramFloat - (entryNode.edgeCentred
                             ? (entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
                                * root.number(entryNode.iconMotion, "scaleY", 1) - 1) * entryNode.size / 2 : 0)
+                            - (entryNode.edgeHologram
+                            ? (entryNode.hoverScale * root.number(entryNode.iconMotion, "scale", 1)
+                               * root.number(entryNode.iconMotion, "scaleY", 1) - 1) * entryNode.edgeHologramHold.y : 0)
                         // Hover magnification and icon motion grow the icon about
                         // its foot, so it stays standing on the pedestal. A turn
                         // in the icon's plane (Spin, Wobble, Swing) becomes a turn

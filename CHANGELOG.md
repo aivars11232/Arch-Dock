@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Hologram icons on a 3D top panel stay on the screen, and edge panels
+  tilt both ways.** On a bar or panel along the top of the screen drawn in
+  3D, hologram icons rose out of the top of the screen, further the more
+  the panel was tilted, because their light always rose up the screen. On
+  an edge panel in 3D the light now leaves its lens away from the screen's
+  edge, as the flat panels' stands and light point: on a top panel the
+  icons hang under their light, on a left panel they float to its right, on
+  a right panel to its left, and on a bottom panel they rise as before. The
+  light, and how high an icon floats in it, are a free panel's. Tilt now
+  runs from -60 to 60 degrees: below 0 the panel leans the other way, its
+  side on the screen's edge going into the screen.
+
 - **Applications and folders drop onto Empty panels.** Dragging an
   application or a folder onto an Empty panel showed the forbidden sign and
   added nothing, while widgets could be added; on a Plasma panel the drop

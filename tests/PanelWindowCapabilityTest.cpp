@@ -1944,12 +1944,16 @@ void PanelWindowCapabilityTest::edgePanelIn3DOffersItsTiltAlone()
     QCOMPARE(panel3D, QStringList{QStringLiteral("scene3DCameraPitch")});
     const auto tilt = fieldByKey(fields, "scene3DCameraPitch");
     QCOMPARE(tilt.value("label").toString(), QStringLiteral("Tilt"));
-    QCOMPARE(tilt.value("minimumValue").toDouble(), 0.0);
+    QCOMPARE(tilt.value("minimumValue").toDouble(), -60.0);
     QCOMPARE(tilt.value("maximumValue").toDouble(), 60.0);
     QVERIFY(fieldKeys(fields).contains("color"));
     QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
         {{"scene3DCameraPitch", 45.0}}).value("success").toBool());
     QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("cameraPitch").toDouble(), 45.0);
+    // It leans the other way too.
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, registry->panelDefinition(panel)->settingsRevision,
+        {{"scene3DCameraPitch", -35.0}}).value("success").toBool());
+    QCOMPARE(registry->panelDefinition(panel)->surface.parameters3D.value("cameraPitch").toDouble(), -35.0);
 }
 
 // Reduced motion is one global setting: every dock, edge or free, is told of

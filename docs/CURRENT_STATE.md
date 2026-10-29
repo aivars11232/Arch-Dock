@@ -1,5 +1,34 @@
 # Arch Dock current state
 
+## Edge panels in 3D: holograms away from the screen's edge, tilt both ways — 2026-10-30
+
+- `PanelScene3D.edgeTilt` takes -60 to 60 (Panel Studio's Tilt for an edge
+  panel likewise, `PanelWindowSettings.cpp`). Above 0 the plate turns about
+  its outer edge, on the screen's edge, its far side into the screen; below
+  0 `edgeFrame` makes the same turn about its inner edge (hinge and the
+  near wall's move mirrored by `side`). `edgeContentPoint` undoes either.
+- A hologram icon over its projector light on an edge panel in 3D
+  (`entryNode.edgeHologram`): the light is a free panel's (`hologramLift`,
+  0.95 x Light height; reaching 0.42 of an icon into the icon's near part,
+  half-width 0.59, fade 1.6), leaving the lens along `edgeHologramWay`,
+  `PlatformGeometry.standDirection` in the icons' frame (top down, left
+  right, right left, bottom up). The icon's middle lies `hologramLift + 0.5`
+  icons along it from the lens, it grows about its side nearest the light
+  (`edgeHologramHold`), and the light strip is rolled to the way and leaned
+  toward the viewer (Euler order Z, X, Y; the way is always straight along
+  a screen axis). Free panels keep their own expressions: every edge
+  branch acts only where `edgePanel` is true.
+- Tests: `RendererCapabilityTest::edgeHologramsFloatAwayFromTheEdge` (top,
+  bottom, left, right, run in `decoration-3d-smoke`'s session): each icon's
+  middle lies away from its lens along the edge's way, the light ends in its
+  near half, the icons lie inside the drawn scene; at +35 the lenses draw
+  toward the screen's edge and at -35 toward the middle; -80 is held at
+  -60. `PanelWindowCapabilityTest::edgePanelIn3DOffersItsTiltAlone`: the
+  range -60 to 60, -35 saved.
+- From the owner's 0.1.1-53 pictures 1 and 2 (30 Oct): "all the holographic
+  3D icons goes up, and i can't tilt negative". Pictures:
+  `/mnt/F/archdock-audit-2026-10-08/evidence/P1-*`.
+
 ## Real 3D icons made into objects by TripoSR — 2026-10-29
 
 - Icon relief `modelled` (the default; choices modelled, rounded, block; a

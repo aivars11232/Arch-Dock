@@ -1769,6 +1769,12 @@ private slots:
     // the icon's own small 3D view, not its flat picture made light.
     void threeDHologramsOnFlatPanels();
     void turningPanelKeepsItsLayout();
+    // An edge panel's hologram icons on its tilted plate float in the light a
+    // free panel's do, from their places away from the screen's edge: a top
+    // panel's hang below their lenses, a side panel's float beside them, and
+    // the light reaches into their near part. The panel leans either way.
+    void edgeHologramsFloatAwayFromTheEdge_data();
+    void edgeHologramsFloatAwayFromTheEdge();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
@@ -4450,6 +4456,169 @@ void RendererCapabilityTest::turningPanelKeepsItsLayout()
     QTest::qWait(200);
     QVERIFY2(std::abs(std::remainder(midway - angle, 360.0)) > 60, "the panel turned");
     QCOMPARE(relaid.count(), 0);
+}
+
+void RendererCapabilityTest::edgeHologramsFloatAwayFromTheEdge_data()
+{
+    QTest::addColumn<QString>("edge");
+    for (const char *edge : {"top", "bottom", "left", "right"})
+        QTest::newRow(edge) << QString::fromLatin1(edge);
+}
+
+void RendererCapabilityTest::edgeHologramsFloatAwayFromTheEdge()
+{
+    QFETCH(QString, edge);
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // An edge panel is drawn in 3D only by the real RHI scene.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_DECORATIONS"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_DECORATIONS).");
+    const QString glyph = QFINDTESTDATA("data/truth-glyph-terminal.svg");
+    QVERIFY(!glyph.isEmpty());
+    QVariantMap theme{
+        {QStringLiteral("format"), QStringLiteral("org.archdock.theme")},
+        {QStringLiteral("version"), 2}, {QStringLiteral("valid"), true},
+        {QStringLiteral("id"), QStringLiteral("procedural-look")},
+        {QStringLiteral("name"), QStringLiteral("Procedural look")},
+        {QStringLiteral("capabilities"), QVariantMap{
+            {QStringLiteral("rendererTiers"), QVariantList{QStringLiteral("true3d"), QStringLiteral("procedural2d")}},
+            {QStringLiteral("preferredRendererTier"), QStringLiteral("procedural2d")},
+            {QStringLiteral("fallbackRendererTiers"), QVariantList{QStringLiteral("procedural2d")}}}},
+        {QStringLiteral("scene3D"), QVariantMap{
+            {QStringLiteral("generic"), true}, {QStringLiteral("generated"), QVariantMap{}},
+            {QStringLiteral("fieldOfView"), 40}, {QStringLiteral("cameraPitch"), 25},
+            {QStringLiteral("cameraYaw"), 0}, {QStringLiteral("defaultQuality"), QStringLiteral("high")},
+            {QStringLiteral("transitions"), false}, {QStringLiteral("parts"), QVariantList{}}}},
+        {QStringLiteral("scene3DResources"), QVariantMap{
+            {QStringLiteral("material"), QVariantMap{
+                {QStringLiteral("format"), QStringLiteral("org.archdock.material")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("baseColor"), QStringLiteral("#406080")},
+                {QStringLiteral("emissiveColor"), QStringLiteral("#000000")},
+                {QStringLiteral("emissiveStrength"), 0.0}, {QStringLiteral("metalness"), 0.3},
+                {QStringLiteral("roughness"), 0.45}}},
+            {QStringLiteral("parts"), QVariantList{}}, {QStringLiteral("indexBudget"), 262144}}}};
+    const bool standing = edge == QStringLiteral("left") || edge == QStringLiteral("right");
+    const auto definition = [&edge, standing](double tilt) {
+        return QVariantMap{{QStringLiteral("rendererTier"), QStringLiteral("true3d")},
+            {QStringLiteral("layout"), standing ? QStringLiteral("vertical") : QStringLiteral("horizontal")},
+            {QStringLiteral("edge"), edge}, {QStringLiteral("screenEdge"), edge},
+            {QStringLiteral("iconSize"), 40}, {QStringLiteral("layoutPadding"), 10},
+            {QStringLiteral("appearance"), QStringLiteral("glass")},
+            {QStringLiteral("scene3DQuality"), QStringLiteral("high")},
+            {QStringLiteral("scene3DTransitions"), false}, {QStringLiteral("scene3DCameraPitch"), tilt},
+            {QStringLiteral("hologramIcons"), true}, {QStringLiteral("hologramIconTurning"), QStringLiteral("still")},
+            {QStringLiteral("hologramIconFloat"), false}};
+    };
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            required property string glyph
+            entryDelegateContext: ({hostKind: "native"})
+            panelThickness: 64
+            orderedEntries: [0, 1, 2, 3].map(function(index) {
+                return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyph}
+            })
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/EdgeHologramConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    QQuickWindow window;
+    window.setColor(QColor(QStringLiteral("#1b2333")));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("themeDefinition"), theme}, {QStringLiteral("panelDefinition"), definition(25)},
+        {QStringLiteral("glyph"), QUrl::fromLocalFile(glyph).toString()}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QVERIFY(scene);
+    scene->setParentItem(window.contentItem());
+    scene->setSize(standing ? QSizeF(96, 360) : QSizeF(360, 96));
+    // Room round the panel for what it shows past it.
+    scene->setPosition(QPointF(120, 120));
+    window.resize(qCeil(scene->width()) + 240, qCeil(scene->height()) + 240);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+    QVERIFY(renderer);
+    QCOMPARE(renderer->property("screenEdge").toString(), edge);
+    QTRY_COMPARE(plainValue(renderer->property("projectedEntryGeometry")).toList().size(), 4);
+    QObject *viewport = objectValue(renderer->property("viewport"));
+    QVERIFY(viewport);
+    // Away from the screen's edge, on the screen (y down).
+    const QPointF away = edge == QStringLiteral("top") ? QPointF(0, 1)
+        : edge == QStringLiteral("bottom") ? QPointF(0, -1)
+        : edge == QStringLiteral("left") ? QPointF(1, 0) : QPointF(-1, 0);
+    const auto along = [&away](const QPointF &step) { return step.x() * away.x() + step.y() * away.y(); };
+    // Each icon's lens, its resting square and its light's far end as drawn,
+    // in the panel's own coordinates.
+    struct Seen { QPointF lens; QRectF icon; QPointF lightEnd; };
+    const auto measure = [&](QList<Seen> *seen) {
+        seen->clear();
+        const QVariantList rects = plainValue(renderer->property("projectedEntryGeometry")).toList();
+        for (int index = 0; index < rects.size(); ++index)
+        {
+            auto *lens = renderer->findChild<QObject *>(QStringLiteral("mesh-hologram-opening-on-panel-%1").arg(index));
+            auto *light = renderer->findChild<QObject *>(QStringLiteral("mesh-hologram-light-%1").arg(index));
+            if (!lens || !lens->property("visible").toBool() || !light || !light->property("visible").toBool())
+                return false;
+            QVector3D lensPoint, endScene, endPoint;
+            if (!projectScenePoint(viewport, lens->property("scenePosition").value<QVector3D>(), lensPoint)
+                    || !QMetaObject::invokeMethod(light, "mapPositionToScene", Q_RETURN_ARG(QVector3D, endScene),
+                                                  Q_ARG(QVector3D, QVector3D(0, 50, 0)))
+                    || !projectScenePoint(viewport, endScene, endPoint))
+                return false;
+            const QVariantMap rect = rects.at(index).toMap();
+            seen->append({QPointF(lensPoint.x(), lensPoint.y()),
+                          QRectF(rect.value("x").toDouble(), rect.value("y").toDouble(),
+                                 rect.value("width").toDouble(), rect.value("height").toDouble()),
+                          QPointF(endPoint.x(), endPoint.y())});
+        }
+        return seen->size() == 4;
+    };
+    QList<Seen> seen;
+    QTRY_VERIFY(measure(&seen));
+    const QRectF drawn = renderer->property("drawnBounds").toRectF();
+    for (int index = 0; index < seen.size(); ++index)
+    {
+        const Seen &entry = seen.at(index);
+        const QPointF gap = entry.icon.center() - entry.lens;
+        const double size = std::max(entry.icon.width(), entry.icon.height());
+        const double across = std::abs(gap.x() * away.y() - gap.y() * away.x());
+        QVERIFY2(along(gap) > 0.6 * size, qPrintable(QStringLiteral("icon %1's middle lies %2 px from its lens away from the %3 edge (icon %4 px)")
+            .arg(index).arg(along(gap)).arg(edge).arg(size)));
+        QVERIFY2(across < 0.2 * size, qPrintable(QStringLiteral("icon %1 lies %2 px aside of its lens").arg(index).arg(across)));
+        // The light reaches into the icon's near part and no further than
+        // about its middle, so the icon is not lost in it.
+        const double reach = along(entry.lightEnd - entry.lens);
+        QVERIFY2(reach > along(gap) - 0.4 * size && reach < along(gap) + 0.1 * size,
+                 qPrintable(QStringLiteral("icon %1's light reaches %2 px, its middle lies %3 px on")
+                     .arg(index).arg(reach).arg(along(gap))));
+        QVERIFY2(drawn.contains(entry.icon), qPrintable(QStringLiteral("icon %1 is drawn whole").arg(index)));
+    }
+    // It leans either way: its places on the plate draw toward the edge that
+    // stays in the panel's plane, the screen's edge above 0 and the one
+    // toward the middle below.
+    const auto lensesAt = [&](double tilt, QList<Seen> *out) {
+        scene->setProperty("panelDefinition", definition(tilt));
+        QTest::qWait(600);
+        return measure(out);
+    };
+    QList<Seen> level, leaning, other;
+    QVERIFY(lensesAt(0, &level));
+    QVERIFY(lensesAt(35, &leaning));
+    QVERIFY(lensesAt(-35, &other));
+    QCOMPARE(renderer->property("edgeTilt").toDouble(), -35.0);
+    for (int index = 0; index < level.size(); ++index)
+    {
+        QVERIFY2(along(leaning.at(index).lens - level.at(index).lens) < -1,
+                 qPrintable(QStringLiteral("lens %1 drew toward the screen's edge").arg(index)));
+        QVERIFY2(along(other.at(index).lens - level.at(index).lens) > 1,
+                 qPrintable(QStringLiteral("lens %1 drew toward the middle").arg(index)));
+    }
+    scene->setProperty("panelDefinition", definition(-80));
+    QTRY_COMPARE(renderer->property("edgeTilt").toDouble(), -60.0);
 }
 
 QTEST_MAIN(RendererCapabilityTest)

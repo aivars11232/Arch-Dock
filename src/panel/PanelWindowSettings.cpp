@@ -1139,15 +1139,17 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 if (available && key == QStringLiteral("scene3DCameraPitch"))
                     field.insert(QStringLiteral("defaultValue"), theme->value(QStringLiteral("scene3D"))
                         .toMap().value(QStringLiteral("cameraPitch"), 25.0));
-                // It leans one way only, as far as its icons still fit in the
-                // panel (PanelScene3D.edgeTiltLimit).
+                // It leans either way, its side toward the screen's middle
+                // going into the screen above 0 and its side on the screen's
+                // edge below 0, as far as its icons still fit in the panel
+                // (PanelScene3D.edgeTiltLimit).
                 if (available && edgeTilt)
                 {
                     field.insert(QStringLiteral("label"), QStringLiteral("Tilt"));
-                    field.insert(QStringLiteral("minimumValue"), 0.0);
+                    field.insert(QStringLiteral("minimumValue"), -60.0);
                     field.insert(QStringLiteral("maximumValue"), 60.0);
                     field.insert(QStringLiteral("defaultValue"),
-                        qBound(0.0, field.value(QStringLiteral("defaultValue")).toDouble(), 60.0));
+                        qBound(-60.0, field.value(QStringLiteral("defaultValue")).toDouble(), 60.0));
                 }
                 // Only a generated platform has a shape to adjust; a theme's
                 // own mesh is drawn as its theme made it.

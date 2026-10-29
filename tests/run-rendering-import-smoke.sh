@@ -534,6 +534,14 @@ run_private_session() {
                     return 1
                 }
         sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/turning-3d.log"
+        printf 'Checking hologram icons on 3D edge panels floating away from the screen edge under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_DECORATIONS=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" edgeHologramsFloatAwayFromTheEdge \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/hologram-edge-3d.log" 2>&1 || {
+                    tail -n 100 "$ARCHDOCK_RENDERING_LOG_DIR/hologram-edge-3d.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/hologram-edge-3d.log"
         return 0
     fi
 
