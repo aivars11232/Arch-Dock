@@ -137,7 +137,20 @@ View3D {
             seed: root.icon ? root.icon.hologramSeed : 0
             brightness: 1 + 0.6 * (root.icon ? root.icon.hologram.glow : 0)
         }
-        materials: root.hologram ? [hologramMaterial] : root.twoSided ? [surfaceMaterial] : [litMaterial]
+        // An object as a hologram: made of light from its own colours.
+        property Material objectHologramMaterial: HologramObject {
+            objectName: "flat-icon-object-hologram"
+            outlineColour: solid.hologramMaterial.outlineColour
+            inlineColour: solid.hologramMaterial.inlineColour
+            volumeColour: solid.hologramMaterial.volumeColour
+            own: solid.hologramMaterial.own
+            time: solid.hologramMaterial.time
+            flicker: solid.hologramMaterial.flicker
+            seed: solid.hologramMaterial.seed
+            brightness: solid.hologramMaterial.brightness
+        }
+        materials: root.hologram ? [root.twoSided ? objectHologramMaterial : hologramMaterial]
+            : root.twoSided ? [surfaceMaterial] : [litMaterial]
         // The hologram's glow (Icons > Hologram > Glow), in its colour or
         // in the picture's own as one colour, its mean: its solid a little
         // larger round it.

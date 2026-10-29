@@ -199,6 +199,9 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/HologramSolid.qml
     optional3d/hologram-solid.vert
     optional3d/hologram-solid.frag
+    optional3d/HologramObject.qml
+    optional3d/hologram-object.vert
+    optional3d/hologram-object.frag
     optional3d/HologramHalo.qml
     optional3d/hologram-halo.frag
     optional3d/HologramLight.qml

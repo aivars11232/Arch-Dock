@@ -51,8 +51,15 @@
   own relief (IconSolid.js, auto) till `ready`. `IconModelGeometry`
   (ArchDock.Decorations3D) draws it: place, normal, picture point (UV0),
   colour. `IconSurface` (`icon-surface.vert/.frag`) is each point's colour
-  lit by the scene's lamps, with Icon lighting's own share; a hologram uses
-  HologramSolid unchanged (picture through UV0, normals).
+  lit by the scene's lamps, with Icon lighting's own share. As a 3D
+  hologram an object is drawn by `HologramObject` (`hologram-object.vert/.frag`):
+  HologramSolid's light read from the object's own colours (not the glyph
+  layer's picture, which holds the icon only as large as the panel draws it),
+  its inner lines where those colours change from one screen pixel to the
+  next (`fwidth` of their brightness, times 7), its rim `pow(1 - |facing|, 3)`
+  and 26 scan lines (the owner ticked it against HologramSolid on a sheet,
+  29 Oct: "now the difference is clearly noticable"); the reliefs keep
+  HologramSolid.
 - Tests: `tests/IconObjectTest.cpp` (the tracked field gives the whole
   grid's surface, closed balls, widest slice, two fronts closed and
   mirrored, the lighter front keeps its cut edge, files, model folders),

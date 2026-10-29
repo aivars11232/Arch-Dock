@@ -19,7 +19,9 @@
   the lowest priority; the objects are kept, so an icon is never made
   twice. Until an icon is made, and where the helper or its models are not
   installed, it keeps its picture's own relief. 3D holograms are made of
-  the same objects, as before. The helper needs ONNX Runtime
+  the same objects, and drawn from their own colours at a far higher
+  resolution than before: their inner lines as fine as the screen on every
+  side, a narrower outline and finer scan lines. The helper needs ONNX Runtime
   (onnxruntime-cpu) and its two model files (0.84 GB); Rounded and Block
   stay as choices.
 

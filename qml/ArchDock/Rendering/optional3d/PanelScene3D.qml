@@ -3706,8 +3706,21 @@ Item {
                                 seed: entryNode.index * 1.37
                                 brightness: 1 + 0.6 * root.iconHologram.glow
                             }
+                            // An object as a 3D hologram: made of light from its own
+                            // colours (HologramObject).
+                            property Material objectHologramMaterial: HologramObject {
+                                objectName: "mesh-icon-object-hologram-" + entryNode.index
+                                outlineColour: solidModel.solidHologramMaterial.outlineColour
+                                inlineColour: solidModel.solidHologramMaterial.inlineColour
+                                volumeColour: solidModel.solidHologramMaterial.volumeColour
+                                own: solidModel.solidHologramMaterial.own
+                                time: root.iconHologramTime
+                                flicker: solidModel.solidHologramMaterial.flicker
+                                seed: entryNode.index * 1.37
+                                brightness: solidModel.solidHologramMaterial.brightness
+                            }
                             materials: !root.iconHologram.on ? (twoSided ? [surfaceMaterial] : [litMaterial])
-                                : threeD ? [solidHologramMaterial] : [hologramMaterial]
+                                : threeD ? [twoSided ? objectHologramMaterial : solidHologramMaterial] : [hologramMaterial]
                             // A 3D icon's glows (Icons > Glow, a hologram's glow):
                             // its own solid a little larger, seen only from inside,
                             // so the light shines round its shape from every side.
