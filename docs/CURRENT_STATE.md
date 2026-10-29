@@ -1,5 +1,66 @@
 # Arch Dock current state
 
+## Real 3D icons made into objects by TripoSR — 2026-10-29
+
+- Icon relief `modelled` (the default; choices modelled, rounded, block; a
+  saved `auto` reads as the default) makes the icon into an object with
+  TripoSR (Tripo AI and Stability AI, MIT licence, "TripoSR: Fast 3D Object
+  Reconstruction from a Single Image", 2024). Its front (the part in front
+  of the widest slice) is kept and mirrored into its back: the owner's
+  choice ("2 3D fronts ... with all the icons", 29 Oct), after TripoSR's own
+  backs were mixed.
+- The helper `arch-dock-icon-object` (`src/iconobject/`; built when ONNX
+  Runtime is found, installed to bin) runs at nice 19, one helper at a time
+  per user (`making.lock` in the objects' folder, QLockFile without an age
+  limit), 4 threads (the network runs slower on a core's second thread).
+  `IconObjectMaker`: the picture as TripoSR's run.py hands it over
+  (resize_foreground 0.85, grey 0.5, antialiased bilinear to 512);
+  `triposr-network.onnx` (picture to triplanes, weights stored in half
+  precision, cast back on load) about 18 s on the owner's Ryzen 5 7520U;
+  `triposr-field.onnx` (TripoSR's query_triplane with its decoder) asked
+  only near the surface (`trackedField`: every fifth point first, then the
+  cells where inside meets outside, following the surface across cell faces;
+  Mescheder et al. 2019 and Bloomenthal 1994), about 1.5 s for 0.5-0.7
+  million points instead of 16.7 million; marching cubes at TripoSR's own
+  level 25 on its 256-point grid (`thirdparty/pymcubes`, BSD), points at the
+  same place welded as trimesh does; colours from the field; the front
+  (`widestSlice`, `frontOf`) made lighter to at most 20,000 triangles
+  within 0.2 % (`thirdparty/meshoptimizer` 1.3, MIT,
+  `meshopt_simplifyWithAttributes` with the colours, border locked), then
+  mirrored (`twoFronts`; triangles lying in the cut are left out so no sheet
+  shows through a hologram). The object is laid in the picture's square (100
+  across, its front-on outline over the picture's opaque box) and each point
+  is told where on the picture it lies as TripoSR's input camera saw it (1.9
+  away, 40 degrees), laid over the same box. About 20 s an icon in all.
+- Models: `tools/icon-objects/export-triposr.py` exports both from
+  TripoSR's published weights (needs TripoSR's Python requirements, onnx and
+  onnxscript); they are looked for in `$ARCHDOCK_ICON_OBJECT_MODELS` or
+  `arch-dock/models` in the data folders. Measured against TripoSR's own
+  PyTorch run: same meshes to under a tenth of a grid step (a sealed bubble
+  inside Firefox's body, never seen, is left out).
+- `IconModel` (ArchDock.Decorations) takes `iconSource` (a theme icon drawn
+  at 512 on the GUI thread, or a file read on the decorations' worker) and
+  `frame` (where the picture lies in the glyph layer), squares the picture,
+  names it by its SHA-1 (with "triposr two fronts 1") and reads
+  `~/.cache/arch-dock/icon-objects/<name>.adicon`, or saves `<name>.png` and
+  asks the helper (one per program, given every waiting picture; objects
+  another program's helper makes are seen by a QFileSystemWatcher; a picture
+  that fails is not asked again in that run). It carries the names the JS
+  solids use (`depth` = `reach`, `builtDepth` 0.3, `colour`, `kind`
+  "modelled", `native`), `ready` and `making`. IconScene shows the picture's
+  own relief (IconSolid.js, auto) till `ready`. `IconModelGeometry`
+  (ArchDock.Decorations3D) draws it: place, normal, picture point (UV0),
+  colour. `IconSurface` (`icon-surface.vert/.frag`) is each point's colour
+  lit by the scene's lamps, with Icon lighting's own share; a hologram uses
+  HologramSolid unchanged (picture through UV0, normals).
+- Tests: `tests/IconObjectTest.cpp` (the tracked field gives the whole
+  grid's surface, closed balls, widest slice, two fronts closed and
+  mirrored, the lighter front keeps its cut edge, files, model folders),
+  `tests/IconModelTest.cpp` (a stand-in helper: made once, read from the
+  cache, laid in the frame; a failed picture is left without),
+  RendererCapabilityTest (no models: the modelled relief shows the picture's
+  own kind).
+
 <!-- LIST_PIECE_9_BEGIN -->
 ## The owner's list, piece 9: Arch Dock's own bars — 2026-10-21
 

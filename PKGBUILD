@@ -9,9 +9,10 @@ depends=('glibc' 'gcc-libs' 'qt6-base>=6.8' 'qt6-declarative>=6.8'
          'qt6-svg' 'qt6-wayland' 'kirigami' 'kservice' 'kio'
          'kglobalaccel' 'kglobalacceld' 'libplasma>=6.8' 'plasma-workspace'
          'plasma-desktop' 'kwin' 'layer-shell-qt>=6.8' 'kpackage' 'kconfig' 'plasma5support')
-makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d' 'qt6-shadertools')
+makedepends=('cmake' 'make' 'gcc' 'pkgconf' 'qt6-quick3d' 'qt6-shadertools' 'onnxruntime-cpu')
 optdepends=('qt6-quick3d: optional true 3D rendering; ordinary renderers work without it'
-            'kpipewire: optional live window thumbnails')
+            'kpipewire: optional live window thumbnails'
+            'onnxruntime-cpu: 3D icons made into objects (with the icon models installed)')
 # Bound compiler/linker memory, including when makepkg enables LTO by default.
 options=('!lto' '!debug')
 source=("arch-dock-${pkgver}.tar.gz")

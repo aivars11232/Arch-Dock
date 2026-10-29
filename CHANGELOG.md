@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **Applications and folders drop onto Empty panels.** Dragging an
+  application or a folder onto an Empty panel showed the forbidden sign and
+  added nothing, while widgets could be added; on a Plasma panel the drop
+  even made a Plasma icon widget beside the panel's "+". An Empty panel now
+  takes them as its own items, as a Launcher panel does.
+- **Real 3D icons, made by an AI model.** With Icons > 3D, each icon was its
+  picture pressed into a rounded relief with the same picture on its back.
+  The new default, Icon relief Modelled, makes every icon into a real 3D
+  object with TripoSR, an open-source model (MIT licence) that sees a picture
+  and builds the thing in it: a cat's head, a ring with a head on it. Its
+  front is kept and a mirror copy of it is its back, so from either side the
+  icon shows its front, and turned or seen from the side its face keeps its
+  shape. A small helper, arch-dock-icon-object, makes each icon once in the
+  background, about 20 seconds an icon on a four-core laptop processor, at
+  the lowest priority; the objects are kept, so an icon is never made
+  twice. Until an icon is made, and where the helper or its models are not
+  installed, it keeps its picture's own relief. 3D holograms are made of
+  the same objects, as before. The helper needs ONNX Runtime
+  (onnxruntime-cpu) and its two model files (0.84 GB); Rounded and Block
+  stay as choices.
+
 ## 0.1.1-52 — 2026-10-28
 
 - **Empty on every panel.** Panel Studio offered Empty on the panels along

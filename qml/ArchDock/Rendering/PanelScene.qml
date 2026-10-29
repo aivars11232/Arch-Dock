@@ -289,8 +289,8 @@ Item {
     readonly property real flatIconDepth: iconSolidNumber("iconDepth", 0.3, 0, 1)
     readonly property real flatIconTurn: iconSolidNumber("iconTurn", 15, -60, 60)
     readonly property real flatIconLighting: iconSolidNumber("iconLighting", 0.5, 0, 1)
-    readonly property string flatIconRelief: ["auto", "rounded", "block"].includes(String(iconSolidValue("iconRelief", "auto")))
-        ? String(iconSolidValue("iconRelief", "auto")) : "auto"
+    readonly property string flatIconRelief: ["modelled", "rounded", "block"].includes(String(iconSolidValue("iconRelief", "modelled")))
+        ? String(iconSolidValue("iconRelief", "modelled")) : "modelled"
     readonly property bool reducedMotion:
         animationProfiles
             && animationProfiles.reducedMotion !== undefined
@@ -2471,8 +2471,8 @@ Item {
                 readonly property real sceneIconDepth: surfaceLoader.true3DReady && surfaceLoader.true3DItem
                     ? Number(surfaceLoader.true3DItem.iconDepth || 0) : root.flatIconSolid ? root.flatIconDepth : 0
                 readonly property string sceneIconRelief: surfaceLoader.true3DReady && surfaceLoader.true3DItem
-                    ? String(surfaceLoader.true3DItem.iconRelief || "auto")
-                    : root.flatIconSolid ? root.flatIconRelief : "auto"
+                    ? String(surfaceLoader.true3DItem.iconRelief || "modelled")
+                    : root.flatIconSolid ? root.flatIconRelief : "modelled"
                 // 3D icons on a flat panel: the solids' switch, turn and
                 // lighting, for the icons' own 3D views.
                 readonly property bool sceneIconSolidOnFlat: root.flatIconSolid
@@ -2532,7 +2532,7 @@ Item {
             reducedMotion: root.reducedMotion
             meshVisualActive: Boolean(parent.sceneMeshActive)
             solidDepth: Number(parent.sceneIconDepth || 0)
-            solidRelief: String(parent.sceneIconRelief || "auto")
+            solidRelief: String(parent.sceneIconRelief || "modelled")
             solidOnFlat: root.flatIconSolid
             solidTurn: root.flatIconTurn
             solidLighting: root.flatIconLighting

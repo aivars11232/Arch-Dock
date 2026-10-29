@@ -676,6 +676,15 @@ function iconMesh(data, width, height, relief, options) {
     return mesh
 }
 
+// How far a 3D scene stretches a solid's depth to show it at Icon depth
+// `depth`: a modelled solid (IconModel) is made at its own depth, so by
+// the ratio of the two; the solids made here, a hundred units deep, by
+// Icon depth itself.
+function depthStretch(mesh, depth) {
+    const built = mesh ? Number(mesh.builtDepth) : 0
+    return built > 0 ? depth / built : depth
+}
+
 // The picture's mean colour, its clear pixels left out: what a glow round
 // its solid shines in when it takes the picture's own colours, a solid's
 // glow being its shape and never a flat copy of the picture.

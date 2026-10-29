@@ -578,6 +578,20 @@ private slots:
                 QTRY_VERIFY_WITH_TIMEOUT(pixels() != solidIcons, 8000);
                 QTest::qWait(300);
                 const QImage blockIcons = pixels();
+                // Asked for nothing, the icon is to be made into an object
+                // (IconModel); where objects cannot be made (no models here),
+                // it keeps its picture's own kind of relief meanwhile.
+                auto modelled = deep;
+                modelled.remove("scene3DIconRelief");
+                scene->setProperty("panelDefinition", modelled);
+                QTRY_COMPARE(renderer->property("iconRelief").toString(), QStringLiteral("modelled"));
+                const auto shownKind = [solid]() {
+                    const QVariant mesh = solid->property("mesh");
+                    if (QObject *object = objectValue(mesh)) return object->property("kind").toString();
+                    return plainValue(mesh).toMap().value(QStringLiteral("kind")).toString();
+                };
+                QTRY_VERIFY_WITH_TIMEOUT(shownKind() == QStringLiteral("rounded") || shownKind() == QStringLiteral("block"), 8000);
+                QVERIFY(!solid->property("twoSided").toBool());
                 if (!evidence.isEmpty()) {
                     QVERIFY(flatIcons.save(QDir(evidence).filePath("icons-flat.png")));
                     QVERIFY(solidIcons.save(QDir(evidence).filePath("icons-rounded.png")));

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import QtCore
 import org.kde.kirigami as Kirigami
+import ArchDock.Decorations 1.0
 import "MotionChannels.js" as MotionChannels
 import "IconSolid.js" as IconSolid
 import "LayoutEngine.js" as LayoutEngine
@@ -407,15 +408,21 @@ Item {
     width: logicalSize
     height: logicalSize
 
-    // The icon as a solid for a 3D panel (Icon depth): the glyph layer's
-    // picture, taken small, gives the block its outline from its own
-    // transparency; the scene scales the block's depth. Taken anew when the
-    // icon changes.
+    // The icon as a solid for a 3D panel (Icon depth). Made into an object
+    // ("modelled", IconModel: the icon helper's object, once made, its front
+    // seen from either side), laid where the picture lies in the glyph
+    // layer; till it is made, and where objects cannot be made, the glyph
+    // layer's picture, taken small, gives the solid its outline from its own
+    // transparency (IconSolid.js), the scene scaling its depth. Taken anew
+    // when the icon changes.
     property real solidDepth: 0
-    // "auto": the picture's own kind (a plate-shaped picture a block, any
-    // other its parts rounded); "rounded": the picture's parts inflated
-    // into rounded volumes; "block": the picture cut out as a block.
-    property string solidRelief: "auto"
+    // "modelled": the icon made into an object; "rounded": the picture's
+    // parts inflated into rounded volumes; "block": the picture cut out as
+    // a block.
+    property string solidRelief: "modelled"
+    // How far the scene stretches the solid's depth to show it at Icon
+    // depth (IconSolid.depthStretch).
+    readonly property real solidStretch: IconSolid.depthStretch(solidMesh, solidDepth)
     // Inside a 3D panel's bubble, where every icon shown with a tile stands,
     // a round picture keeps a flat back instead of rising as a ball: no
     // bubble in the bubble.
@@ -461,14 +468,31 @@ Item {
     }
     readonly property bool solidWanted: (meshVisualActive || flatSolidWanted) && solidDepth > 0
     property var solidMesh: null
+    readonly property bool solidModelled: solidRelief === "modelled" && solidModel.ready
     function refreshSolid() {
         if (!solidWanted) {
             solidMesh = null
             return
         }
-        glyphLayer.grabToImage(function(result) { solidCanvas.take(result.url) },
-                               Qt.size(solidCanvas.width, solidCanvas.height))
+        if (solidModelled)
+            solidMesh = solidModel
+        else
+            glyphLayer.grabToImage(function(result) { solidCanvas.take(result.url) },
+                                   Qt.size(solidCanvas.width, solidCanvas.height))
         refreshSolidPicture()
+    }
+    // Where the icon's own picture lies in the glyph layer the 3D scenes
+    // draw from (0 to 1 across and down): the object is laid there.
+    readonly property rect solidPictureFrame: glyphLayer.width > 0 && glyphLayer.height > 0
+        ? Qt.rect((glyph.x + glyph.width * (1 - glyph.scale) / 2) / glyphLayer.width,
+                  (glyph.y + glyph.height * (1 - glyph.scale) / 2) / glyphLayer.height,
+                  glyph.width * glyph.scale / glyphLayer.width, glyph.height * glyph.scale / glyphLayer.height)
+        : Qt.rect(0.14, 0.14, 0.72, 0.72)
+    IconModel {
+        id: solidModel
+        iconSource: root.solidWanted && root.solidRelief === "modelled" ? root.resolvedIconSource : ""
+        frame: root.solidPictureFrame
+        onModelled: if (root.solidWanted) root.refreshSolid()
     }
     onSolidWantedChanged: refreshSolid()
     onResolvedIconSourceChanged: if (solidWanted) refreshSolid()
@@ -510,7 +534,8 @@ Item {
             context.drawImage(pending, 0, 0, width, height)
             const data = context.getImageData(0, 0, width, height)
             const mesh = IconSolid.iconMesh(data.data, width, height, root.solidRelief, { globe: !root.bubbleTile })
-            root.solidMesh = mesh.indexes.length ? mesh : null
+            // An object made meanwhile comes first.
+            root.solidMesh = root.solidModelled ? solidModel : mesh.indexes.length ? mesh : null
             unloadImage(pending)
             pending = ""
         }

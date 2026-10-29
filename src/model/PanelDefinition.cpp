@@ -666,7 +666,7 @@ std::optional<PanelDefinition> PanelDefinition::fromLegacyMap(
             normalized(QStringLiteral("scene3DCameraPitch"), 25.0));
     if (record.contains(QStringLiteral("scene3DIconRelief")))
         definition.surface.parameters3D.insert(QStringLiteral("iconRelief"),
-            normalized(QStringLiteral("scene3DIconRelief"), QStringLiteral("auto")));
+            normalized(QStringLiteral("scene3DIconRelief"), QStringLiteral("modelled")));
     for (const auto &[key, parameter, fallback] :
          {std::tuple{"scene3DCameraYaw", "cameraYaw", QVariant(10.0)},
           std::tuple{"scene3DThickness", "thickness", QVariant(1.0)},

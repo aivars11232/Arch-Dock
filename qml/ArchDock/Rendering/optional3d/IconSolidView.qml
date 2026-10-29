@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick3D
 import QtQuick3D.Helpers
+import "../IconSolid.js" as IconSolid
+import ArchDock.Decorations3D 1.0
 
 // An icon's own picture as a solid on a flat panel (Icons > 3D): the solid a
 // 3D panel draws for it, cut from the picture's own transparency
@@ -32,6 +34,9 @@ View3D {
                                    : Qt.vector2d(value[0], value[1])
         })
     }
+    // An icon made into an object is drawn from its model (IconModel), in a
+    // material of its own (IconSurface).
+    readonly property bool twoSided: mesh !== null && mesh.native === true
 
     camera: camera
     environment: SceneEnvironment {
@@ -77,19 +82,31 @@ View3D {
         id: solid
         objectName: "flat-icon-solid"
         visible: root.mesh !== null && root.depth > 0
-        readonly property real lift: (root.mesh ? root.mesh.depth : 50) * root.depth
+        readonly property real stretch: IconSolid.depthStretch(root.mesh, root.depth)
+        readonly property real lift: (root.mesh ? root.mesh.depth : 50) * stretch
         position: Qt.vector3d(0, -lift * Math.sin(root.tilt), lift * Math.cos(root.tilt))
         rotation: Qt.quaternion(Math.cos(root.tilt / 2) * Math.cos(root.turnAngle / 2),
                                 Math.sin(root.tilt / 2) * Math.cos(root.turnAngle / 2),
                                 Math.cos(root.tilt / 2) * Math.sin(root.turnAngle / 2),
                                 Math.sin(root.tilt / 2) * Math.sin(root.turnAngle / 2))
-        scale: Qt.vector3d(1, 1, root.depth)
-        geometry: ProceduralMesh {
-            positions: root.mesh ? root.toVectors(root.mesh.positions, 3) : []
-            normals: root.mesh ? root.toVectors(root.mesh.normals, 3) : []
-            uv0s: root.mesh ? root.toVectors(root.mesh.uv0s, 2) : []
-            indexes: root.mesh ? root.mesh.indexes : []
+        scale: Qt.vector3d(1, 1, stretch)
+        geometry: root.twoSided ? modelledGeometry : pointsGeometry
+        property Geometry modelledGeometry: IconModelGeometry {
+            model: root.twoSided ? root.mesh : null
+        }
+        property Geometry pointsGeometry: ProceduralMesh {
+            readonly property var points: root.mesh && !root.twoSided ? root.mesh : null
+            positions: points ? root.toVectors(points.positions, 3) : []
+            normals: points ? root.toVectors(points.normals, 3) : []
+            uv0s: points ? root.toVectors(points.uv0s, 2) : []
+            indexes: points ? points.indexes : []
             primitiveMode: ProceduralMesh.Triangles
+        }
+        // An object's surface: each point in the object's own colour there,
+        // the light modelling it as far as Icon lighting says.
+        property Material surfaceMaterial: IconSurface {
+            roughness: 0.7 - 0.5 * root.lighting
+            own: 0.5 * (1 - root.lighting)
         }
         // As on a 3D panel: the light models the parts as far as Icon
         // lighting says; the rest is the picture's own brightness.
@@ -120,7 +137,7 @@ View3D {
             seed: root.icon ? root.icon.hologramSeed : 0
             brightness: 1 + 0.6 * (root.icon ? root.icon.hologram.glow : 0)
         }
-        materials: root.hologram ? [hologramMaterial] : [litMaterial]
+        materials: root.hologram ? [hologramMaterial] : root.twoSided ? [surfaceMaterial] : [litMaterial]
         // The hologram's glow (Icons > Hologram > Glow), in its colour or
         // in the picture's own as one colour, its mean: its solid a little
         // larger round it.

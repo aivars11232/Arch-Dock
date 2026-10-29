@@ -6,7 +6,9 @@ import "../GizmoMath.js" as GizmoMath
 import "../LayoutEngine.js" as LayoutEngine
 import "../PlatformGeometry.js" as PlatformGeometry
 import "../HologramLook.js" as HologramLook
+import "../IconSolid.js" as IconSolid
 import ".."
+import ArchDock.Decorations3D 1.0
 
 // The true-3D panel renderer (Qt Quick 3D), loaded only when the system can
 // draw it. It draws the theme's own platform mesh, or a platform generated
@@ -485,7 +487,7 @@ Item {
     readonly property real iconLighting: bounded("iconLighting", 0.5, 0, 1)
     readonly property string iconRelief: {
         const word = String((sceneDefinition || ({})).iconRelief || "")
-        return word === "block" || word === "rounded" ? word : "auto"
+        return word === "block" || word === "rounded" ? word : "modelled"
     }
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
         .times(camera.sceneRotation)
@@ -995,12 +997,13 @@ Item {
         // Each half of the shell, from the icon's middle: as deep as the
         // bubble is wide (a ball round a circle, a rhombus with depth round a
         // diamond, never a flat lens), and past the icon's reach.
-        const height = Math.max(diameter, 0.15 + 1.25 * root.iconDepth * reach * 0.0144 * pictureScale)
+        const stretch = IconSolid.depthStretch(mesh, root.iconDepth)
+        const height = Math.max(diameter, 0.15 + 1.25 * stretch * reach * 0.0144 * pictureScale)
         // The icon's middle: its picture's plane plus half its volume, in
         // the tile's frame (the glyph's plane sits a hundredth of the cell
         // before the tile, the volume's back on it; a hologram's volume
         // stands half as far forward), at the size it is drawn in its bubble.
-        const middle = 0.02 + 0.02 * (mesh ? Number(mesh.depth || 0) : 0) * root.iconDepth
+        const middle = 0.02 + 0.02 * (mesh ? Number(mesh.depth || 0) : 0) * stretch
             * (root.iconHologram.on ? 0.5 : 1) * bubbleIconShare(shape)
         return { diameter: diameter, height: height, middle: middle }
     }
@@ -3597,12 +3600,13 @@ Item {
                             opacity: root.number(entryNode.tileMotion, "opacity", 1) * (1 - root.collapseProgress)
                             materials: tileFaceMaterial
                         }
-                        // The icon as a solid (Icon depth): its own picture's
-                        // outline cut from its transparency and drawn as a
-                        // block, the picture on its front and its back, the
-                        // walls in the picture's edge colours, the block's
-                        // back where the flat picture would lie, turned by
-                        // Icon turn so its depth shows.
+                        // The icon as a solid (Icon depth): made into an object
+                        // (Icon relief "Modelled", IconModel: its front seen
+                        // from either side) or its own picture's outline cut
+                        // from its transparency, drawn as a block or its parts
+                        // rounded (the picture on front and back); the solid's
+                        // back where the flat picture would lie, turned by Icon
+                        // turn so its depth shows.
                         Model {
                             id: solidModel
                             objectName: "mesh-icon-solid-" + entryNode.index
@@ -3619,6 +3623,9 @@ Item {
                                                            : Qt.vector2d(value[0], value[1])
                                 })
                             }
+                            // An object is drawn from its model, in a material of
+                            // its own (IconSurface).
+                            readonly property bool twoSided: mesh !== null && mesh.native === true
                             pickable: false
                             visible: shown
                             // Its back where the flat picture lay.
@@ -3627,14 +3634,27 @@ Item {
                                                   glyphModel.position.z + (mesh ? mesh.depth : 50) * scale.z
                                                       * (root.iconHologram.on ? 0.5 : 1))
                             eulerRotation: Qt.vector3d(0, glyphModel.eulerRotation.y + root.iconTurn, 0)
-                            scale: Qt.vector3d(glyphModel.scale.x, glyphModel.scale.y, glyphModel.scale.x * root.iconDepth)
+                            scale: Qt.vector3d(glyphModel.scale.x, glyphModel.scale.y,
+                                               glyphModel.scale.x * IconSolid.depthStretch(mesh, root.iconDepth))
                             opacity: glyphModel.pictureOpacity
-                            geometry: ProceduralMesh {
-                                positions: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.positions, 3) : []
-                                normals: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.normals, 3) : []
-                                uv0s: solidModel.mesh ? solidModel.toVectors(solidModel.mesh.uv0s, 2) : []
-                                indexes: solidModel.mesh ? solidModel.mesh.indexes : []
+                            geometry: twoSided ? modelledGeometry : pointsGeometry
+                            property Geometry modelledGeometry: IconModelGeometry {
+                                model: solidModel.twoSided ? solidModel.mesh : null
+                            }
+                            property Geometry pointsGeometry: ProceduralMesh {
+                                readonly property var points: solidModel.mesh && !solidModel.twoSided ? solidModel.mesh : null
+                                positions: points ? solidModel.toVectors(points.positions, 3) : []
+                                normals: points ? solidModel.toVectors(points.normals, 3) : []
+                                uv0s: points ? solidModel.toVectors(points.uv0s, 2) : []
+                                indexes: points ? points.indexes : []
                                 primitiveMode: ProceduralMesh.Triangles
+                            }
+                            // An object's surface: each point in the object's
+                            // own colour there, the light modelling it as far as
+                            // Icon lighting says.
+                            property Material surfaceMaterial: IconSurface {
+                                roughness: 0.7 - 0.5 * root.iconLighting
+                                own: 0.5 * (1 - root.iconLighting)
                             }
                             property Material litMaterial: PrincipledMaterial {
                                 lighting: PrincipledMaterial.FragmentLighting
@@ -3686,7 +3706,7 @@ Item {
                                 seed: entryNode.index * 1.37
                                 brightness: 1 + 0.6 * root.iconHologram.glow
                             }
-                            materials: !root.iconHologram.on ? [litMaterial]
+                            materials: !root.iconHologram.on ? (twoSided ? [surfaceMaterial] : [litMaterial])
                                 : threeD ? [solidHologramMaterial] : [hologramMaterial]
                             // A 3D icon's glows (Icons > Glow, a hologram's glow):
                             // its own solid a little larger, seen only from inside,

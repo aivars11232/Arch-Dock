@@ -345,6 +345,17 @@ Qt Quick 3D is optional. `AUTO` includes support when the build module is
 available; `OFF` excludes it; `ON` requires it. A build that includes 3D still
 checks runtime capability and falls back safely when the module is missing.
 
+3D icons made into objects (Icons > 3D, Icon relief Modelled) need the icon
+helper, `arch-dock-icon-object`, which is built when ONNX Runtime is found
+(Arch's `onnxruntime-cpu`; `-DARCHDOCK_ONNXRUNTIME_ROOT=` names one unpacked
+elsewhere), and its two models, `triposr-network.onnx` and
+`triposr-field.onnx` (0.84 GB together), in `arch-dock/models` in a data
+folder: for one user `~/.local/share/arch-dock/models`, or the folder
+`ARCHDOCK_ICON_OBJECT_MODELS` names. `tools/icon-objects/export-triposr.py`
+makes them from TripoSR's published weights (MIT licence). Without the helper
+or the models, 3D icons keep their pictures' own reliefs. The objects made are
+kept in `~/.cache/arch-dock/icon-objects`, one for each picture.
+
 ## Arch package
 
 For a developer package, export the approved current source into a new
@@ -440,8 +451,12 @@ their windows. Qt Quick 3D is an
 explicit build dependency so the package includes its optional renderer. It
 is an **optional runtime dependency**: the executable does not link against
 Qt Quick 3D, and ordinary rendering works when the QML module is absent.
-KPipeWire is optional for live window thumbnails. Install the recipe's
-declared build dependencies before running makepkg; it does not install them.
+KPipeWire is optional for live window thumbnails. ONNX Runtime
+(`onnxruntime-cpu`) is a build dependency so the package includes the icon
+helper, and an optional runtime dependency: without it, or without the
+helper's models, 3D icons keep their pictures' own reliefs. Install the
+recipe's declared build dependencies before running makepkg; it does not
+install them.
 
 After reviewing the resulting package, the owner can install or remove it:
 

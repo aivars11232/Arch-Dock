@@ -818,12 +818,15 @@ const QVector<Descriptor> &schemaFields()
               15.0, "surface.parameters3D.iconTurn", -60.0, 60.0, {}, true, true,
               editor("icons-3d", "Icon turn", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 1.0}, {QStringLiteral("decimals"), 0}})),
-        // Auto: a plate-shaped picture a block, any other its parts rounded;
-        // rounded: the picture's parts inflated into rounded volumes; block:
-        // the picture cut out as a block with walls.
+        // Modelled: the icon made into an object by the icon helper (its
+        // front seen from either side; till it is made, the picture's own
+        // kind of relief); rounded: the picture's parts inflated into
+        // rounded volumes; block: the picture cut out as a block with walls.
+        // A saved "auto" (block or rounded by the picture's kind) reads as
+        // the default.
         panel("scene3DIconRelief", Access::Editor, Type::String, Normalization::ChoiceLower,
-              QStringLiteral("auto"), "surface.parameters3D.iconRelief", {}, {},
-              {"auto", "rounded", "block"}, true, true,
+              QStringLiteral("modelled"), "surface.parameters3D.iconRelief", {}, {},
+              {"modelled", "rounded", "block"}, true, true,
               editor("icons-3d", "Icon relief", "combo", {"studio"}, "icon-solid")),
         // How much the light models the icon's volume: 0 keeps the picture's
         // own brightness, 1 lets the light alone shape it.

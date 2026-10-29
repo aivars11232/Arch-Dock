@@ -358,4 +358,14 @@ TestCase {
         verify(Math.abs(shapes[0].ellipse.a - 18) < 2 && Math.abs(shapes[0].ellipse.b - 8) < 2, "disc axes " + shapes[0].ellipse.a + " " + shapes[0].ellipse.b)
         verify(Math.abs(shapes[0].ellipse.angle) < 0.2, "lying flat: " + shapes[0].ellipse.angle)
     }
+
+    // A solid made here is a hundred units deep and stretched by Icon depth
+    // itself; a modelled one (IconModel) is made at its depth and stretched
+    // only by how far Icon depth has moved since.
+    function test_depthStretch() {
+        compare(IconSolid.depthStretch({ depth: 50 }, 0.4), 0.4)
+        compare(IconSolid.depthStretch(null, 0.4), 0.4)
+        compare(IconSolid.depthStretch({ builtDepth: 0.4, depth: 12 }, 0.4), 1)
+        fuzzyCompare(IconSolid.depthStretch({ builtDepth: 0.4, depth: 12 }, 0.6), 1.5, 1e-9)
+    }
 }

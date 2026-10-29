@@ -48,7 +48,7 @@ Item {
     property bool meshVisualActive: false
     // How deep, and in what shape, the 3D scene makes the icon's solid.
     property real solidDepth: 0
-    property string solidRelief: "auto"
+    property string solidRelief: "modelled"
     // 3D icons on a flat panel: the solid drawn in the icon's own 3D view.
     property bool solidOnFlat: false
     property real solidTurn: 15

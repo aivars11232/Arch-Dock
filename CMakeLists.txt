@@ -176,6 +176,9 @@ set(ARCHDOCK_OPTIONAL_RENDERING_FILES
     optional3d/PanelScene3D.qml
     optional3d/IconStyle3D.qml
     optional3d/IconSolidView.qml
+    optional3d/IconSurface.qml
+    optional3d/icon-surface.vert
+    optional3d/icon-surface.frag
     optional3d/PictureRelief.qml
     optional3d/picture-relief.vert
     optional3d/picture-relief.frag
@@ -281,6 +284,23 @@ install(FILES
   DESTINATION "${ARCHDOCK_QML_INSTALL_DIR}/ArchDock/Input")
 add_dependencies(archdock-rendering-module archdock-inputplugin)
 
+# The icons' 3D objects (IconObject.h): their files, and the steps they are
+# made by, with PyMCubes' marching cubes (BSD licence) and meshoptimizer's
+# simplifier (MIT licence), kept in thirdparty/ with their licences. Shared
+# by the decorations plugin (which reads the objects), the icon helper
+# (which makes them) and the tests.
+add_library(archdock-iconobject STATIC
+  src/decorations/IconObject.h src/decorations/IconObject.cpp
+  thirdparty/pymcubes/marchingcubes.h thirdparty/pymcubes/marchingcubes.cpp
+  thirdparty/meshoptimizer/meshoptimizer.h thirdparty/meshoptimizer/simplifier.cpp
+  thirdparty/meshoptimizer/allocator.cpp)
+set_target_properties(archdock-iconobject PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(archdock-iconobject PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
+target_include_directories(archdock-iconobject SYSTEM PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pymcubes" "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/meshoptimizer")
+target_link_libraries(archdock-iconobject PUBLIC Qt6::Core Qt6::Gui)
+target_compile_options(archdock-iconobject PRIVATE -O2)
+
 # The decoration lighting (panel decorations lit per pixel), a plugin like
 # ArchDock.Input so the dock widget in plasmashell loads it too.
 qt_add_qml_module(archdock-decorations SHARED
@@ -291,11 +311,16 @@ qt_add_qml_module(archdock-decorations SHARED
           src/decorations/DecorationTubes.h src/decorations/DecorationTubes.cpp
           src/decorations/DecorationWorker.h src/decorations/DecorationWorker.cpp
           src/decorations/DecorationBaker.h src/decorations/DecorationBaker.cpp
-          src/decorations/DecorationLayer.h src/decorations/DecorationLayer.cpp)
-target_link_libraries(archdock-decorations PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick)
+          src/decorations/DecorationLayer.h src/decorations/DecorationLayer.cpp
+          src/decorations/IconModel.h src/decorations/IconModel.cpp)
+target_link_libraries(archdock-decorations PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick archdock-iconobject)
+# Where the icon helper is installed, for the icons to find it.
+target_compile_definitions(archdock-decorations PRIVATE
+  ARCHDOCK_ICON_OBJECT_HELPER="${CMAKE_INSTALL_FULL_BINDIR}/arch-dock-icon-object")
 # Per-pixel lighting is unusably slow unoptimised, even in a debug build.
 set_source_files_properties(src/decorations/DecorationLighting.cpp src/decorations/DecorationRelief.cpp
-  src/decorations/DecorationTubes.cpp PROPERTIES COMPILE_OPTIONS "-O2")
+  src/decorations/DecorationTubes.cpp
+  PROPERTIES COMPILE_OPTIONS "-O2")
 target_include_directories(archdock-decorations PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
 set_target_properties(archdock-decorations archdock-decorationsplugin
   PROPERTIES INSTALL_RPATH "$ORIGIN")
@@ -315,7 +340,8 @@ if(ARCHDOCK_QUICK3D_BUILT)
     URI ArchDock.Decorations3D VERSION 1.0
     OUTPUT_DIRECTORY "${ARCHDOCK_RENDERING_IMPORT_ROOT}/ArchDock/Decorations3D"
     DEPENDENCIES QtQuick3D
-    SOURCES src/decorations/DecorationSolid3D.h src/decorations/DecorationSolid3D.cpp)
+    SOURCES src/decorations/DecorationSolid3D.h src/decorations/DecorationSolid3D.cpp
+            src/decorations/IconSolid3D.h src/decorations/IconSolid3D.cpp)
   target_link_libraries(archdock-decorations3d PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Quick3D
     archdock-decorations)
   target_include_directories(archdock-decorations3d PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/decorations")
@@ -631,6 +657,24 @@ if(BUILD_TESTING)
     ARCHDOCK_DECORATION_MATERIALS="${CMAKE_CURRENT_SOURCE_DIR}/qml/ArchDock/Rendering/materials")
   add_test(NAME decoration-lighting-test COMMAND decoration-lighting-test)
   set_tests_properties(decoration-lighting-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # The icons' objects, by themselves: the steps they are made by, on
+  # fields drawn for the test, and their files.
+  qt_add_executable(icon-object-test tests/IconObjectTest.cpp)
+  target_link_libraries(icon-object-test PRIVATE archdock-iconobject Qt6::Test)
+  set_source_files_properties(tests/IconObjectTest.cpp PROPERTIES COMPILE_OPTIONS "-O2")
+  add_test(NAME icon-object-test COMMAND icon-object-test)
+  set_tests_properties(icon-object-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # An icon's object as the 3D scenes take it (IconModel): asked of a
+  # stand-in helper, kept in the cache, laid in the picture's frame.
+  qt_add_executable(icon-model-test tests/IconModelTest.cpp
+    src/decorations/IconModel.h src/decorations/IconModel.cpp
+    src/decorations/DecorationWorker.h src/decorations/DecorationWorker.cpp)
+  target_include_directories(icon-model-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/decorations)
+  target_link_libraries(icon-model-test PRIVATE archdock-iconobject Qt6::Gui Qt6::Qml Qt6::Test)
+  add_test(NAME icon-model-test COMMAND icon-model-test)
+  set_tests_properties(icon-model-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   # Arch Dock's own bars shown by the bar host in a private KWin: side by side
   # on an edge, each where its list puts it, windows kept clear of them.
@@ -1126,11 +1170,12 @@ if(BUILD_TESTING)
     ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT="${ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT}")
   add_dependencies(renderer-capability-test archdock-rendering-module)
   add_test(NAME renderer-capability-software-test COMMAND renderer-capability-test)
+  # No models for the icons' objects: the tests see the pictures' reliefs.
   set_tests_properties(renderer-capability-software-test PROPERTIES ENVIRONMENT
-    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;ARCHDOCK_ICON_OBJECT_MODELS=/nonexistent")
   add_test(NAME renderer-capability-missing-module-test COMMAND renderer-capability-test)
   set_tests_properties(renderer-capability-missing-module-test PROPERTIES ENVIRONMENT
-    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;ARCHDOCK_TEST_MISSING_3D=1")
+    "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;ARCHDOCK_TEST_MISSING_3D=1;ARCHDOCK_ICON_OBJECT_MODELS=/nonexistent")
 
   qt_add_executable(
     panel-capability-resolver-test
@@ -2335,6 +2380,33 @@ install(
   DIRECTORY plasma-dock-widget/
   DESTINATION share/plasma/plasmoids/org.archdock.dock)
 install(TARGETS arch-dock-bars RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# The icon helper (arch-dock-icon-object): makes icons into 3D objects with
+# TripoSR's network, run by ONNX Runtime (Arch's onnxruntime-cpu), its two
+# models installed apart (tools/icon-objects/export-triposr.py makes them).
+# Built where ONNX Runtime is; without it the 3D icons keep their pictures'
+# own reliefs. ARCHDOCK_ONNXRUNTIME_ROOT names an unpacked ONNX Runtime
+# elsewhere.
+set(ARCHDOCK_ONNXRUNTIME_ROOT "" CACHE PATH "An ONNX Runtime unpacked outside the system")
+find_path(ARCHDOCK_ONNXRUNTIME_INCLUDE onnxruntime_cxx_api.h
+  HINTS "${ARCHDOCK_ONNXRUNTIME_ROOT}/include" PATH_SUFFIXES onnxruntime)
+find_library(ARCHDOCK_ONNXRUNTIME_LIBRARY onnxruntime HINTS "${ARCHDOCK_ONNXRUNTIME_ROOT}/lib")
+if(ARCHDOCK_ONNXRUNTIME_INCLUDE AND ARCHDOCK_ONNXRUNTIME_LIBRARY)
+  add_executable(arch-dock-icon-object
+    src/iconobject/main.cpp
+    src/iconobject/IconObjectMaker.h
+    src/iconobject/IconObjectMaker.cpp)
+  target_include_directories(arch-dock-icon-object SYSTEM PRIVATE "${ARCHDOCK_ONNXRUNTIME_INCLUDE}")
+  target_link_libraries(arch-dock-icon-object PRIVATE archdock-iconobject "${ARCHDOCK_ONNXRUNTIME_LIBRARY}")
+  target_compile_options(arch-dock-icon-object PRIVATE -O2)
+  if(ARCHDOCK_ONNXRUNTIME_ROOT)
+    set_target_properties(arch-dock-icon-object PROPERTIES BUILD_RPATH "${ARCHDOCK_ONNXRUNTIME_ROOT}/lib")
+  endif()
+  install(TARGETS arch-dock-icon-object RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  message(STATUS "Arch Dock: the icon helper is built (ONNX Runtime at ${ARCHDOCK_ONNXRUNTIME_LIBRARY})")
+else()
+  message(STATUS "Arch Dock: no ONNX Runtime, so no icon helper; 3D icons keep their pictures' reliefs")
+endif()
 install(
   DIRECTORY plasma-bar-containment/
   DESTINATION share/plasma/plasmoids/org.archdock.bar)

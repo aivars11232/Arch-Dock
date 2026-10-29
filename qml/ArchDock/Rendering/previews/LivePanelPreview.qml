@@ -305,7 +305,7 @@ Item {
                 "reducedMotion", "reducedMotion", true))
             meshVisualActive: Boolean(parent.sceneMeshActive)
             solidDepth: Number(parent.sceneIconDepth || 0)
-            solidRelief: String(parent.sceneIconRelief || "auto")
+            solidRelief: String(parent.sceneIconRelief || "modelled")
             solidOnFlat: Boolean(parent.sceneIconSolidOnFlat)
             solidTurn: Number(parent.sceneIconTurn || 0)
             solidLighting: Number(parent.sceneIconLighting === undefined ? 0.5 : parent.sceneIconLighting)
