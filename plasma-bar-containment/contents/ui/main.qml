@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
 import QtQuick.Layouts
-import QtCore
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
+import ArchDock.Rendering 1.0
 
 // An Arch Dock bar: the widgets it holds in a row along its screen edge (a
 // column on a side edge). The bar host sizes the bar's window, as long as
@@ -111,10 +111,9 @@ ContainmentItem {
             const plugin = String(child.plasmaApplet.pluginName)
             places.push({ id: String(child.plasmaApplet.id), plugin: plugin,
                           rect: Qt.rect(corner.x, corner.y, item.width, item.height),
-                          icon: root.iconWidgetPlugins.includes(plugin) ? String(child.plasmaApplet.icon || "") : "",
-                          face: child.faceDrawnByDock ? child.facePicture : "",
-                          symbol: root.symbolWidgetPlugins.includes(plugin)
-                              || /-symbolic$/.test(String(child.plasmaApplet.icon || "")),
+                          icon: WidgetKinds.iconWidget(plugin) ? String(child.plasmaApplet.icon || "") : "",
+                          face: child.drawn.faceDrawn ? child.drawn.facePicture : "",
+                          symbol: WidgetKinds.symbolWidget(plugin, child.plasmaApplet.icon),
                           title: String(child.plasmaApplet.title || ""), cap: cap,
                           expanded: item.expanded === true,
                           hovered: cap ? startCapHover.hovered : child.hovered,
@@ -174,39 +173,8 @@ ContainmentItem {
     readonly property real wantedReach: dockApplet && dockApplet.barReach !== undefined
         ? Math.max(0, Number(dockApplet.barReach)) : 0
     readonly property var shownPastRects: dockApplet && dockApplet.barShownRects ? dockApplet.barShownRects : []
-    readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
-        "org.kde.plasma.kickerdash", "org.kde.plasma.simplekickoff", "AndromedaLauncher"]
-    // Widgets that show only their icon on a panel: the launchers, Plasma's
-    // Icon and Folder widgets, and the status widgets whose icon tells how
-    // things are (a network's signal, the sound muted). The dock draws that
-    // icon as one of its own (its tile, 3D icons, holograms), following it as
-    // it changes; the widget stays under it, unseen, for its clicks and its
-    // popup. Widgets that show more than one icon (the clock, a battery's
-    // level, unread notifications) are not among them.
-    readonly property var iconWidgetPlugins: launcherPlugins.concat([
-        "org.kde.plasma.icon", "org.kde.plasma.folder", "org.kde.plasma.networkmanagement",
-        "org.kde.plasma.bluetooth", "org.kde.plasma.volume", "org.kde.plasma.clipboard",
-        "org.kde.plasma.devicenotifier", "org.kde.kdeconnect", "org.kde.plasma.printmanager",
-        "org.kde.plasma.brightness", "org.kde.kscreen"])
-    // The status widgets among them show a line drawing, which the dock draws
-    // with a body (thicker strokes) for 3D icons and holograms.
-    readonly property var symbolWidgetPlugins: ["org.kde.plasma.networkmanagement",
-        "org.kde.plasma.bluetooth", "org.kde.plasma.volume", "org.kde.plasma.clipboard",
-        "org.kde.plasma.devicenotifier", "org.kde.kdeconnect", "org.kde.plasma.printmanager",
-        "org.kde.plasma.brightness", "org.kde.kscreen"]
-    // Widgets that shape or colour the panel rather than show something
-    // (spacers, separators, Panel Colorizer): left as Plasma draws them.
-    function layoutWidget(plugin) { return /spacer|separator|colorizer/i.test(plugin) }
-    // Every other widget shows more than an icon (the clock, a battery's
-    // level, unread notifications): while the dock draws holograms, it draws
-    // that widget's face as one, from a picture of it taken each second. The
-    // system tray's icons are its own.
-    function faceWidget(plugin) {
-        return !iconWidgetPlugins.includes(plugin) && !layoutWidget(plugin)
-            && plugin !== "org.kde.plasma.systemtray" && plugin !== "org.archdock.dock"
-    }
-    readonly property string faceFolder: String(StandardPaths.writableLocation(StandardPaths.RuntimeLocation))
-        .replace(/^file:\/\//, "")
+    // Which widgets the dock draws as its own, and how, is WidgetKinds'.
+    readonly property var launcherPlugins: WidgetKinds.launcherPlugins
     function slotWith(plugins) {
         let found = null
         for (const child of row.children)
@@ -558,55 +526,21 @@ ContainmentItem {
             property bool dying: false
             // What the bar's arrangement names it by.
             readonly property string token: group ? "group:" + groupId : plasmaApplet ? String(plasmaApplet.id) : ""
-            // An icon widget's icon is drawn by the dock (`widgetPlaces`); the
-            // widget itself stays here, unseen, taking its clicks and its menu.
-            readonly property bool iconDrawnByDock: plasmaApplet !== null && applet !== null
-                && root.iconWidgetPlugins.includes(String(plasmaApplet.pluginName))
-                && root.dockApplet !== null && root.dockApplet.barDrawsWidgetIcons === true
-            // A widget that shows more than an icon: while the dock draws
-            // holograms, its face is drawn by the dock too, from a picture of
-            // it taken each second (`takeFace`); the widget stays here,
-            // unseen once its first picture is there.
-            readonly property bool faceDrawnByDock: plasmaApplet !== null && applet !== null
-                && root.faceWidget(String(plasmaApplet.pluginName))
-                && root.dockApplet !== null && root.dockApplet.barDrawsWidgetFaces === true
-            property string facePicture: ""
-            property int faceShots: 0
-            function takeFace() {
-                if (!slot.faceDrawnByDock || !slot.applet || !(slot.applet.width > 0) || !(slot.applet.height > 0))
-                    return
-                const scale = Math.max(1, Screen.devicePixelRatio)
-                const shot = slot.faceShots + 1
-                // Two pictures in turn, the next written while the last is shown.
-                const path = root.faceFolder + "/archdock-widget-face-" + slot.token + "-" + (shot % 2) + ".png"
-                slot.applet.grabToImage(function(result) {
-                    if (!slot.faceDrawnByDock || !result.saveToFile(path))
-                        return
-                    slot.faceShots = shot
-                    slot.facePicture = "file://" + path + "?" + shot
-                    root.queueWidgetPlaces()
-                }, Qt.size(Math.ceil(slot.applet.width * scale), Math.ceil(slot.applet.height * scale)))
+            // The dock draws an icon widget's icon (`widgetPlaces`), and,
+            // while it draws 3D icons or holograms, the face of a widget that
+            // shows more than an icon, from a picture of it taken each
+            // second; the widget itself stays here, unseen, taking its clicks
+            // and its menu.
+            DrawnWidget {
+                id: drawnWidget
+                applet: slot.plasmaApplet
+                widget: slot.applet
+                drawsIcons: root.dockApplet !== null && root.dockApplet.barDrawsWidgetIcons === true
+                drawsFaces: root.dockApplet !== null && root.dockApplet.barDrawsWidgetFaces === true
+                shown: slot.visible
+                onUpdated: root.queueWidgetPlaces()
             }
-            Timer {
-                interval: 1000
-                repeat: true
-                triggeredOnStart: true
-                running: slot.faceDrawnByDock && slot.visible
-                onTriggered: slot.takeFace()
-            }
-            onFaceDrawnByDockChanged: {
-                if (faceDrawnByDock)
-                    return
-                facePicture = ""
-                root.queueWidgetPlaces()
-            }
-            Binding {
-                when: slot.applet !== null
-                target: slot.applet
-                property: "opacity"
-                value: slot.iconDrawnByDock || (slot.faceDrawnByDock && slot.facePicture.length > 0) ? 0 : 1
-                restoreMode: Binding.RestoreBindingOrValue
-            }
+            property alias drawn: drawnWidget
             readonly property bool hovered: slotHover.hovered
             HoverHandler { id: slotHover }
             onHoveredChanged: root.queueWidgetPlaces()
@@ -615,17 +549,6 @@ ContainmentItem {
             onWidthChanged: root.queueWidgetPlaces()
             onHeightChanged: root.queueWidgetPlaces()
             onDragShiftChanged: root.queueWidgetPlaces()
-            Connections {
-                target: slot.plasmaApplet
-                ignoreUnknownSignals: true
-                function onIconChanged() { root.queueWidgetPlaces() }
-                function onTitleChanged() { root.queueWidgetPlaces() }
-            }
-            Connections {
-                target: slot.applet
-                ignoreUnknownSignals: true
-                function onExpandedChanged() { root.queueWidgetPlaces() }
-            }
             Component.onCompleted: root.queueWidgetPlaces()
             Component.onDestruction: root.queueWidgetPlaces()
             z: root.movingSlot === slot ? 10 : 0

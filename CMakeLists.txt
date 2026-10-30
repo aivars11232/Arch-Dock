@@ -88,6 +88,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     DecorationJob.js
     StandFrames.js
     HologramLook.js
+    WidgetKinds.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
@@ -95,6 +96,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     ThemeStateSelection.js
     IconScene.qml
     WidgetFace.qml
+    DrawnWidget.qml
     FolderExpansion.qml
     FolderTrack.qml
     IconMotionController.qml

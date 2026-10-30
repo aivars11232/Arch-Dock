@@ -12,8 +12,10 @@ ThemeStateSelection 1.0 ThemeStateSelection.js
 DecorationCatalogue 1.0 DecorationCatalogue.js
 DecorationScene 1.0 DecorationScene.js
 HologramLook 1.0 HologramLook.js
+WidgetKinds 1.0 WidgetKinds.js
 IconScene 1.0 IconScene.qml
 WidgetFace 1.0 WidgetFace.qml
+DrawnWidget 1.0 DrawnWidget.qml
 FolderExpansion 1.0 FolderExpansion.qml
 FolderTrack 1.0 FolderTrack.qml
 IconMotionController 1.0 IconMotionController.qml
