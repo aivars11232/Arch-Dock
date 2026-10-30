@@ -85,11 +85,47 @@ ContainmentItem {
     // Handed to the dock a moment after they change: bound live, the dock's
     // layout would be asked for them while it is being worked out from them.
     onGroupPlacesChanged: Qt.callLater(root.pushGroupPlaces)
-    onDockAppletChanged: Qt.callLater(root.pushGroupPlaces)
+    onDockAppletChanged: {
+        Qt.callLater(root.pushGroupPlaces)
+        root.queueWidgetPlaces()
+    }
     function pushGroupPlaces() {
         if (root.dockApplet)
             root.dockApplet.barGroupPlaces = root.groupPlaces
     }
+    // Where each widget stands, in the bar's own coordinates (the dock's too:
+    // it fills the bar underneath), handed to the dock a moment after anything
+    // of it changes: the dock draws an icon widget's icon there as one of its
+    // own icons.
+    function widgetPlaces() {
+        const places = []
+        for (const child of row.children) {
+            if (!child.plasmaApplet || !child.applet || child.dying)
+                continue
+            const cap = root.launcherSlot === child
+            if (!child.visible && !cap)
+                continue
+            const item = child.applet
+            const corner = item.mapToItem(root, 0, 0)
+            const plugin = String(child.plasmaApplet.pluginName)
+            places.push({ id: String(child.plasmaApplet.id), plugin: plugin,
+                          rect: Qt.rect(corner.x, corner.y, item.width, item.height),
+                          icon: root.iconWidgetPlugins.includes(plugin) ? String(child.plasmaApplet.icon || "") : "",
+                          title: String(child.plasmaApplet.title || ""), cap: cap,
+                          expanded: item.expanded === true,
+                          hovered: cap ? startCapHover.hovered : child.hovered,
+                          applet: child.plasmaApplet })
+        }
+        return places
+    }
+    function pushWidgetPlaces() {
+        if (root.dockApplet)
+            root.dockApplet.barWidgetPlaces = root.widgetPlaces()
+    }
+    function queueWidgetPlaces() { Qt.callLater(root.pushWidgetPlaces) }
+    onLauncherSlotChanged: queueWidgetPlaces()
+    onWidthChanged: queueWidgetPlaces()
+    onHeightChanged: queueWidgetPlaces()
     // The widgets and the dock's groups of icons in their order along the
     // bar: as arranged by dragging, then the bar's record for the rest (the
     // dock's groups in the dock's place there).
@@ -130,6 +166,11 @@ ContainmentItem {
         : ({ start: 0, end: 0 })
     readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
         "org.kde.plasma.kickerdash"]
+    // Widgets that show only their icon on a panel, as Plasma's launchers do:
+    // the dock draws that icon as one of its own (its tile, 3D icons,
+    // holograms), the widget staying under it, unseen, for its clicks and
+    // its menu.
+    readonly property var iconWidgetPlugins: launcherPlugins
     function slotWith(plugins) {
         let found = null
         for (const child of row.children)
@@ -349,6 +390,14 @@ ContainmentItem {
             x: root.vertical || !root.launcherSlot ? 0 : root.launcherSlot.dragShift
             y: root.vertical && root.launcherSlot ? root.launcherSlot.dragShift : 0
         }
+        HoverHandler {
+            id: startCapHover
+            onHoveredChanged: root.queueWidgetPlaces()
+        }
+        onXChanged: root.queueWidgetPlaces()
+        onYChanged: root.queueWidgetPlaces()
+        onWidthChanged: root.queueWidgetPlaces()
+        onHeightChanged: root.queueWidgetPlaces()
         // Edit mode: the menu is dragged along the bar like any widget.
         MouseArea {
             anchors.fill: parent
@@ -473,6 +522,39 @@ ContainmentItem {
             property bool dying: false
             // What the bar's arrangement names it by.
             readonly property string token: group ? "group:" + groupId : plasmaApplet ? String(plasmaApplet.id) : ""
+            // An icon widget's icon is drawn by the dock (`widgetPlaces`); the
+            // widget itself stays here, unseen, taking its clicks and its menu.
+            readonly property bool iconDrawnByDock: plasmaApplet !== null && applet !== null
+                && root.iconWidgetPlugins.includes(String(plasmaApplet.pluginName))
+                && root.dockApplet !== null && root.dockApplet.barDrawsWidgetIcons === true
+            Binding {
+                when: slot.applet !== null
+                target: slot.applet
+                property: "opacity"
+                value: slot.iconDrawnByDock ? 0 : 1
+                restoreMode: Binding.RestoreBindingOrValue
+            }
+            readonly property bool hovered: slotHover.hovered
+            HoverHandler { id: slotHover }
+            onHoveredChanged: root.queueWidgetPlaces()
+            onXChanged: root.queueWidgetPlaces()
+            onYChanged: root.queueWidgetPlaces()
+            onWidthChanged: root.queueWidgetPlaces()
+            onHeightChanged: root.queueWidgetPlaces()
+            onDragShiftChanged: root.queueWidgetPlaces()
+            Connections {
+                target: slot.plasmaApplet
+                ignoreUnknownSignals: true
+                function onIconChanged() { root.queueWidgetPlaces() }
+                function onTitleChanged() { root.queueWidgetPlaces() }
+            }
+            Connections {
+                target: slot.applet
+                ignoreUnknownSignals: true
+                function onExpandedChanged() { root.queueWidgetPlaces() }
+            }
+            Component.onCompleted: root.queueWidgetPlaces()
+            Component.onDestruction: root.queueWidgetPlaces()
             z: root.movingSlot === slot ? 10 : 0
             // Edit mode: a widget is dragged along the bar, following the
             // pointer as on Plasma's panels, and stands where it is let go;
@@ -618,7 +700,10 @@ ContainmentItem {
             // The application menu on the look's start is out of the row, and
             // so is a group with no icons.
             visible: !dying && root.launcherSlot !== slot && (!group || groupLength > 0)
-            onVisibleChanged: root.seat(slot)
+            onVisibleChanged: {
+                root.seat(slot)
+                root.queueWidgetPlaces()
+            }
             // Something stands before it: a widget or group, or the menu on
             // the look's start.
             readonly property bool widgetBefore: root.firstSlot !== slot || root.launcherSlot !== null

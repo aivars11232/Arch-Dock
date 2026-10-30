@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **A bar's launchers are drawn as its icons.** Plasma's Application
+  Launcher, Application Menu and Application Dashboard on an Arch Dock bar
+  kept Plasma's own flat picture, so with 3D icons or holograms on they
+  stayed plain pictures beside the dock's 3D icons and holograms, a picture
+  chosen for them included. The dock now draws their icon - the widget's
+  own, or the picture chosen for it - as one of its own icons, as large as
+  the dock's icons, where the widget stands, with the bar's tiles, 3D icons
+  and holograms; the widget stays under it and opens as before, and a click
+  on its hologram where it hangs past the bar opens it too.
+- **Widgets keep their place on a bar with holograms.** With hologram icons
+  or stands on, a bar that is always shown draws its dock in a clear window
+  over the bar; there the dock's icons lost their room among the bar's
+  widgets, so the widgets after them (a launcher, the clock) slid over them.
+  The icons keep their room, and the bar's look runs the whole bar there
+  too, as it does without holograms.
 - **Hologram icons on a 3D top panel stay on the screen, and edge panels
   tilt both ways.** On a bar or panel along the top of the screen drawn in
   3D, hologram icons rose out of the top of the screen, further the more

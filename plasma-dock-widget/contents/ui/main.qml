@@ -83,6 +83,17 @@ PlasmoidItem {
     // start and the look's end lands on the bar's end, not past it.
     readonly property real barGroupLead: barScene ? Number(barScene.barGroupsStart || 0) : 0
     property var barGroupPlaces: ({})
+    // Set by the bar: where each of its widgets stands, and the icon of each
+    // that shows only its icon, as Plasma's launchers do. This dock draws
+    // those icons as its own, where the widgets stand (read by the bar).
+    property var barWidgetPlaces: []
+    readonly property bool barDrawsWidgetIcons: barScene !== null
+    readonly property var barWidgetIcons: barDrawsWidgetIcons
+        ? (barWidgetPlaces || []).filter(function(place) { return String(place.icon || "").length > 0 }) : []
+    // As 3D icons where the dock's icons are 3D (Icons > 3D), each in a small
+    // 3D view of its own as on a flat panel: on a 3D bar the widgets stand
+    // beside its platform.
+    readonly property bool barWidgetIconSolid: barScene !== null && barScene.iconSolidValue("iconSolid", false) === true
     // How far the scene moves from the middle of its place in a bar: so that
     // its first group of icons starts where the bar put that group, or, until
     // the bar says, at the start of the place. `lead` is where that group
@@ -1566,15 +1577,17 @@ PlasmoidItem {
                     barVertical: root.vertical
                     segmentPlaces: root.drawsBarSurface ? (root.barGroupPlaces || ({})) : ({})
                     // Along a bar holding other widgets, from where the bar
-                    // starts to where it ends (not from the window the dock
-                    // overflows into, which is no bar).
-                    surfaceSpanBefore: root.drawsBarSurface && !overflowHost.hosting
+                    // starts to where it ends. Drawn in the window over the bar
+                    // (where its stands or holograms reach past it), the dock
+                    // keeps the bar's own size and place in it, so it is still
+                    // in its bar there: its groups of icons keep their room
+                    // among the bar's widgets.
+                    surfaceSpanBefore: root.drawsBarSurface
                         ? Math.max(0, root.barSurfaceBefore + (root.vertical ? y : x)) : 0
-                    surfaceSpanAfter: root.drawsBarSurface && !overflowHost.hosting
+                    surfaceSpanAfter: root.drawsBarSurface
                         ? Math.max(0, root.barSurfaceAfter + (root.vertical ? dockContent.height - y - height
                                                                             : dockContent.width - x - width)) : 0
-                    surfaceSpanThickness: root.drawsBarSurface && !overflowHost.hosting
-                        ? root.barSurfaceThickness : 0
+                    surfaceSpanThickness: root.drawsBarSurface ? root.barSurfaceThickness : 0
                     panelThickness: root.freeSurface || root.drawsBarSurface ? 0 : root.panelCrossSize
                     panelDefinition: root.scenePanelDefinition
                     runtimeState: root.sceneRuntimeState
@@ -1716,6 +1729,76 @@ PlasmoidItem {
                     }
                 }
 
+                // In a bar: its icon widgets (its application launchers), each
+                // drawn as one of this dock's icons where the widget stands -
+                // the widget's own icon, a picture chosen for it too, with the
+                // dock's tiles, 3D icons and holograms. The widget stays under
+                // its icon, unseen, taking its clicks and its menu; where its
+                // icon floats past the bar as a hologram, a click there opens
+                // it as a click on the widget would.
+                Repeater {
+                    id: barWidgetIconRepeater
+                    model: root.barWidgetIcons
+                    delegate: Item {
+                        id: widgetIconPlace
+                        required property var modelData
+                        objectName: "bar-widget-icon-" + modelData.id
+                        // On the look's start piece as large as the piece holds
+                        // it; along the bar as large as the dock's own icons.
+                        readonly property real size: modelData.cap
+                            ? Math.min(modelData.rect.width, modelData.rect.height)
+                            : Number(root.barScene && root.barScene.layoutGeometry.iconSize || root.iconSize)
+                        // Where it shows itself at rest, in the dock's coordinates.
+                        readonly property rect shownRect: Qt.rect(x + widgetIcon.restingIconRect.x,
+                            y + widgetIcon.restingIconRect.y, widgetIcon.restingIconRect.width,
+                            widgetIcon.restingIconRect.height)
+                        x: modelData.rect.x + (modelData.rect.width - size) / 2
+                        y: modelData.rect.y + (modelData.rect.height - size) / 2
+                        width: size
+                        height: size
+                        IconScene {
+                            id: widgetIcon
+                            anchors.fill: parent
+                            entry: ({ id: "widget-" + widgetIconPlace.modelData.id,
+                                      iconName: widgetIconPlace.modelData.icon,
+                                      displayName: widgetIconPlace.modelData.title })
+                            iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                            logicalSize: widgetIconPlace.size
+                            tileShape: root.configuration.iconShape
+                            tileSettings: root.configuration
+                            pedestalOnPath: false
+                            screenEdge: String(root.configuration.edge || "bottom")
+                            appearance: root.configuration.appearance
+                            vertical: root.vertical
+                            hovered: widgetIconPlace.modelData.hovered === true || widgetIconFloat.containsMouse
+                            pressed: widgetIconFloat.pressed
+                            active: widgetIconPlace.modelData.expanded === true
+                            showReflection: root.configuration.showReflections
+                            showIndicator: false
+                            reducedMotion: root.configuration.reducedMotion === true
+                            solidOnFlat: root.barWidgetIconSolid
+                            solidDepth: root.barWidgetIconSolid && root.barScene ? Number(root.barScene.flatIconDepth) : 0
+                            solidRelief: root.barScene ? String(root.barScene.flatIconRelief || "modelled") : "modelled"
+                            solidTurn: root.barScene ? Number(root.barScene.flatIconTurn) : 15
+                            solidLighting: root.barScene ? Number(root.barScene.flatIconLighting) : 0.5
+                        }
+                        MouseArea {
+                            id: widgetIconFloat
+                            x: widgetIcon.restingIconRect.x
+                            y: widgetIcon.restingIconRect.y
+                            width: widgetIcon.restingIconRect.width
+                            height: widgetIcon.restingIconRect.height
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton
+                            onClicked: {
+                                const applet = widgetIconPlace.modelData.applet
+                                if (applet && typeof applet.activated === "function")
+                                    applet.activated()
+                            }
+                        }
+                    }
+                }
+
                 DropArea {
                     id: panelDropArea
 
@@ -1756,9 +1839,17 @@ PlasmoidItem {
                         : edge === "left" ? right - representation.width
                         : edge === "right" ? -left : -top
                 }
-                shownRects: (panelScene.entryShownRects || []).map(function(rect) {
-                    return Qt.rect(panelScene.x + rect.x, panelScene.y + rect.y, rect.width, rect.height)
-                })
+                shownRects: {
+                    const rects = (panelScene.entryShownRects || []).map(function(rect) {
+                        return Qt.rect(panelScene.x + rect.x, panelScene.y + rect.y, rect.width, rect.height)
+                    })
+                    for (let index = 0; index < barWidgetIconRepeater.count; ++index) {
+                        const place = barWidgetIconRepeater.itemAt(index)
+                        if (place)
+                            rects.push(place.shownRect)
+                    }
+                    return rects
+                }
             }
         }
     }

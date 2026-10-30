@@ -1,5 +1,43 @@
 # Arch Dock current state
 
+## A bar's launchers drawn as the dock's icons; widgets keep their place with holograms — 2026-10-30
+
+- The bar (`plasma-bar-containment/contents/ui/main.qml`) hands the dock
+  `barWidgetPlaces`: every Plasma widget's place in the bar's coordinates
+  (the dock's too: it fills the bar underneath), and for icon widgets
+  (`iconWidgetPlugins` = the launchers: kickoff, kicker, kickerdash) the
+  widget's `icon` (Plasma::Applet::icon, a chosen picture included), its
+  title, whether it is open (`expanded`) and hovered, and the applet. It
+  sends them a moment after any of that changes (`queueWidgetPlaces`).
+  While the dock draws a widget's icon (`barDrawsWidgetIcons`), the widget's
+  own item stays in its place at opacity 0, taking its clicks and its menu.
+- The dock (`plasma-dock-widget/contents/ui/main.qml`) draws each with
+  `IconScene` (ArchDock.Rendering) at the widget's place: the dock's icon
+  size along the bar (the start piece's size there), its icon style, tile
+  settings and holograms, and 3D icons as on a flat panel
+  (`barWidgetIconSolid`, the scene's flat icon depth, relief, turn and
+  lighting) on flat and 3D bars alike, a 3D bar's widgets standing beside
+  its platform. A click on the icon where it hangs past the bar as a
+  hologram emits the applet's `activated()` (as its global shortcut does);
+  its shown rect joins the see-through window's input region. Inside the
+  bar the bar's own window lies above the see-through window, so the
+  widgets keep their clicks as before (measured with real clicks).
+- The jump: in the see-through window (`OverflowHost`, holograms or stands
+  on an always-shown bar) the dock set `surfaceSpanThickness` to 0, so its
+  `PanelScene` was not `inBar`, `barGroups` was empty and the bar gave its
+  icons no room: the widgets after them slid over them. The dock keeps the
+  bar's span there (its content keeps the bar's size and place in that
+  window).
+- Checked on a private desktop (`tools/p2-widgets-steps.sh`,
+  `p2-click-steps.sh`): a Plasma top panel with Application Launcher and
+  Application Dashboard given pictures of their own by Plasma script, made a
+  bar; real clicks with KWin's test pointer on the dashboard, the clock and
+  the dashboard's hanging hologram. Pictures `evidence/P2-*`.
+- From the owner's 0.1.1-53 pictures 4 and 5 (30 Oct): "When i put custom
+  icon, it doesn't go to 3D"; "custom icons don't turn to holograms at all";
+  "widgets that have icons, should behave more like icons, like they do in
+  plasma"; on the jump: "That shouldn't even be possible for Arch dock".
+
 ## Edge panels in 3D: holograms away from the screen's edge, tilt both ways — 2026-10-30
 
 - `PanelScene3D.edgeTilt` takes -60 to 60 (Panel Studio's Tilt for an edge
