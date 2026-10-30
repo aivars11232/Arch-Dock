@@ -15,7 +15,7 @@ Wayland**. It gives you panels of three kinds, all designed in one place
 - **Free panels** anywhere on the desktop: rings, arcs, circles, grids, a
   Möbius strip; turned and scaled as you like, flat or in real 3D.
 
-Version **0.1.1** (release 48). Original Arch Dock work is licensed
+Version **0.1.1** (release 54). Original Arch Dock work is licensed
 **GPL-3.0-or-later** ([LICENSE](LICENSE)); the few MIT components keep MIT.
 
 ## Install
@@ -24,7 +24,7 @@ On Arch Linux with KDE Plasma 6, one command installs the newest package;
 pacman fetches what it needs from the Arch repositories:
 
 ```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-49/arch-dock-0.1.1-49-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-54/arch-dock-0.1.1-54-x86_64.pkg.tar.zst
 systemctl --user restart plasma-plasmashell.service
 ```
 
@@ -47,25 +47,28 @@ built-in themes, 15 panel presets and 15 icon presets; your own presets and
 profiles save whole arrangements.
 
 **3D.** Panels drawn as real 3D (Qt Quick 3D) with free turning and
-scaling, materials and bending; the dock's icons as solids modelled from
-each icon's own picture (rings become tori, round icons globes, others
-bevelled prisms), with their own lighting; glass bubble tiles; stands and
-pedestals; holograms; icons mirrored in water on the river look. Icons
-always face you.
+scaling, materials and bending; the dock's icons made into real 3D objects
+from their own pictures by TripoSR, an open-source model (MIT licence), or
+pressed into rounded reliefs, with their own lighting; glass bubble tiles;
+stands and pedestals; holograms, their projector light rising from the
+middle of the panel and turned away from the screen's edge; icons mirrored
+in water on the river look. Icons always face you.
 
 **Icons.** Six icon styles, six shapes, tiles with thirteen textures,
-per-icon properties (your own picture and label), running and attention
-markers, badges and progress, window previews, and folder icons whose
-contents open as a fan, arc, ring, stack, grid or Möbius strip along the
-dock, sorted and sized as you choose (Icons in the folder's menu), with
-previews.
+per-icon properties (your own picture, chosen in KDE's file window, and
+label), running and attention markers, badges and progress, window
+previews, and folder icons whose contents open as a fan, arc, ring, grid or
+Möbius strip, or along the dock, sorted and sized as you choose (Icons in
+the folder's menu), with previews.
 
 **Bars.** Enter Edit Mode from a bar's right-click menu: Panel Studio
 opens for that bar and every widget shows its remove and settings buttons.
 Drag widgets, icons and whole groups of icons anywhere along the bar; a
 **+** beside the bar adds a Spacer, a Margins Separator or any Plasma
 widget. A bar fits its content or takes the length you set; thicker bars
-grow their icons.
+grow their icons. Plasma's launchers on a bar (Application Launcher,
+Application Menu, Application Dashboard, your own picture on them too) are
+drawn as the dock's icons, with its tiles, 3D icons and holograms.
 
 **Panel Studio.** One window per panel: General, Size, Appearance,
 Behavior, Segments, Presets, Animations, Hologram, Widgets and 3D pages for
@@ -90,8 +93,10 @@ keeps them, Cancel drops them.
 
 Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6.8 or newer, KDE
 Frameworks 6 or newer. True 3D needs Qt Quick 3D and a working GPU driver; without
-them panels fall back to flat drawing. See
-[known limitations](docs/KNOWN_LIMITATIONS.md).
+them panels fall back to flat drawing. Icons made into 3D objects need
+ONNX Runtime (`onnxruntime-cpu`) and the TripoSR model files, as the
+[installation guide](docs/INSTALL.md) describes; without them icons keep a
+relief of their picture. See [known limitations](docs/KNOWN_LIMITATIONS.md).
 
 ## Building and contributing
 

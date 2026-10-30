@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1-54 — 2026-10-30
 
 - **File dialogs show your disks.** Icon Properties' Choose custom icon,
   and the Studio's picture and profile files, opened Qt's own plain dialog:
@@ -52,6 +52,8 @@
   light, and how high an icon floats in it, are a free panel's. Tilt now
   runs from -60 to 60 degrees: below 0 the panel leans the other way, its
   side on the screen's edge going into the screen.
+
+## 0.1.1-53 — 2026-10-29
 
 - **Applications and folders drop onto Empty panels.** Dragging an
   application or a folder onto an Empty panel showed the forbidden sign and
