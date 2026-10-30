@@ -171,12 +171,19 @@ ContainmentItem {
         ? Math.max(0, Number(dockApplet.barReach)) : 0
     readonly property var shownPastRects: dockApplet && dockApplet.barShownRects ? dockApplet.barShownRects : []
     readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
-        "org.kde.plasma.kickerdash"]
-    // Widgets that show only their icon on a panel, as Plasma's launchers do:
-    // the dock draws that icon as one of its own (its tile, 3D icons,
-    // holograms), the widget staying under it, unseen, for its clicks and
-    // its menu.
-    readonly property var iconWidgetPlugins: launcherPlugins
+        "org.kde.plasma.kickerdash", "org.kde.plasma.simplekickoff", "AndromedaLauncher"]
+    // Widgets that show only their icon on a panel: the launchers, Plasma's
+    // Icon and Folder widgets, and the status widgets whose icon tells how
+    // things are (a network's signal, the sound muted). The dock draws that
+    // icon as one of its own (its tile, 3D icons, holograms), following it as
+    // it changes; the widget stays under it, unseen, for its clicks and its
+    // popup. Widgets that show more than one icon (the clock, a battery's
+    // level, unread notifications) are not among them.
+    readonly property var iconWidgetPlugins: launcherPlugins.concat([
+        "org.kde.plasma.icon", "org.kde.plasma.folder", "org.kde.plasma.networkmanagement",
+        "org.kde.plasma.bluetooth", "org.kde.plasma.volume", "org.kde.plasma.clipboard",
+        "org.kde.plasma.devicenotifier", "org.kde.kdeconnect", "org.kde.plasma.printmanager",
+        "org.kde.plasma.brightness", "org.kde.kscreen"])
     function slotWith(plugins) {
         let found = null
         for (const child of row.children)
