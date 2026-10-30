@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **File dialogs show your disks.** Icon Properties' Choose custom icon,
+  and the Studio's picture and profile files, opened Qt's own plain dialog:
+  Home and a few folders, no disks, a path bar that could not be read.
+  Plasma gives a program KDE's file window only when it is a widgets
+  application, as Plasma's own programs are; Arch Dock now is one, so its
+  file dialogs are KDE's, with Places and Devices. The Studio's colour
+  picker stays the one it was; its questions (changes not applied, removing
+  a panel from a profile) are now KDE's message boxes, with the same texts
+  and buttons.
 - **Hologram icons on a flat edge bar hang whole from the middle of the
   bar.** On a flat bar or panel along a screen edge, a hologram icon's
   light left its lens at the bar's side nearest the screen's edge, short,

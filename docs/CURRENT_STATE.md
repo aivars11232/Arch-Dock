@@ -1,5 +1,27 @@
 # Arch Dock current state
 
+## The backend is a widgets application: KDE's file dialogs — 2026-10-30
+
+- `src/main.cpp` makes the backend a `QApplication` (`Qt6::Widgets` found
+  and linked into `arch-dock`). Plasma's platform theme gives Qt Quick
+  Dialogs the native KDE helpers (file, message, colour) only in one
+  (plasma-integration `KdePlatformTheme::usePlatformNativeDialog`,
+  `qobject_cast<QApplication *>`); a `QGuiApplication` got Qt's non-native
+  dialogs, whose file dialog lists no devices.
+- Every `FileDialog` (`IconProperties.qml`, `ProfilePage.qml`, the two in
+  `SettingsPopup.qml`) is now KDE's file window. The Studio's `ColorDialog`
+  keeps the Qt Quick one (`ColorDialog.DontUseNativeDialog`). The two
+  `MessageDialog`s (`unappliedChangesDialog`, the profile remove question)
+  become KDE's boxes: Qt Quick Dialogs has no per-dialog switch for them
+  (only `Qt::AA_DontUseNativeDialogs`, for every dialog).
+- The Studio's pages import `QtQuick.Controls.Basic` and no Kirigami theme
+  colours, so they look the same (compared pixel for pixel on the private
+  desktop); the non-native dialogs' default style (KDE's) draws properly
+  now that a widgets application backs it.
+- From the owner's 0.1.1-53 picture 3 (30 Oct): "i can't access to my
+  files none of my disks are there!". Pictures:
+  `/mnt/F/archdock-audit-2026-10-08/evidence/P4-*`.
+
 ## Flat edge holograms from the middle of the bar; a hiding bar's window holds them — 2026-10-30
 
 - `PlatformGeometry.hologramLayout` gives every panel one light. With no

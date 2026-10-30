@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick)
+find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick Widgets)
 
 find_package(KF6Kirigami REQUIRED)
 find_package(KF6Service REQUIRED)
@@ -559,6 +559,7 @@ target_link_libraries(
           Qt6::Network
           Qt6::Qml
           Qt6::Quick
+          Qt6::Widgets
           KF6::Kirigami
           KF6::Service
           KF6::KIOGui

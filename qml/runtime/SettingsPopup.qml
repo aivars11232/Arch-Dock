@@ -3617,7 +3617,9 @@ Window {
         title: qsTr("Choose panel color")
         parentWindow: root
         modality: Qt.WindowModal
-        options: ColorDialog.ShowAlphaChannel
+        // Qt's own colour picker, as it always was: in a widgets application
+        // Plasma's platform theme would give it KDE's.
+        options: ColorDialog.ShowAlphaChannel | ColorDialog.DontUseNativeDialog
         onAccepted: {
             if (root.colorField !== null) {
                 // A decoration's colours are plain colours, as it is drawn

@@ -7,6 +7,7 @@
 // backend stopped. --dbus-activated marks an on-demand start, refused while a
 // stop is in force.
 
+#include <QApplication>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QCoreApplication>
@@ -149,7 +150,12 @@ int main(int argc, char *argv[])
     if (recoveryCommand || quitCommand) application = std::make_unique<QCoreApplication>(argc, argv);
     else
     {
-        auto gui = std::make_unique<QGuiApplication>(argc, argv);
+        // A widgets application, as Plasma's own programs are: Plasma's
+        // platform theme gives Qt Quick's file dialogs (Icon Properties'
+        // Choose custom icon) the KDE file window, with its places, devices
+        // and network, only to one; anything else gets Qt's own plain dialog,
+        // which shows no disks.
+        auto gui = std::make_unique<QApplication>(argc, argv);
         gui->setQuitOnLastWindowClosed(false);
         // Panel Studio's windows carry the Arch Dock icon from the icon theme.
         // The application id stays "arch-dock": the window watcher and the
