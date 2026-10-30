@@ -2,10 +2,12 @@ import QtQuick
 import "PlatformGeometry.js" as PlatformGeometry
 import "HologramLook.js" as HologramLook
 import "MotionChannels.js" as MotionChannels
+import "IconSolid.js" as IconSolid
 
 // A Plasma widget's face on a panel (its clock, a battery's level, whatever
-// it shows) drawn as the dock's hologram icons are: as light, over its own
-// projector's light. The face is a picture of the widget taken as it
+// it shows) drawn as the dock's icons are: as a 3D icon (Icons > 3D), a
+// solid with the face on its front, lit and turned as they are, and as a
+// hologram, as light over its own projector's light. The face is a picture of the widget taken as it
 // changes (`picture`), as large as the widget; the light is laid out as an
 // icon's of the panel's icon size, its lens in the middle of the widget's
 // place, turned away from the screen's edge, and the face floats upright in
@@ -30,8 +32,32 @@ Item {
     readonly property real hoverScale: magnificationEnabled && hovered
         ? MotionChannels.magnificationScale(magnification, 1) : 1
 
+    // 3D icons as on a flat panel.
+    property bool solidOnFlat: false
+    property real solidDepth: 0
+    property real solidTurn: 15
+    property real solidLighting: 0.5
+
     readonly property var hologram: HologramLook.settings(settings, "Icon")
     readonly property bool drawn: hologram.on === true && String(picture).length > 0
+    readonly property bool solidWanted: solidOnFlat && solidDepth > 0 && String(picture).length > 0
+    // What the 3D view (optional3d/IconSolidView) reads of the face, as of an
+    // icon: its solid, made from the picture, the picture on its front, and
+    // its width, which the view frames by.
+    property var solidMesh: null
+    readonly property url solidPictureUrl: picture
+    readonly property real solidFaceWidth: width
+    readonly property real logicalSize: iconSize
+    readonly property real glyphTurnAngle: 0
+    readonly property bool hologramDrawn: drawn
+    readonly property var hologramColours: colours
+    readonly property real hologramTime: time
+    readonly property real hologramSeed: seed
+    readonly property bool hologramMoving: moving
+    // Its solid stands in its place where 3D icons are on; as a hologram the
+    // face is drawn as light at its own size.
+    readonly property bool solidShown: solidWanted && !drawn && solidMesh !== null
+        && solidLoader.status === Loader.Ready
     readonly property var colours: HologramLook.colours(settings, "Icon")
     readonly property var layout: drawn
         ? PlatformGeometry.hologramLayout(settings, iconSize, false, screenEdge) : ({ on: false })
@@ -60,8 +86,64 @@ Item {
             HologramClock.release();
     }
     onMovingChanged: holdClock(moving)
-    Component.onCompleted: holdClock(moving)
+    Component.onCompleted: {
+        holdClock(moving)
+        if (solidWanted)
+            faceCanvas.take(String(picture))
+    }
     Component.onDestruction: holdClock(false)
+
+    // The face's solid: its picture read on a small canvas of its shape and
+    // made into a relief (IconSolid), again only when the picture changes.
+    Canvas {
+        id: faceCanvas
+        visible: false
+        // Fine enough to keep a clock's colons.
+        width: 256
+        height: Math.max(8, Math.round(256 * Math.max(1, root.height) / Math.max(1, root.width)))
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
+        property string pending: ""
+        property real lastSum: -1
+        function take(url) {
+            if (!root.solidWanted || !url.length)
+                return
+            pending = url
+            if (!isImageLoaded(url))
+                loadImage(url)
+            if (isImageLoaded(url))
+                requestPaint()
+        }
+        onImageLoaded: if (pending.length && isImageLoaded(pending)) requestPaint()
+        onPaint: {
+            if (!pending.length || !isImageLoaded(pending))
+                return
+            const context = getContext("2d")
+            context.reset()
+            context.clearRect(0, 0, width, height)
+            context.drawImage(pending, 0, 0, width, height)
+            const data = context.getImageData(0, 0, width, height)
+            let sum = 0
+            for (let index = 3; index < data.data.length; index += 4)
+                sum = (sum * 31 + data.data[index] + data.data[index - 1]) % 1000000007
+            unloadImage(pending)
+            pending = ""
+            if (sum === lastSum && root.solidMesh !== null)
+                return
+            lastSum = sum
+            // A face's letters and marks pressed out whole (the icons' rounded
+            // relief keeps only an icon's few large parts), even the smallest.
+            const mesh = IconSolid.iconMesh(data.data, width, height, "block", { globe: false, minimumShare: 0 })
+            root.solidMesh = mesh.indexes.length ? mesh : null
+        }
+    }
+    onPictureChanged: faceCanvas.take(String(picture))
+    onSolidWantedChanged: {
+        if (solidWanted)
+            faceCanvas.take(String(picture))
+        else
+            solidMesh = null
+    }
 
     // The picture, drawn only through the light below.
     Image {
@@ -150,9 +232,23 @@ Item {
             }
         }
 
+        // The face as a solid (light, where holograms are on), where it
+        // rests; its view larger than it by its glow.
+        Loader {
+            id: solidLoader
+            readonly property real margin: root.drawn ? 0.3 * root.iconSize : 0
+            x: root.restingRect.x - margin
+            y: root.restingRect.y + root.floating - margin
+            width: root.width + 2 * margin
+            height: root.height + 2 * margin
+            active: root.solidWanted && !root.drawn && root.solidMesh !== null
+            source: Qt.resolvedUrl("optional3d/IconSolidView.qml")
+            onLoaded: item.icon = root
+        }
+
         // The face as light, upright, where it floats.
         HologramEffect {
-            visible: root.drawn
+            visible: root.drawn && !root.solidShown
             x: root.restingRect.x
             y: root.restingRect.y + root.floating
             width: root.width

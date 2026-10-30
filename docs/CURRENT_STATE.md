@@ -24,9 +24,20 @@
   through `HologramEffect` over its own lens and light
   (`hologram-opening`/`hologram-beam` shaders), laid out by
   `PlatformGeometry.hologramLayout` at the panel's icon size, turned by
-  `standDirection`, the face upright; it grows on hover by Magnification. The
-  faces' shown rects join the see-through window's input and the reach past
-  the bar.
+  `standDirection`, the face upright; it grows on hover by Magnification. With
+  3D icons on (holograms off) it is a solid in its place: the picture read on
+  a canvas 256 wide of the face's shape, pressed out whole
+  (`IconSolid.iconMesh(..., "block", { minimumShare: 0 })`, made again only
+  when the picture changes) and drawn by `optional3d/IconSolidView.qml`, which
+  frames a face by its height (`solidFaceWidth`). `IconSolid`'s relief and
+  block meshes keep a wide picture's shape (100 units across, as far down as
+  the picture is, a block a quarter of the height thick either way; an icon's
+  square is unchanged). The faces' shown rects join the see-through window's
+  input and the reach past the bar. The dock's widget drawings are kept by
+  count (`model: ....length`), not made anew each time the bar sends its
+  list (each second, as the faces change). Open: the clock's colons are lost
+  in its 3D solid (too faint at that size); as a 3D hologram a wide face was
+  drawn too small, so faces are drawn as light at their own size there.
 - Tests: `tst_WidgetFace` (new, `widget-face-test`); pictures
   `/mnt/F/archdock-audit-2026-10-08/evidence/W1-*`.
 - From the owner (30 Oct): "make clock and other widgets that can be 3D and

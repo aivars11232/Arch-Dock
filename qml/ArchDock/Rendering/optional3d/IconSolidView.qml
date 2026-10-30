@@ -22,8 +22,11 @@ View3D {
     readonly property real lighting: icon ? Number(icon.solidLighting) : 0.5
     readonly property bool hologram: icon ? icon.hologramDrawn === true : false
     readonly property var hologramColours: icon ? icon.hologramColours || ({}) : ({})
-    // The view's size in icons.
-    readonly property real frame: icon && icon.logicalSize > 0 ? Math.max(1, width / icon.logicalSize) : 1
+    // The view's size in icons. A widget's face (WidgetFace) is as wide as
+    // its solid, which is 100 units across: the view then shows as much of
+    // its height as it is tall.
+    readonly property real frame: icon && Number(icon.solidFaceWidth) > 0 ? height / Number(icon.solidFaceWidth)
+        : icon && icon.logicalSize > 0 ? Math.max(1, width / icon.logicalSize) : 1
     function hologramColour(part) {
         return (part && part.colour) ? part.colour : "#ffffff"
     }

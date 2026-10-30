@@ -13,10 +13,11 @@
   drawing is drawn with a body, its strokes thicker, so as a 3D icon it has
   real depth and as a hologram its lines show across it, sharp at twice the
   screen's resolution. Widgets that show more than an icon - the clock with
-  its seconds, a battery's level, unread notifications - are drawn as
-  holograms over their own light while holograms are on, from a picture of
-  them taken each second, as large as they are, and grow under the pointer
-  as the icons do. Spacers, separators and Panel Colorizer stay as they
+  its seconds, a battery's level, unread notifications - are drawn from a
+  picture of them taken each second, as large as they are: as 3D icons, the
+  clock's digits pressed out into a solid, lit and turned as the icons are,
+  and as holograms over their own light; they grow under the pointer as the
+  icons do. Spacers, separators and Panel Colorizer stay as they
   are; every widget stays under its icon and opens as before.
 
 ## 0.1.1-54 — 2026-10-30

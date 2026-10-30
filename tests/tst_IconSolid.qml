@@ -60,6 +60,22 @@ TestCase {
         verify(mesh.indexes.length >= cap.length * 3, "triangulated")
     }
 
+    // A wide picture (a widget's face, a clock) keeps its shape: a hundred
+    // units across, as far down as its shape says, and a quarter of its
+    // height thick either way, as an icon's square is.
+    function test_aWidePictureKeepsItsShape() {
+        const data = picture(40, 10, function(x, y) { return true })
+        const mesh = IconSolid.solidMesh(data, 40, 10)
+        let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9
+        for (const point of mesh.positions) {
+            minX = Math.min(minX, point[0]); maxX = Math.max(maxX, point[0])
+            minY = Math.min(minY, point[1]); maxY = Math.max(maxY, point[1])
+        }
+        compare(Math.round(maxX - minX), 100, "a hundred units across")
+        compare(Math.round(maxY - minY), 25, "a quarter of that down, as the picture is")
+        compare(mesh.depth, 6.25, "a quarter of its height thick either way")
+    }
+
     function test_twoPartsGiveTwoBlocks() {
         const data = picture(16, 8, function(x, y) { return (x >= 1 && x < 6 && y >= 1 && y < 7) || (x >= 9 && x < 15 && y >= 1 && y < 7) })
         const mesh = IconSolid.solidMesh(data, 16, 8)

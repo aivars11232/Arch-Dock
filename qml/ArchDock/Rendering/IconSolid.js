@@ -198,21 +198,28 @@ function solidMesh(data, width, height, options) {
     const kept = loops.filter(function(loop) { return signedArea(loop) >= total * (settings.minimumShare || 0.01) })
     const positions = [], normals = [], uv0s = [], indexes = []
     const tolerance = settings.tolerance === undefined ? 0.75 : settings.tolerance
+    // A quarter of the picture's height either way, as for an icon's square.
+    const half = 25 * height / width
     for (const loop of kept) {
         // Picture coordinates to the glyph's frame: y up, a hundred units
-        // square, wound counter-clockwise seen from the front.
-        const polygon = simplify(loop, tolerance).map(function(point) {
-            return [(point[0] / width - 0.5) * 100, (0.5 - point[1] / height) * 100, point[0] / width, 1 - point[1] / height]
+        // across and down as far as the picture's shape says (a hundred, for
+        // an icon's square), wound counter-clockwise seen from the front.
+        // A small mark (a clock's colon) kept as traced, where simplifying
+        // would leave it less than a triangle.
+        const simplified = simplify(loop, tolerance)
+        const polygon = (simplified.length >= 3 ? simplified : loop).map(function(point) {
+            return [(point[0] / width - 0.5) * 100, (0.5 - point[1] / height) * 100 * height / width,
+                    point[0] / width, 1 - point[1] / height]
         })
         if (signedArea(polygon) < 0) polygon.reverse()
         if (polygon.length < 3) continue
         const front = positions.length
         for (const point of polygon) {
-            positions.push([point[0], point[1], 25]); normals.push([0, 0, 1]); uv0s.push([point[2], point[3]])
+            positions.push([point[0], point[1], half]); normals.push([0, 0, 1]); uv0s.push([point[2], point[3]])
         }
         const back = positions.length
         for (const point of polygon) {
-            positions.push([point[0], point[1], -25]); normals.push([0, 0, -1]); uv0s.push([point[2], point[3]])
+            positions.push([point[0], point[1], -half]); normals.push([0, 0, -1]); uv0s.push([point[2], point[3]])
         }
         for (const triangle of triangulate(polygon)) {
             indexes.push(front + triangle[0], front + triangle[1], front + triangle[2])
@@ -234,7 +241,7 @@ function solidMesh(data, width, height, options) {
             const slide = Math.min(inset, length / 200)
             const along = [dx / length * slide, dy / length * slide]
             const base = positions.length
-            positions.push([a[0], a[1], 25], [b[0], b[1], 25], [b[0], b[1], -25], [a[0], a[1], -25])
+            positions.push([a[0], a[1], half], [b[0], b[1], half], [b[0], b[1], -half], [a[0], a[1], -half])
             normals.push(normal, normal, normal, normal)
             const atA = [a[2] + inward[0] + along[0], a[3] + inward[1] + along[1]]
             const atB = [b[2] + inward[0] - along[0], b[3] + inward[1] - along[1]]
@@ -242,7 +249,7 @@ function solidMesh(data, width, height, options) {
             indexes.push(base, base + 2, base + 1, base, base + 3, base + 2)
         }
     }
-    return { positions: positions, normals: normals, uv0s: uv0s, indexes: indexes, loops: kept.length, depth: 25 }
+    return { positions: positions, normals: normals, uv0s: uv0s, indexes: indexes, loops: kept.length, depth: half }
 }
 
 // ---------------------------------------------------------------------
@@ -579,7 +586,9 @@ function reliefMesh(data, width, height, options) {
             const slopeY = (at(x, y - 1) - at(x, y + 1)) / (2 * unit)
             const length = Math.hypot(slopeX, slopeY, 1)
             const normal = [-slopeX / length, -slopeY / length, 1 / length]
-            const px = (placeX[corner] / width - 0.5) * 100, py = (0.5 - placeY[corner] / height) * 100
+            // 100 units across; down as far as the picture's own shape says
+            // (as far, for an icon's square picture; less, for a wide face).
+            const px = (placeX[corner] / width - 0.5) * 100, py = (0.5 - placeY[corner] / height) * 100 * height / width
             front[corner] = positions.length
             positions.push([px, py, z[corner]]); normals.push(normal); uv0s.push(uv[corner])
             back[corner] = positions.length
