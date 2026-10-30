@@ -139,10 +139,19 @@ PlasmoidItem {
     // Dock's own window over the panel (OverflowHost) - while the panel is
     // always shown. Plasma hides an auto-hiding panel through the
     // compositor, unseen by its widgets, and keeps it shown while a window
-    // of theirs is; such a panel draws its dock in itself as before.
-    readonly property bool dockReachesPastPanel: !freeSurface
-        && (String(configuration.pedestalShape || "none") !== "none" || configuration.hologramIcons === true)
+    // of theirs is; such a panel draws its dock in itself as before. An Arch
+    // Dock bar that hides at times reaches past itself in its own window,
+    // made that much deeper (barReach), which hides with it.
+    readonly property bool standsOrHolograms: String(configuration.pedestalShape || "none") !== "none"
+        || configuration.hologramIcons === true
+    readonly property bool dockReachesPastPanel: !freeSurface && standsOrHolograms
         && String(configuration.visibilityMode || "always") === "always"
+    // Read by the bar: how far past its inner side this dock's stands and
+    // holograms reach while it hides at times, and where they show there, in
+    // the dock's own coordinates.
+    readonly property real barReach: drawsBarSurface && standsOrHolograms && !dockReachesPastPanel
+        && activeDockRepresentation ? Math.max(0, Math.ceil(activeDockRepresentation.reachPast || 0)) : 0
+    readonly property var barShownRects: barReach > 0 ? activeDockRepresentation.shownPast || [] : []
     // How thick the edge panel is across its edge: the widget's own size
     // there, which Plasma gives it.
     readonly property real panelCrossSize: activeDockRepresentation
@@ -1423,6 +1432,10 @@ PlasmoidItem {
             // the displayed owner may report host facts or open its preview.
             readonly property bool authoritativeHost:
                 root.activeDockRepresentation === representation
+            // How far past the panel the dock is drawn and where it shows
+            // something there (read by a bar that hides at times).
+            readonly property real reachPast: overflowHost.reach
+            readonly property var shownPast: overflowHost.shownRects
 
             function publishHostConcealed() {
                 if (authoritativeHost)

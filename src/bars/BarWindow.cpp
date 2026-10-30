@@ -10,6 +10,8 @@
 #include <QQuickItem>
 #include <QScreen>
 
+#include <algorithm>
+
 Q_LOGGING_CATEGORY(archdockBars, "archdock.bars", QtWarningMsg)
 
 namespace ArchDock::Bars
@@ -60,7 +62,10 @@ BarWindow::BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, c
     m_layer->setCloseOnDismissed(false);
 
     if (QQuickItem *root = rootObject())
+    {
         connect(root, SIGNAL(wantedLengthChanged()), this, SIGNAL(wantedLengthChanged()));
+        connect(root, SIGNAL(wantedReachChanged()), this, SIGNAL(wantedReachChanged()));
+    }
 
     m_concealTimer.setSingleShot(true);
     m_concealTimer.setInterval(ConcealDelayMs);
@@ -81,6 +86,24 @@ int BarWindow::wantedLength() const
     return root ? root->property("wantedLength").toInt() : 0;
 }
 
+int BarWindow::wantedReach() const
+{
+    const QQuickItem *root = rootObject();
+    return root ? std::max(0, root->property("wantedReach").toInt()) : 0;
+}
+
+QRect BarWindow::barGeometry() const
+{
+    const QRect window = geometry();
+    if (m_edge == QStringLiteral("top"))
+        return window.adjusted(0, 0, 0, -m_reach);
+    if (m_edge == QStringLiteral("left"))
+        return window.adjusted(0, 0, -m_reach, 0);
+    if (m_edge == QStringLiteral("right"))
+        return window.adjusted(m_reach, 0, 0, 0);
+    return window.adjusted(0, m_reach, 0, 0);
+}
+
 void BarWindow::place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
                       int roomBefore, int roomAfter)
 {
@@ -91,14 +114,18 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
         return;
     }
     const bool vertical = sideEdge(edge);
+    m_reach = wantedReach();
     if (QQuickItem *root = rootObject())
     {
         root->setProperty("vertical", vertical);
+        root->setProperty("edge", edge);
         root->setProperty("editRoomBefore", roomBefore);
         root->setProperty("editRoomAfter", roomAfter);
+        root->setProperty("barThickness", thickness);
     }
     start -= roomBefore;
     length += roomBefore + roomAfter;
+    const int depth = thickness + m_reach;
 
     // Anchored to its edge and the edge's start, so that its margin along
     // the edge is where it starts.
@@ -122,13 +149,13 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
     {
         anchors = Window::Anchors(Window::AnchorRight | Window::AnchorTop);
         margins = QMargins(0, start, margin, 0);
-        at = QPoint(area.x() + area.width() - margin - thickness, area.y() + start);
+        at = QPoint(area.x() + area.width() - margin - depth, area.y() + start);
     }
     else
     {
         anchors = Window::Anchors(Window::AnchorBottom | Window::AnchorLeft);
         margins = QMargins(start, 0, 0, margin);
-        at = QPoint(area.x() + start, area.y() + area.height() - margin - thickness);
+        at = QPoint(area.x() + start, area.y() + area.height() - margin - depth);
     }
 
     // A layer-shell surface belongs to one screen from when it is shown: to
@@ -152,7 +179,7 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
     // The compositor places the bar by its anchors and margins. Its place on
     // the screen is kept here too, as Plasma keeps a panel's, for whatever
     // places itself from it: the dock's popups and its window past the bar.
-    setGeometry(QRect(at, vertical ? QSize(thickness, length) : QSize(length, thickness)));
+    setGeometry(QRect(at, vertical ? QSize(depth, length) : QSize(length, depth)));
     if (!isVisible())
         show();
     // The compositor takes a new place with the bar's next frame, which a bar

@@ -164,6 +164,12 @@ ContainmentItem {
     // the system tray's button for the icons it hides (^), in any look.
     readonly property var endCaps: dockApplet && dockApplet.barEndCaps ? dockApplet.barEndCaps
         : ({ start: 0, end: 0 })
+    // While the bar hides at times, how far past its inner side the dock's
+    // stands and holograms reach, and where they show there, in the bar's
+    // own coordinates: the bar's window reaches that far (the bar's view).
+    readonly property real wantedReach: dockApplet && dockApplet.barReach !== undefined
+        ? Math.max(0, Number(dockApplet.barReach)) : 0
+    readonly property var shownPastRects: dockApplet && dockApplet.barShownRects ? dockApplet.barShownRects : []
     readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
         "org.kde.plasma.kickerdash"]
     // Widgets that show only their icon on a panel, as Plasma's launchers do:

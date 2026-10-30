@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Hologram icons on a flat edge bar hang whole from the middle of the
+  bar.** On a flat bar or panel along a screen edge, a hologram icon's
+  light left its lens at the bar's side nearest the screen's edge, short,
+  the icon sitting deep in it; on a bar that hides at times (dodge windows,
+  cover, auto-hide) the bar's window cut the icons off at its edge. The
+  lens now lies in the middle of the bar, and the light and the icon
+  floating in it are a free panel's, turned away from the screen's edge:
+  on a top bar the icons hang under it. A bar that hides at times makes its
+  window deeper for them, so they show whole and hide with the bar, and a
+  hanging hologram takes the pointer as the bar does; when the bar hides,
+  and how, is as before.
+- **3D icons keep their picture.** A 3D icon on a flat panel takes its
+  picture once; asked for while its window was not shown yet (the dock
+  moving into its window over the bar as hologram icons were switched on)
+  it got none and stayed empty. It now takes it once the window shows.
 - **A bar's launchers are drawn as its icons.** Plasma's Application
   Launcher, Application Menu and Application Dashboard on an Arch Dock bar
   kept Plasma's own flat picture, so with 3D icons or holograms on they

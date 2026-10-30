@@ -355,6 +355,7 @@ void BarHost::applyRecords(const QList<BarRecord> &records)
             // any widget can start a program.
             m_wholeCollections.reset();
             connect(bar, &BarWindow::wantedLengthChanged, this, &BarHost::scheduleLayout);
+            connect(bar, &BarWindow::wantedReachChanged, this, &BarHost::scheduleLayout);
             connect(bar, &BarWindow::pointerInsideChanged, this, [this] { m_evaluateTimer.start(); });
         }
     }
@@ -541,7 +542,9 @@ void BarHost::evaluateBars()
             continue;
         ArchDock::PanelVisibilityInput input;
         input.mode = ArchDock::panelVisibilityModeFromString(record.visibilityMode);
-        input.panelGeometry = bar->geometry();
+        // The bar itself: windows keep clear of it, not of the room its
+        // window reaches past it for its dock's stands and holograms.
+        input.panelGeometry = bar->barGeometry();
         input.panelScreenIndex = int(screens.indexOf(bar->screen()));
         input.windows = m_windows;
         input.dodgeAnyWindow = true;

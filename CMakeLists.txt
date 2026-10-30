@@ -690,6 +690,15 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-bar-host-smoke.sh)
   set_tests_properties(bar-host-smoke PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+  # A bar's window: the bar at its edge, and the room past it for its dock's
+  # stands and holograms while it hides at times.
+  add_test(
+    NAME bar-view-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_BarView.qml)
+  set_tests_properties(bar-view-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
   # Arch Dock's bars, by themselves: where each stands on its edge, and what
   # the backend's list of them says.
   qt_add_executable(bar-autostart-test tests/BarAutostartTest.cpp

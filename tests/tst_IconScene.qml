@@ -17,6 +17,30 @@ TestCase {
         IconScene {}
     }
 
+    // An icon in a window not shown yet, as a dock moving into its window
+    // over an edge panel is, with 3D icons on a flat panel.
+    Component {
+        id: hiddenWindowComponent
+
+        Window {
+            property alias scene: hiddenScene
+            width: 120
+            height: 120
+            visible: false
+
+            IconScene {
+                id: hiddenScene
+                entry: ({ appId: "org.example.app", displayName: "Example",
+                          iconName: "application-x-executable", windowCount: 0 })
+                logicalSize: 64
+                reducedMotion: true
+                solidOnFlat: true
+                solidDepth: 0.5
+                solidRelief: "rounded"
+            }
+        }
+    }
+
     Component {
         id: maskStatusObserverComponent
 
@@ -62,6 +86,21 @@ TestCase {
         if (GraphicsInfo.api === GraphicsInfo.Software || GraphicsInfo.api === GraphicsInfo.Unknown)
             return true
         return effect.status === ShaderEffect.Compiled
+    }
+
+    // A 3D icon on a flat panel takes its picture while its window is shown:
+    // one asked for in a window not shown yet is taken once it shows, or the
+    // icon would keep none and stay empty.
+    function test_flatSolidPictureWaitsForItsWindow() {
+        const window = createTemporaryObject(hiddenWindowComponent, testCase)
+        verify(window !== null)
+        const scene = window.scene
+        tryVerify(() => scene.glyphGrabWaiting, 3000, "a picture asked for in a hidden window waits")
+        compare(scene.solidPictureUrl, "", "no picture taken while hidden")
+        window.visible = true
+        tryVerify(() => scene.solidPictureUrl.length > 0, 5000, "taken once the window shows")
+        verify(!scene.glyphGrabWaiting)
+        window.visible = false
     }
 
     function test_hologramIconIsDrawnAsLight() {

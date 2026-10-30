@@ -624,14 +624,27 @@ TestCase {
         compare(PlatformGeometry.hologramLayout({}, 52, false, "bottom").on, false, "no hologram by default")
         compare(PlatformGeometry.hologramLayout({ hologramIcons: true, hologramBeam: false }, 52, false, "bottom").on,
                 false, "a hologram without its light stays in its place")
+        // A free panel's light rises tall from a lens on the path, the icon
+        // high in its wide end.
+        const free = PlatformGeometry.hologramLayout({ hologramIcons: true }, 52, true, "")
+        fuzzyCompare(free.lift, 52 * 0.95, 1e-6)
+        fuzzyCompare(free.opening.y, 0, 1e-6, "its lens lies on the path")
+        fuzzyCompare(free.beam.length, free.lift + 52 * 0.42, 1e-6, "it reaches into the icon's near part")
         for (const edge of ["bottom", "top", "left", "right"]) {
+            // An edge panel's light is a free panel's: its lens in the middle
+            // of the icon's cell, the icon hanging out of the panel.
+            const bare = PlatformGeometry.hologramLayout({ hologramIcons: true }, 52, false, edge)
+            fuzzyCompare(bare.opening.y, 0, 1e-6, edge + ": its lens lies in the middle of its cell")
+            fuzzyCompare(bare.lift, free.lift, 1e-6, edge + ": the light is a free panel's")
+            fuzzyCompare(bare.raise, free.raise, 1e-6, edge + ": the icon floats as high in it")
+            fuzzyCompare(bare.beam.length, free.beam.length, 1e-6)
+            verify(bare.raise > 52, edge + ": the icon hangs out of its cell")
             for (const shape of ["none", "plate", "star", "ring", "projector", "column"]) {
                 const values = { hologramIcons: true, pedestalShape: shape }
                 const layout = PlatformGeometry.hologramLayout(values, 52, false, edge)
                 verify(layout.on, edge + " " + shape)
                 verify(layout.raise > 0, edge + " " + shape + ": the icon lies away from the screen edge")
-                verify(layout.wraps, "an edge panel's light wraps its icon")
-                fuzzyCompare(layout.beam.length, layout.lift + 52 * 1.05, 1e-6, "it reaches on past the icon")
+                fuzzyCompare(layout.beam.length, layout.lift + 52 * 0.42, 1e-6, "it reaches into the icon's near part")
                 verify(layout.beam.endHalf > layout.beam.startHalf, "the light widens as it rises")
                 if (shape !== "none") {
                     verify(layout.opening.y >= layout.standTop - 1e-6
@@ -644,10 +657,5 @@ TestCase {
                 verify(higher.raise > layout.raise, "Light height lifts the icon higher")
             }
         }
-        // A free panel's light rises tall, the icon high in its wide end.
-        const free = PlatformGeometry.hologramLayout({ hologramIcons: true }, 52, true, "")
-        verify(!free.wraps)
-        fuzzyCompare(free.lift, 52 * 0.95, 1e-6)
-        fuzzyCompare(free.opening.y, 0, 1e-6, "its lens lies on the path")
     }
 }

@@ -39,11 +39,20 @@ public:
 
     // How long the bar's widgets want it to be along its edge.
     [[nodiscard]] int wantedLength() const;
+    // How far past the bar's inner side what it shows reaches while the bar
+    // hides at times (its dock's stands and holograms): its window is that
+    // much deeper, so that they are not cut at the window's edge and hide
+    // with the bar. A bar always shown has its dock drawn in the dock's own
+    // window past it and asks for none.
+    [[nodiscard]] int wantedReach() const;
+    // The bar on the screen: its window without the room past its inner side.
+    [[nodiscard]] QRect barGeometry() const;
     // Stands the bar on this screen against `edge`, `start` pixels along it
     // from the edge's start (its left, or its top on a side edge), `length`
     // long, `thickness` deep and `margin` pixels off the edge. Shown unless
     // it has no length. Its window reaches `roomBefore` pixels past its start
-    // and `roomAfter` past its end, for edit mode's + to stand outside it.
+    // and `roomAfter` past its end, for edit mode's + to stand outside it,
+    // and the wanted reach past its inner side.
     void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
                int roomBefore = 0, int roomAfter = 0);
 
@@ -61,6 +70,7 @@ public:
 
 Q_SIGNALS:
     void wantedLengthChanged();
+    void wantedReachChanged();
     void pointerInsideChanged();
 
 protected:
@@ -72,6 +82,8 @@ private:
     LayerShellQt::Window *m_layer = nullptr;
     QPointer<QScreen> m_screen;
     QString m_edge;
+    // The room the window reaches past the bar's inner side.
+    int m_reach = 0;
     QPointer<ScreenEdgeManager> m_edges;
     std::unique_ptr<AutoHideEdge> m_autoHide;
     QTimer m_concealTimer;

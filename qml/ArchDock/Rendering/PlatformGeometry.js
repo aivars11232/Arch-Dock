@@ -627,14 +627,15 @@ var hologramOpeningView = 28
 // A hologram icon over its projector's light (Icons > Hologram, Projector
 // light on), in its stand's frame: the light rises toward -y as on a
 // bottom panel and the scene turns the frame as standDirection says, the
-// icon itself staying upright. Where the light's opening lies (the middle
-// of the stand's top, or on the panel where there is no stand) and how wide
-// it is seen; how far the light reaches and how wide it ends, the icon's
-// near part in its wide end; how far the icon rises from its cell's middle.
-// Its stand stands on the panel at the icon's place, its middle on the
-// cell's, as on a free panel's path; with no stand the opening lies on the
-// panel at the cell's edge side of an edge panel, on a free panel's path. On a side panel the light is short and wide, wrapping
-// the icon close round like a halo. `above`, `below` and `across` are how
+// icon itself staying upright. On every panel the light leaves a lens in
+// the middle of the icon's stand's top, or in the middle of its cell where
+// it has no stand (on a free panel's path and in an edge panel's row
+// alike), and rises tall, the icon floating high in its widening end: on an
+// edge panel it hangs out of the panel, away from the screen's edge. Where
+// the lens lies and how wide it is seen; how far the light reaches and how
+// wide it ends, the icon's near part in its wide end; how far the icon
+// rises from its cell's middle. Its stand stands on the panel at the icon's
+// place, its middle on the cell's. `above`, `below` and `across` are how
 // far the whole reaches past the cell, glow and float included.
 function hologramLayout(values, size, onPath, edge) {
     const v = values || ({})
@@ -642,13 +643,8 @@ function hologramLayout(values, size, onPath, edge) {
     const direction = standDirection(edge, onPath)
     if (!(v.hologramIcons === true && v.hologramBeam !== false))
         return { on: false, direction: direction }
-    const side = direction.name === "left" || direction.name === "right"
-    // An edge panel's light is short and its icon sits deep in it, the
-    // light reaching on past the icon and round it like a halo; a free
-    // panel's rises tall, the icon floating high in its widening end.
-    const wraps = onPath !== true
     const height = clamp(finite(v.hologramBeamHeight, 1), 0.2, 2)
-    const lift = icon * height * (wraps ? 0.3 : 0.95)
+    const lift = icon * height * 0.95
     const stand = pedestalLayout(v, icon, onPath === true)
     let standTop = 0, opening = 0, rx = 0, ry = 0, hole = false, nearEnd = 0
     if (stand.drawn) {
@@ -665,26 +661,25 @@ function hologramLayout(values, size, onPath, edge) {
         hole = spot.hole
         nearEnd = standTop + stand.height
     } else {
-        rx = icon * (side ? 0.36 : 0.4)
+        rx = icon * 0.4
         ry = rx * Math.sin(hologramOpeningView * Math.PI / 180)
-        // On the panel at the cell's edge side.
-        opening = onPath === true ? 0 : icon / 2 - ry
+        // In the middle of the icon's cell.
+        opening = 0
         nearEnd = opening + ry
     }
     const nearEdge = opening - lift
     const raise = icon / 2 - nearEdge
-    const length = lift + icon * (wraps ? 1.05 : 0.42)
+    const length = lift + icon * 0.42
     const startHalf = Math.max(icon * 0.08, rx * 0.95)
-    const endHalf = icon * (wraps ? 0.72 : 0.59)
+    const endHalf = icon * 0.59
     // Its glow and float reach past the icon and the light.
     const glow = icon * 0.3
     const farEnd = Math.min(nearEdge - icon, opening - length) - glow - icon * 0.03
     const acrossHalf = Math.max(icon / 2 + glow, rx, endHalf, stand.drawn ? stand.width / 2 : 0)
-    return { on: true, direction: direction, side: side, wraps: wraps, lift: lift, raise: raise,
+    return { on: true, direction: direction, lift: lift, raise: raise,
              stand: stand, standTop: standTop,
              opening: { y: opening, rx: rx, ry: ry, hole: hole },
-             beam: { start: opening, length: length, startHalf: startHalf, endHalf: endHalf,
-                     fade: wraps ? 0.9 : 1.6 },
+             beam: { start: opening, length: length, startHalf: startHalf, endHalf: endHalf, fade: 1.6 },
              above: Math.max(0, -farEnd - icon / 2), below: Math.max(0, nearEnd + icon * 0.05 - icon / 2),
              across: Math.max(0, acrossHalf - icon / 2) }
 }

@@ -1,5 +1,47 @@
 # Arch Dock current state
 
+## Flat edge holograms from the middle of the bar; a hiding bar's window holds them — 2026-10-30
+
+- `PlatformGeometry.hologramLayout` gives every panel one light. With no
+  stand the lens lies in the middle of the icon's cell (`opening` 0) on an
+  edge panel as on a free panel's path; the light reaches 0.95 x Light
+  height (`lift`) and 0.42 of an icon into the icon's near part, half-width
+  0.59 at its end, fade 1.6; the scene turns the frame by `standDirection`
+  (top down, left right, right left, bottom up), the icons upright. The
+  edge-only short light (`wraps`: lift 0.3, 1.05, 0.72, fade 0.9, 22
+  streaks in `IconScene`) and the lens at the cell's edge side are gone;
+  free panels' numbers are unchanged (compared for every stand shape).
+- A bar that hides at times (dodge, cover, auto-hide) draws its dock in its
+  own window, which KWin hides at its edge. The dock tells the bar how far
+  its stands and holograms reach past it and where they show (`barReach`,
+  `barShownRects`: what `OverflowHost` uses for an always-shown bar); the
+  containment passes them on (`wantedReach`, `shownPastRects`); the bar
+  shell's view (`plasma-bar-shell/contents/views/Bar.qml`) asks for that
+  room (`wantedReach`), keeps the containment at the edge as deep as the
+  bar (`barThickness`, set by the bar host; `reachPast` is what the window
+  has beyond it) and gives the window an input outline of the bar and the
+  shown rects (`WindowInputShape`); `BarWindow::place` makes the window
+  that much deeper on its inner side. Dodging measures the bar alone
+  (`BarWindow::barGeometry`). A hanging hologram is inside the outline, so
+  it keeps an auto-hiding bar shown and takes clicks; the rest passes
+  through. Plasma opens a widget's popup outside a window's input outline
+  (libplasma `PopupPlasmaWindow`: `mask().boundingRect()`), so on such a
+  bar the popups open under the hanging holograms. An always-shown bar
+  keeps the see-through window (`OverflowHost`); Plasma's own panels that
+  hide still draw inside Plasma's window.
+- `IconScene`: a 3D icon on a flat panel whose glyph picture cannot be
+  taken (`grabToImage` refuses while the item's window is not shown, as
+  when the dock moves into `OverflowHost`) takes it again once the window
+  shows (`glyphGrabWaiting`, `takeWaitingGrab`).
+- Tests: `tst_PlatformGeometry` (edge light = free light, lens in the
+  cell's middle), `tst_BarView` (new, `bar-view-test`), and
+  `tst_IconScene::test_flatSolidPictureWaitsForItsWindow`. Pictures:
+  `/mnt/F/archdock-audit-2026-10-08/evidence/P3-*`.
+- From the owner's 0.1.1-53 picture 5 (30 Oct): "the hologram light should
+  come from mid panel, so it kind of hangs of the panel, and gets cut off,
+  is because of that invisible panel box"; "The lights should stay
+  somewhere where the Lower line I draw".
+
 ## A bar's launchers drawn as the dock's icons; widgets keep their place with holograms — 2026-10-30
 
 - The bar (`plasma-bar-containment/contents/ui/main.qml`) hands the dock

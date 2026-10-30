@@ -461,10 +461,31 @@ Item {
         const pixels = Math.max(64, Math.min(512, Math.ceil(logicalSize * Math.max(1, Screen.devicePixelRatio) * 2)))
         const folder = String(StandardPaths.writableLocation(StandardPaths.RuntimeLocation)).replace(/^file:\/\//, "")
         const path = folder + "/" + solidPictureName([resolvedIconSource, pixels, glyphTint, glyphIsMask].join("|"))
-        glyphLayer.grabToImage(function(result) {
+        grabGlyph(function(result) {
             if (result.saveToFile(path))
                 root.solidPictureUrl = "file://" + path
         }, Qt.size(pixels, pixels))
+    }
+    // A picture is taken only while the icon's window is shown: an icon moved
+    // into a window not shown yet (an edge panel's dock moving into its window
+    // over the panel as holograms are switched on) takes its pictures again
+    // once that window shows, or it would keep none.
+    property bool glyphGrabWaiting: false
+    function grabGlyph(done, size) {
+        if (!glyphLayer.grabToImage(done, size))
+            glyphGrabWaiting = true
+    }
+    function takeWaitingGrab() {
+        const window = Window.window
+        if (!glyphGrabWaiting || !window || !window.visible)
+            return
+        glyphGrabWaiting = false
+        refreshSolid()
+    }
+    Window.onWindowChanged: takeWaitingGrab()
+    Connections {
+        target: root.Window.window
+        function onVisibleChanged() { root.takeWaitingGrab() }
     }
     readonly property bool solidWanted: (meshVisualActive || flatSolidWanted) && solidDepth > 0
     property var solidMesh: null
@@ -477,7 +498,7 @@ Item {
         if (solidModelled)
             solidMesh = solidModel
         else
-            glyphLayer.grabToImage(function(result) { solidCanvas.take(result.url) },
+            grabGlyph(function(result) { solidCanvas.take(result.url) },
                                    Qt.size(solidCanvas.width, solidCanvas.height))
         refreshSolidPicture()
     }
@@ -991,7 +1012,7 @@ Item {
         property real startHalf: beam.startHalf / Math.max(1, width)
         property real endHalf: (beam.startHalf + (beam.endHalf - beam.startHalf)
             * Math.pow(Math.max(0, Math.min(1, share)), 0.85)) / Math.max(1, width)
-        property real streaks: root.hologramLayout.wraps ? 22 : 30
+        property real streaks: 30
         property real sparks: 0.1
         property real seed: root.hologramSeed
         property real fade: beam.fade
