@@ -94,6 +94,12 @@ PlasmoidItem {
     // 3D view of its own as on a flat panel: on a 3D bar the widgets stand
     // beside its platform.
     readonly property bool barWidgetIconSolid: barScene !== null && barScene.iconSolidValue("iconSolid", false) === true
+    // While this dock draws holograms in a bar, it draws the faces of the
+    // bar's other widgets too (the clock, a battery's level), from the
+    // pictures of them the bar takes (read by the bar).
+    readonly property bool barDrawsWidgetFaces: barScene !== null && configuration.hologramIcons === true
+    readonly property var barWidgetFaces: barDrawsWidgetFaces
+        ? (barWidgetPlaces || []).filter(function(place) { return String(place.face || "").length > 0 }) : []
     // How far the scene moves from the middle of its place in a bar: so that
     // its first group of icons starts where the bar put that group, or, until
     // the bar says, at the start of the place. `lead` is where that group
@@ -1755,6 +1761,7 @@ PlasmoidItem {
                     delegate: Item {
                         id: widgetIconPlace
                         required property var modelData
+                        required property int index
                         objectName: "bar-widget-icon-" + modelData.id
                         // On the look's start piece as large as the piece holds
                         // it; along the bar as large as the dock's own icons.
@@ -1769,31 +1776,39 @@ PlasmoidItem {
                         y: modelData.rect.y + (modelData.rect.height - size) / 2
                         width: size
                         height: size
-                        IconScene {
+                        WidgetIcon {
                             id: widgetIcon
                             anchors.fill: parent
                             entry: ({ id: "widget-" + widgetIconPlace.modelData.id,
                                       iconName: widgetIconPlace.modelData.icon,
                                       displayName: widgetIconPlace.modelData.title })
+                            entryIndex: 10000 + index
+                            baseSize: widgetIconPlace.size
                             iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
-                            logicalSize: widgetIconPlace.size
                             tileShape: root.configuration.iconShape
                             tileSettings: root.configuration
-                            pedestalOnPath: false
-                            screenEdge: String(root.configuration.edge || "bottom")
                             appearance: root.configuration.appearance
                             vertical: root.vertical
+                            screenEdge: String(root.configuration.edge || "bottom")
+                            showReflection: root.configuration.showReflections
                             hovered: widgetIconPlace.modelData.hovered === true || widgetIconFloat.containsMouse
                             pressed: widgetIconFloat.pressed
                             active: widgetIconPlace.modelData.expanded === true
-                            showReflection: root.configuration.showReflections
-                            showIndicator: false
                             reducedMotion: root.configuration.reducedMotion === true
+                            magnification: root.magnification
+                            magnificationEnabled: root.configuration.magnificationEnabled === true
+                            animationProfiles: root.activeAnimationProfiles
+                            animationCatalog: root.animationCatalogMap
+                            motionTrigger: String(root.configuration.animationTrigger || "")
+                            motionIntensity: Number(root.configuration.animationIntensity || 1)
+                            motionSpeed: root.motionSpeedScale
+                            motionDuration: root.motionDuration
                             solidOnFlat: root.barWidgetIconSolid
                             solidDepth: root.barWidgetIconSolid && root.barScene ? Number(root.barScene.flatIconDepth) : 0
                             solidRelief: root.barScene ? String(root.barScene.flatIconRelief || "modelled") : "modelled"
                             solidTurn: root.barScene ? Number(root.barScene.flatIconTurn) : 15
                             solidLighting: root.barScene ? Number(root.barScene.flatIconLighting) : 0.5
+                            boldSymbol: widgetIconPlace.modelData.symbol === true
                         }
                         MouseArea {
                             id: widgetIconFloat
@@ -1805,6 +1820,57 @@ PlasmoidItem {
                             acceptedButtons: Qt.LeftButton
                             onClicked: {
                                 const applet = widgetIconPlace.modelData.applet
+                                if (applet && typeof applet.activated === "function")
+                                    applet.activated()
+                            }
+                        }
+                    }
+                }
+
+                // In a bar with holograms: the faces of its other widgets, each
+                // drawn as a hologram where the widget stands, as large as the
+                // widget, over its own light. The widget stays under it,
+                // unseen; a click on its face where it floats past the bar
+                // opens it as a click on the widget would.
+                Repeater {
+                    id: barWidgetFaceRepeater
+                    model: root.barWidgetFaces
+                    delegate: Item {
+                        id: widgetFacePlace
+                        required property var modelData
+                        objectName: "bar-widget-face-" + modelData.id
+                        // Where it shows itself at rest, in the dock's coordinates.
+                        readonly property rect shownRect: Qt.rect(x + widgetFace.restingRect.x,
+                            y + widgetFace.restingRect.y, widgetFace.restingRect.width,
+                            widgetFace.restingRect.height)
+                        x: modelData.rect.x
+                        y: modelData.rect.y
+                        width: modelData.rect.width
+                        height: modelData.rect.height
+                        WidgetFace {
+                            id: widgetFace
+                            anchors.fill: parent
+                            picture: widgetFacePlace.modelData.face
+                            iconSize: Number(root.barScene && root.barScene.layoutGeometry.iconSize || root.iconSize)
+                            settings: root.configuration
+                            screenEdge: String(root.configuration.edge || "bottom")
+                            reducedMotion: root.configuration.reducedMotion === true
+                            seed: (Number(widgetFacePlace.modelData.id) || 0) % 97 / 9.7
+                            hovered: widgetFacePlace.modelData.hovered === true || widgetFaceFloat.containsMouse
+                            magnification: root.magnification
+                            magnificationEnabled: root.configuration.magnificationEnabled === true
+                            motionDuration: root.motionDuration
+                        }
+                        MouseArea {
+                            id: widgetFaceFloat
+                            hoverEnabled: true
+                            x: widgetFace.restingRect.x
+                            y: widgetFace.restingRect.y
+                            width: widgetFace.restingRect.width
+                            height: widgetFace.restingRect.height
+                            acceptedButtons: Qt.LeftButton
+                            onClicked: {
+                                const applet = widgetFacePlace.modelData.applet
                                 if (applet && typeof applet.activated === "function")
                                     applet.activated()
                             }
@@ -1846,8 +1912,20 @@ PlasmoidItem {
                 // screen edge (the scene's own drawn bounds), and where.
                 reach: {
                     const drawn = panelScene.drawnBounds
-                    const top = panelScene.y + drawn.y, left = panelScene.x + drawn.x
-                    const bottom = top + drawn.height, right = left + drawn.width
+                    let top = panelScene.y + drawn.y, left = panelScene.x + drawn.x
+                    let bottom = top + drawn.height, right = left + drawn.width
+                    // The bar's widget faces floating past it, their glow round them.
+                    const glow = root.iconSize * 0.3
+                    for (let index = 0; index < barWidgetFaceRepeater.count; ++index) {
+                        const place = barWidgetFaceRepeater.itemAt(index)
+                        if (!place)
+                            continue
+                        const face = place.shownRect
+                        top = Math.min(top, face.y - glow)
+                        left = Math.min(left, face.x - glow)
+                        bottom = Math.max(bottom, face.y + face.height + glow)
+                        right = Math.max(right, face.x + face.width + glow)
+                    }
                     return edge === "top" ? bottom - representation.height
                         : edge === "left" ? right - representation.width
                         : edge === "right" ? -left : -top
@@ -1858,6 +1936,11 @@ PlasmoidItem {
                     })
                     for (let index = 0; index < barWidgetIconRepeater.count; ++index) {
                         const place = barWidgetIconRepeater.itemAt(index)
+                        if (place)
+                            rects.push(place.shownRect)
+                    }
+                    for (let index = 0; index < barWidgetFaceRepeater.count; ++index) {
+                        const place = barWidgetFaceRepeater.itemAt(index)
                         if (place)
                             rects.push(place.shownRect)
                     }

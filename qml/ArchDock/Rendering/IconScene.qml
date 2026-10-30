@@ -434,6 +434,10 @@ Item {
     // hologram, not its flat picture made light. Without Qt Quick 3D the
     // flat picture stays.
     property bool solidOnFlat: false
+    // A line drawing (a widget's status icon) drawn with a body: its strokes
+    // thicker (shaders/symbol-body.frag), so 3D icons give it depth and a
+    // hologram's lines show across it, at twice the screen's resolution.
+    property bool boldSymbol: false
     property real solidTurn: 15
     property real solidLighting: 0.5
     readonly property bool flatSolidWanted: solidOnFlat && !meshVisualActive && solidDepth > 0
@@ -1376,12 +1380,14 @@ Item {
                     * (root.tileRenderingEnabled ? root.tileValue("iconTileIconScale", 100, 25, 150) / 100 : 1)
 
                 // MultiEffect is instantiated only when a tint is requested.
-                layer.enabled: root.glyphTreatment === "tinted"
-                    && root.glyphTint.length > 0
-                layer.effect: MultiEffect {
-                    colorization: 1
-                    colorizationColor: root.glyphTint
-                }
+                layer.enabled: root.boldSymbol || (root.glyphTreatment === "tinted"
+                    && root.glyphTint.length > 0)
+                layer.effect: root.boldSymbol ? symbolBodyEffect : glyphTintEffect
+                layer.smooth: true
+                layer.textureSize: root.boldSymbol
+                    ? Qt.size(Math.ceil(width * 2 * Math.max(1, Screen.devicePixelRatio)),
+                              Math.ceil(height * 2 * Math.max(1, Screen.devicePixelRatio)))
+                    : Qt.size(0, 0)
             }
 
             Kirigami.Icon {
@@ -1743,11 +1749,27 @@ Item {
 
     // The icon's picture for its hologram: taken from the glyph layer, which
     // it hides, at the screen's own resolution.
+    Component {
+        id: glyphTintEffect
+        MultiEffect {
+            colorization: 1
+            colorizationColor: root.glyphTint
+        }
+    }
+    Component {
+        id: symbolBodyEffect
+        ShaderEffect {
+            // How far each stroke grows, in the glyph's own size.
+            property vector2d reach: Qt.vector2d(0.045, 0.045)
+            fragmentShader: "shaders/symbol-body.frag.qsb"
+        }
+    }
+
     ShaderEffectSource {
         id: hologramSource
 
         readonly property int pixels: Math.max(16, Math.min(512,
-            Math.ceil(root.logicalSize * Math.max(1, Screen.devicePixelRatio))))
+            Math.ceil(root.logicalSize * Math.max(1, Screen.devicePixelRatio) * (root.boldSymbol ? 2 : 1))))
         sourceItem: root.hologramDrawn ? glyphLayer : null
         hideSource: root.hologramDrawn
         live: true

@@ -1,5 +1,39 @@
 # Arch Dock current state
 
+## A bar's widgets drawn as the dock's icons: 3D, holograms, animations — 2026-10-30
+
+- The bar (`plasma-bar-containment/contents/ui/main.qml`) classifies its
+  widgets: `iconWidgetPlugins` (the launchers, `org.kde.plasma.icon`,
+  `org.kde.plasma.folder` and the status widgets) show one icon, whose
+  `Plasma::Applet::icon` it hands the dock; `symbolWidgetPlugins` (the status
+  widgets) and icons named `-symbolic` are line drawings (`symbol`);
+  `layoutWidget` (any plugin id with spacer, separator or colorizer) is left
+  alone, as is the system tray; every other widget is a face (`faceWidget`):
+  while the dock draws holograms (`barDrawsWidgetFaces`) the bar takes a
+  picture of it each second (`takeFace`, `grabToImage` into the runtime
+  folder, two files in turn; an item at opacity 0 is still drawn into a
+  grab) and hides it once the first is there.
+- The dock (`plasma-dock-widget/contents/ui/main.qml`) draws icon widgets with
+  `WidgetIcon.qml` (new): DockEntry's motion layers (IconMotionController
+  with the panel's animation profiles and trigger, magnification on hover)
+  round the same `IconScene`. `IconScene.boldSymbol` draws a line drawing
+  through `shaders/symbol-body.frag` (new; each pixel takes the strongest of
+  three rings of neighbours within 4.5% of the glyph) at twice the screen's
+  resolution, so the flat-panel solid and the hologram get a body. Faces are
+  drawn with `WidgetFace.qml` (new, ArchDock.Rendering): the face picture
+  through `HologramEffect` over its own lens and light
+  (`hologram-opening`/`hologram-beam` shaders), laid out by
+  `PlatformGeometry.hologramLayout` at the panel's icon size, turned by
+  `standDirection`, the face upright; it grows on hover by Magnification. The
+  faces' shown rects join the see-through window's input and the reach past
+  the bar.
+- Tests: `tst_WidgetFace` (new, `widget-face-test`); pictures
+  `/mnt/F/archdock-audit-2026-10-08/evidence/W1-*`.
+- From the owner (30 Oct): "make clock and other widgets that can be 3D and
+  holographic too ... not the spacers or seperators, or Colorizer";
+  "Widgets them selfs also have to be holographic"; "They have to be as 3D
+  as icons are, and animations they also have to have".
+
 ## The backend is a widgets application: KDE's file dialogs — 2026-10-30
 
 - `src/main.cpp` makes the backend a `QApplication` (`Qt6::Widgets` found
