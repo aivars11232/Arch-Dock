@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Window
-import QtQml.Models
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import ArchDock.Rendering 1.0
@@ -89,161 +88,12 @@ PlasmoidItem {
     // those icons as its own, where the widgets stand (read by the bar).
     property var barWidgetPlaces: []
     readonly property bool barDrawsWidgetIcons: barScene !== null
-    // While this dock draws 3D icons or holograms in a bar, it draws the
-    // faces of the bar's other widgets too (the clock, a battery's level),
-    // from the pictures of them the bar takes (read by the bar).
-    readonly property bool barDrawsWidgetFaces: barScene !== null && drawsWidgetFaces
-    // The widgets beside this dock that it draws as its own: a bar's, where
-    // the bar says they stand, or those in its Plasma panel, where Plasma
-    // lays them out (`panelWidgetPlaces`).
-    readonly property Item widgetScene: (drawsBarSurface || drawsPanelWidgets) && activeDockRepresentation
-        ? activeDockRepresentation.scene || null : null
-    readonly property var widgetPlaces: drawsBarSurface ? barWidgetPlaces : drawsPanelWidgets ? panelWidgetPlaces : []
-    readonly property var widgetIcons: widgetScene
-        ? (widgetPlaces || []).filter(function(place) { return String(place.icon || "").length > 0 }) : []
+    readonly property var barWidgetIcons: barDrawsWidgetIcons
+        ? (barWidgetPlaces || []).filter(function(place) { return String(place.icon || "").length > 0 }) : []
     // As 3D icons where the dock's icons are 3D (Icons > 3D), each in a small
-    // 3D view of its own as on a flat panel: on a 3D panel the widgets stand
+    // 3D view of its own as on a flat panel: on a 3D bar the widgets stand
     // beside its platform.
-    readonly property bool widgetIconSolid: widgetScene !== null && widgetScene.iconSolidValue("iconSolid", false) === true
-    readonly property bool drawsWidgetFaces: widgetScene !== null
-        && (configuration.hologramIcons === true || widgetIconSolid)
-    readonly property var widgetFaces: drawsWidgetFaces
-        ? (widgetPlaces || []).filter(function(place) { return String(place.face || "").length > 0 }) : []
-    // In one of Plasma's own panels: the widgets beside this dock, each
-    // with a DrawnWidget that hides it while the dock draws it and takes the
-    // pictures of its face. The widget stays under its drawing for its
-    // clicks and its popup. Spacers, separators and the like are left as
-    // Plasma draws them.
-    property Item panelLayout: null
-    function findPanelLayout() {
-        let item = root.parent
-        while (item && typeof item.itemFor !== "function")
-            item = item.parent
-        panelLayout = item || null
-    }
-    onParentChanged: findPanelLayout()
-    // Plasma puts the widget's place on the panel together after the widget
-    // itself: it is looked for again until it is there.
-    Timer {
-        interval: 500
-        repeat: true
-        running: root.plasmaPanel !== null && root.panelLayout === null
-        onTriggered: root.findPanelLayout()
-    }
-    readonly property bool drawsPanelWidgets: plasmaPanel !== null && panelLayout !== null
-        && activeDockRepresentation !== null
-    readonly property var panelWidgetApplets: drawsPanelWidgets
-        ? (plasmaPanel.applets || []).filter(function(applet) {
-              return applet && applet.id !== Plasmoid.id
-                  && (WidgetKinds.iconWidget(applet.pluginName) || WidgetKinds.faceWidget(applet.pluginName))
-          }) : []
-    property var panelWidgetPlaces: []
-    // Where each drawn widget stands, in the dock's own coordinates, as a
-    // bar tells its widgets' places.
-    function panelWidgetPlacesNow() {
-        const places = []
-        const own = activeDockRepresentation
-        if (!own)
-            return places
-        for (let index = 0; index < panelWidgets.count; ++index) {
-            const drawn = panelWidgets.objectAt(index)
-            if (!drawn || !drawn.widget || !drawn.widget.visible || !(drawn.iconDrawn || drawn.faceDrawn))
-                continue
-            const item = drawn.widget
-            const corner = item.mapToItem(own, 0, 0)
-            const icon = String(drawn.applet.icon || "")
-            places.push({ id: String(drawn.applet.id), plugin: drawn.plugin,
-                          rect: Qt.rect(corner.x, corner.y, item.width, item.height),
-                          icon: drawn.iconDrawn ? icon : "",
-                          face: drawn.faceDrawn ? drawn.facePicture : "",
-                          symbol: WidgetKinds.symbolWidget(drawn.plugin, icon),
-                          title: String(drawn.applet.title || ""), cap: false,
-                          expanded: item.expanded === true, hovered: drawn.hovered,
-                          applet: drawn.applet })
-        }
-        return places
-    }
-    function pushPanelWidgetPlaces() { panelWidgetPlaces = panelWidgetPlacesNow() }
-    function queuePanelWidgetPlaces() { Qt.callLater(root.pushPanelWidgetPlaces) }
-    Instantiator {
-        id: panelWidgets
-        model: root.panelWidgetApplets
-        delegate: DrawnWidget {
-            id: panelWidget
-            required property var modelData
-            applet: modelData
-            widget: root.panelLayout ? root.panelLayout.itemFor(modelData) : null
-            drawsIcons: root.drawsPanelWidgets
-            drawsFaces: root.drawsWidgetFaces
-            hoverArea: widget ? widget.parent : null
-            onUpdated: root.queuePanelWidgetPlaces()
-            onWidgetChanged: root.queuePanelWidgetPlaces()
-            // A widget just added has no item on the panel at first.
-            Timer {
-                interval: 300
-                repeat: true
-                running: panelWidget.widget === null && root.panelLayout !== null
-                onTriggered: panelWidget.widget = root.panelLayout.itemFor(panelWidget.modelData)
-            }
-            // Its place on the panel, as Plasma lays it out.
-            Connections {
-                target: panelWidget.widget ? panelWidget.widget.parent : null
-                function onXChanged() { root.queuePanelWidgetPlaces() }
-                function onYChanged() { root.queuePanelWidgetPlaces() }
-                function onWidthChanged() { root.queuePanelWidgetPlaces() }
-                function onHeightChanged() { root.queuePanelWidgetPlaces() }
-                function onVisibleChanged() { root.queuePanelWidgetPlaces() }
-            }
-        }
-        onObjectAdded: root.queuePanelWidgetPlaces()
-        onObjectRemoved: root.queuePanelWidgetPlaces()
-    }
-    // TEMPORARY DIAGNOSTIC (remove)
-    Timer {
-        interval: 3000; repeat: true; running: true
-        onTriggered: {
-            let chain = [], item = root.parent
-            while (item) { chain.push(String(item).split("(")[0] + (typeof item.itemFor === "function" ? "*" : "")); item = item.parent }
-            console.warn("W2DIAG panel", root.plasmaPanel !== null, "layout", root.panelLayout !== null,
-                "rep", root.activeDockRepresentation !== null, "draws", root.drawsPanelWidgets,
-                "applets", root.plasmaPanel ? (root.plasmaPanel.applets || []).length : -1,
-                "wanted", root.panelWidgetApplets.length, "made", panelWidgets.count,
-                "places", root.panelWidgetPlaces.length, "chain", chain.join(" > "))
-            for (let i = 0; i < panelWidgets.count; ++i) {
-                const d = panelWidgets.objectAt(i)
-                console.warn("W2DIAG widget", d.plugin, "item", d.widget !== null, "icon", d.iconDrawn, "face", d.faceDrawn, "pic", d.facePicture)
-            }
-        }
-    }
-    // The dock's own place on the panel.
-    Connections {
-        target: root.drawsPanelWidgets ? root.parent : null
-        function onXChanged() { root.queuePanelWidgetPlaces() }
-        function onYChanged() { root.queuePanelWidgetPlaces() }
-        function onWidthChanged() { root.queuePanelWidgetPlaces() }
-        function onHeightChanged() { root.queuePanelWidgetPlaces() }
-    }
-    // The part of `rect`, in the dock's coordinates, past its Plasma panel,
-    // away from the screen's edge: there a widget's drawing takes the clicks
-    // meant for the widget. Over the panel the widget under its drawing
-    // takes them itself, and its menu. In a bar, where the widgets stand
-    // above this dock, the whole drawing.
-    function pastPanel(rect) {
-        if (!drawsPanelWidgets || !activeDockRepresentation)
-            return rect
-        const own = activeDockRepresentation
-        const edge = String(configuration.edge || "bottom")
-        let left = rect.x, top = rect.y, right = rect.x + rect.width, bottom = rect.y + rect.height
-        if (edge === "top")
-            top = Math.max(top, own.height)
-        else if (edge === "left")
-            left = Math.max(left, own.width)
-        else if (edge === "right")
-            right = Math.min(right, 0)
-        else
-            bottom = Math.min(bottom, 0)
-        return right > left && bottom > top ? Qt.rect(left, top, right - left, bottom - top) : Qt.rect(0, 0, 0, 0)
-    }
+    readonly property bool barWidgetIconSolid: barScene !== null && barScene.iconSolidValue("iconSolid", false) === true
     // How far the scene moves from the middle of its place in a bar: so that
     // its first group of icons starts where the bar put that group, or, until
     // the bar says, at the start of the place. `lead` is where that group
@@ -1892,144 +1742,69 @@ PlasmoidItem {
                     }
                 }
 
-                // In a bar, or beside this dock in a Plasma panel: the icon
-                // widgets (application launchers, status icons), each drawn as
-                // one of this dock's icons where the widget stands - the
-                // widget's own icon, with the dock's tiles, 3D icons and
-                // holograms. The widget stays under its icon, unseen, taking
-                // its clicks and its menu; where its icon floats past the
-                // panel as a hologram, a click there opens it as a click on
-                // the widget would.
-                // One drawing per widget, kept while the bar's widgets only
-                // change (a picture, hover, a place): by count, each reading
-                // its widget from the list, so a drawing is made anew only when
-                // widgets come or go, not each time the list is sent.
+                // In a bar: its icon widgets (its application launchers), each
+                // drawn as one of this dock's icons where the widget stands -
+                // the widget's own icon, a picture chosen for it too, with the
+                // dock's tiles, 3D icons and holograms. The widget stays under
+                // its icon, unseen, taking its clicks and its menu; where its
+                // icon floats past the bar as a hologram, a click there opens
+                // it as a click on the widget would.
                 Repeater {
-                    id: widgetIconRepeater
-                    model: root.widgetIcons.length
+                    id: barWidgetIconRepeater
+                    model: root.barWidgetIcons
                     delegate: Item {
                         id: widgetIconPlace
-                        required property int index
-                        readonly property var modelData: root.widgetIcons[index] || ({ rect: Qt.rect(0, 0, 0, 0) })
-                        objectName: "widget-icon-" + modelData.id
+                        required property var modelData
+                        objectName: "bar-widget-icon-" + modelData.id
                         // On the look's start piece as large as the piece holds
                         // it; along the bar as large as the dock's own icons.
                         readonly property real size: modelData.cap
                             ? Math.min(modelData.rect.width, modelData.rect.height)
-                            : Number(root.widgetScene && root.widgetScene.layoutGeometry.iconSize || root.iconSize)
-                        // Where it shows itself at rest, in the dock's coordinates,
-                        // and where a click on it opens the widget.
+                            : Number(root.barScene && root.barScene.layoutGeometry.iconSize || root.iconSize)
+                        // Where it shows itself at rest, in the dock's coordinates.
                         readonly property rect shownRect: Qt.rect(x + widgetIcon.restingIconRect.x,
                             y + widgetIcon.restingIconRect.y, widgetIcon.restingIconRect.width,
                             widgetIcon.restingIconRect.height)
-                        readonly property rect clickRect: root.pastPanel(shownRect)
                         x: modelData.rect.x + (modelData.rect.width - size) / 2
                         y: modelData.rect.y + (modelData.rect.height - size) / 2
                         width: size
                         height: size
-                        WidgetIcon {
+                        IconScene {
                             id: widgetIcon
                             anchors.fill: parent
                             entry: ({ id: "widget-" + widgetIconPlace.modelData.id,
                                       iconName: widgetIconPlace.modelData.icon,
                                       displayName: widgetIconPlace.modelData.title })
-                            entryIndex: 10000 + index
-                            baseSize: widgetIconPlace.size
                             iconStyleDefinition: root.configuration.iconStyleDefinition || ({})
+                            logicalSize: widgetIconPlace.size
                             tileShape: root.configuration.iconShape
                             tileSettings: root.configuration
+                            pedestalOnPath: false
+                            screenEdge: String(root.configuration.edge || "bottom")
                             appearance: root.configuration.appearance
                             vertical: root.vertical
-                            screenEdge: String(root.configuration.edge || "bottom")
-                            showReflection: root.configuration.showReflections
                             hovered: widgetIconPlace.modelData.hovered === true || widgetIconFloat.containsMouse
                             pressed: widgetIconFloat.pressed
                             active: widgetIconPlace.modelData.expanded === true
+                            showReflection: root.configuration.showReflections
+                            showIndicator: false
                             reducedMotion: root.configuration.reducedMotion === true
-                            magnification: root.magnification
-                            magnificationEnabled: root.configuration.magnificationEnabled === true
-                            animationProfiles: root.activeAnimationProfiles
-                            animationCatalog: root.animationCatalogMap
-                            motionTrigger: String(root.configuration.animationTrigger || "")
-                            motionIntensity: Number(root.configuration.animationIntensity || 1)
-                            motionSpeed: root.motionSpeedScale
-                            motionDuration: root.motionDuration
-                            solidOnFlat: root.widgetIconSolid
-                            solidDepth: root.widgetIconSolid && root.widgetScene ? Number(root.widgetScene.flatIconDepth) : 0
-                            solidRelief: root.widgetScene ? String(root.widgetScene.flatIconRelief || "modelled") : "modelled"
-                            solidTurn: root.widgetScene ? Number(root.widgetScene.flatIconTurn) : 15
-                            solidLighting: root.widgetScene ? Number(root.widgetScene.flatIconLighting) : 0.5
-                            boldSymbol: widgetIconPlace.modelData.symbol === true
+                            solidOnFlat: root.barWidgetIconSolid
+                            solidDepth: root.barWidgetIconSolid && root.barScene ? Number(root.barScene.flatIconDepth) : 0
+                            solidRelief: root.barScene ? String(root.barScene.flatIconRelief || "modelled") : "modelled"
+                            solidTurn: root.barScene ? Number(root.barScene.flatIconTurn) : 15
+                            solidLighting: root.barScene ? Number(root.barScene.flatIconLighting) : 0.5
                         }
                         MouseArea {
                             id: widgetIconFloat
-                            x: widgetIconPlace.clickRect.x - widgetIconPlace.x
-                            y: widgetIconPlace.clickRect.y - widgetIconPlace.y
-                            width: widgetIconPlace.clickRect.width
-                            height: widgetIconPlace.clickRect.height
+                            x: widgetIcon.restingIconRect.x
+                            y: widgetIcon.restingIconRect.y
+                            width: widgetIcon.restingIconRect.width
+                            height: widgetIcon.restingIconRect.height
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton
                             onClicked: {
                                 const applet = widgetIconPlace.modelData.applet
-                                if (applet && typeof applet.activated === "function")
-                                    applet.activated()
-                            }
-                        }
-                    }
-                }
-
-                // With 3D icons or holograms, in a bar or a Plasma panel: the
-                // faces of the other widgets, each drawn where the widget
-                // stands, as large as the widget, as a 3D icon or a hologram
-                // over its own light. The widget stays under it, unseen; a
-                // click on its face where it floats past the panel opens it as
-                // a click on the widget would.
-                Repeater {
-                    id: widgetFaceRepeater
-                    model: root.widgetFaces.length
-                    delegate: Item {
-                        id: widgetFacePlace
-                        required property int index
-                        readonly property var modelData: root.widgetFaces[index] || ({ rect: Qt.rect(0, 0, 0, 0) })
-                        objectName: "widget-face-" + modelData.id
-                        // Where it shows itself at rest, in the dock's coordinates,
-                        // and where a click on it opens the widget.
-                        readonly property rect shownRect: Qt.rect(x + widgetFace.restingRect.x,
-                            y + widgetFace.restingRect.y, widgetFace.restingRect.width,
-                            widgetFace.restingRect.height)
-                        readonly property rect clickRect: root.pastPanel(shownRect)
-                        x: modelData.rect.x
-                        y: modelData.rect.y
-                        width: modelData.rect.width
-                        height: modelData.rect.height
-                        WidgetFace {
-                            id: widgetFace
-                            anchors.fill: parent
-                            picture: widgetFacePlace.modelData.face
-                            iconSize: Number(root.widgetScene && root.widgetScene.layoutGeometry.iconSize || root.iconSize)
-                            settings: root.configuration
-                            screenEdge: String(root.configuration.edge || "bottom")
-                            reducedMotion: root.configuration.reducedMotion === true
-                            seed: (Number(widgetFacePlace.modelData.id) || 0) % 97 / 9.7
-                            hovered: widgetFacePlace.modelData.hovered === true || widgetFaceFloat.containsMouse
-                            magnification: root.magnification
-                            magnificationEnabled: root.configuration.magnificationEnabled === true
-                            motionDuration: root.motionDuration
-                            solidOnFlat: root.widgetIconSolid
-                            solidDepth: root.widgetIconSolid && root.widgetScene ? Number(root.widgetScene.flatIconDepth) : 0
-                            solidTurn: root.widgetScene ? Number(root.widgetScene.flatIconTurn) : 15
-                            solidLighting: root.widgetScene ? Number(root.widgetScene.flatIconLighting) : 0.5
-                        }
-                        MouseArea {
-                            id: widgetFaceFloat
-                            hoverEnabled: true
-                            x: widgetFacePlace.clickRect.x - widgetFacePlace.x
-                            y: widgetFacePlace.clickRect.y - widgetFacePlace.y
-                            width: widgetFacePlace.clickRect.width
-                            height: widgetFacePlace.clickRect.height
-                            acceptedButtons: Qt.LeftButton
-                            onClicked: {
-                                const applet = widgetFacePlace.modelData.applet
                                 if (applet && typeof applet.activated === "function")
                                     applet.activated()
                             }
@@ -2071,24 +1846,8 @@ PlasmoidItem {
                 // screen edge (the scene's own drawn bounds), and where.
                 reach: {
                     const drawn = panelScene.drawnBounds
-                    let top = panelScene.y + drawn.y, left = panelScene.x + drawn.x
-                    let bottom = top + drawn.height, right = left + drawn.width
-                    // The widgets' drawings floating past it, their glow round them.
-                    const glow = root.iconSize * 0.3
-                    const drawings = []
-                    for (let index = 0; index < widgetIconRepeater.count; ++index)
-                        drawings.push(widgetIconRepeater.itemAt(index))
-                    for (let index = 0; index < widgetFaceRepeater.count; ++index)
-                        drawings.push(widgetFaceRepeater.itemAt(index))
-                    for (const place of drawings) {
-                        if (!place)
-                            continue
-                        const shown = place.shownRect
-                        top = Math.min(top, shown.y - glow)
-                        left = Math.min(left, shown.x - glow)
-                        bottom = Math.max(bottom, shown.y + shown.height + glow)
-                        right = Math.max(right, shown.x + shown.width + glow)
-                    }
+                    const top = panelScene.y + drawn.y, left = panelScene.x + drawn.x
+                    const bottom = top + drawn.height, right = left + drawn.width
                     return edge === "top" ? bottom - representation.height
                         : edge === "left" ? right - representation.width
                         : edge === "right" ? -left : -top
@@ -2097,15 +1856,10 @@ PlasmoidItem {
                     const rects = (panelScene.entryShownRects || []).map(function(rect) {
                         return Qt.rect(panelScene.x + rect.x, panelScene.y + rect.y, rect.width, rect.height)
                     })
-                    for (let index = 0; index < widgetIconRepeater.count; ++index) {
-                        const place = widgetIconRepeater.itemAt(index)
-                        if (place && place.clickRect.width > 0)
-                            rects.push(place.clickRect)
-                    }
-                    for (let index = 0; index < widgetFaceRepeater.count; ++index) {
-                        const place = widgetFaceRepeater.itemAt(index)
-                        if (place && place.clickRect.width > 0)
-                            rects.push(place.clickRect)
+                    for (let index = 0; index < barWidgetIconRepeater.count; ++index) {
+                        const place = barWidgetIconRepeater.itemAt(index)
+                        if (place)
+                            rects.push(place.shownRect)
                     }
                     return rects
                 }
@@ -2273,7 +2027,6 @@ PlasmoidItem {
     Plasmoid.contextualActions: [moveIntoBarAction, removePanelAction]
 
     Component.onCompleted: {
-        root.findPanelLayout();
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);
         root.bootstrapFreeDock();
         root.refresh();

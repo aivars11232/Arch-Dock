@@ -1,25 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- **A bar's widgets are drawn as its icons, 3D and holographic.** Plasma's
-  Icon and Folder widgets, Networks, Bluetooth, Volume, Clipboard, Disks &
-  Devices, KDE Connect, Printers, Brightness and Display, and the Simple
-  Application Launcher and Andromeda Launcher, kept Plasma's flat icon on an
-  Arch Dock bar beside the dock's 3D icons and holograms. The dock now draws
-  each one's icon as one of its own, following it as it changes (a
-  network's signal, the sound muted), with the bar's tiles, 3D icons,
-  holograms, magnification and animations. A status widget's thin line
-  drawing is drawn with a body, its strokes thicker, so as a 3D icon it has
-  real depth and as a hologram its lines show across it, sharp at twice the
-  screen's resolution. Widgets that show more than an icon - the clock with
-  its seconds, a battery's level, unread notifications - are drawn from a
-  picture of them taken each second, as large as they are: as 3D icons, the
-  clock's digits pressed out into a solid, lit and turned as the icons are,
-  and as holograms over their own light; they grow under the pointer as the
-  icons do. Spacers, separators and Panel Colorizer stay as they
-  are; every widget stays under its icon and opens as before.
-
 ## 0.1.1-54 — 2026-10-30
 
 - **File dialogs show your disks.** Icon Properties' Choose custom icon,

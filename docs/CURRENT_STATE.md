@@ -1,49 +1,14 @@
 # Arch Dock current state
 
-## A bar's widgets drawn as the dock's icons: 3D, holograms, animations — 2026-10-30
+## `main` is the published 0.1.1-54 again; unfinished widget work on a branch — 2026-11-25
 
-- The bar (`plasma-bar-containment/contents/ui/main.qml`) classifies its
-  widgets: `iconWidgetPlugins` (the launchers, `org.kde.plasma.icon`,
-  `org.kde.plasma.folder` and the status widgets) show one icon, whose
-  `Plasma::Applet::icon` it hands the dock; `symbolWidgetPlugins` (the status
-  widgets) and icons named `-symbolic` are line drawings (`symbol`);
-  `layoutWidget` (any plugin id with spacer, separator or colorizer) is left
-  alone, as is the system tray; every other widget is a face (`faceWidget`):
-  while the dock draws holograms (`barDrawsWidgetFaces`) the bar takes a
-  picture of it each second (`takeFace`, `grabToImage` into the runtime
-  folder, two files in turn; an item at opacity 0 is still drawn into a
-  grab) and hides it once the first is there.
-- The dock (`plasma-dock-widget/contents/ui/main.qml`) draws icon widgets with
-  `WidgetIcon.qml` (new): DockEntry's motion layers (IconMotionController
-  with the panel's animation profiles and trigger, magnification on hover)
-  round the same `IconScene`. `IconScene.boldSymbol` draws a line drawing
-  through `shaders/symbol-body.frag` (new; each pixel takes the strongest of
-  three rings of neighbours within 4.5% of the glyph) at twice the screen's
-  resolution, so the flat-panel solid and the hologram get a body. Faces are
-  drawn with `WidgetFace.qml` (new, ArchDock.Rendering): the face picture
-  through `HologramEffect` over its own lens and light
-  (`hologram-opening`/`hologram-beam` shaders), laid out by
-  `PlatformGeometry.hologramLayout` at the panel's icon size, turned by
-  `standDirection`, the face upright; it grows on hover by Magnification. With
-  3D icons on (holograms off) it is a solid in its place: the picture read on
-  a canvas 256 wide of the face's shape, pressed out whole
-  (`IconSolid.iconMesh(..., "block", { minimumShare: 0 })`, made again only
-  when the picture changes) and drawn by `optional3d/IconSolidView.qml`, which
-  frames a face by its height (`solidFaceWidth`). `IconSolid`'s relief and
-  block meshes keep a wide picture's shape (100 units across, as far down as
-  the picture is, a block a quarter of the height thick either way; an icon's
-  square is unchanged). The faces' shown rects join the see-through window's
-  input and the reach past the bar. The dock's widget drawings are kept by
-  count (`model: ....length`), not made anew each time the bar sends its
-  list (each second, as the faces change). Open: the clock's colons are lost
-  in its 3D solid (too faint at that size); as a 3D hologram a wide face was
-  drawn too small, so faces are drawn as light at their own size there.
-- Tests: `tst_WidgetFace` (new, `widget-face-test`); pictures
-  `/mnt/F/archdock-audit-2026-10-08/evidence/W1-*`.
-- From the owner (30 Oct): "make clock and other widgets that can be 3D and
-  holographic too ... not the spacers or seperators, or Colorizer";
-  "Widgets them selfs also have to be holographic"; "They have to be as 3D
-  as icons are, and animations they also have to have".
+- The four commits after 0.1.1-54 (`b4d4a3e`, `2db8255`, `ba0225e`,
+  `6619984`: bar widgets drawn by the dock as 3D icons and holograms, faces
+  photographed each second, a temporary diagnostic timer, Plasma panel
+  widgets hidden while drawn) are reverted on `main` in one commit and kept
+  on the branch `widgets-3d-wip`. The tree is 0.1.1-54's (`812081d`).
+- First step of the breakage fixes of November 2026; the running report is
+  `docs/repairs/BREAKAGE-FIX-2026-11.md`.
 
 ## The backend is a widgets application: KDE's file dialogs — 2026-10-30
 

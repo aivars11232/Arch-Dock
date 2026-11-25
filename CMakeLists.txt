@@ -88,15 +88,12 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     DecorationJob.js
     StandFrames.js
     HologramLook.js
-    WidgetKinds.js
     IconStyleResolver.js
     AnimationProfileRuntime.js
     MotionChannels.js
     PresentationStates.js
     ThemeStateSelection.js
     IconScene.qml
-    WidgetFace.qml
-    DrawnWidget.qml
     FolderExpansion.qml
     FolderTrack.qml
     IconMotionController.qml
@@ -255,7 +252,7 @@ add_custom_target(
 # shader packs with qsb at build time, for every graphics backend Qt Quick
 # draws with.
 find_package(Qt6 REQUIRED COMPONENTS ShaderTools)
-set(ARCHDOCK_RENDERING_SHADERS hologram hologram-beam hologram-opening seamless symbol-body)
+set(ARCHDOCK_RENDERING_SHADERS hologram hologram-beam hologram-opening seamless)
 set(ARCHDOCK_RENDERING_SHADER_PACKS)
 file(MAKE_DIRECTORY "${ARCHDOCK_RENDERING_BUILD_DIR}/shaders")
 foreach(shader IN LISTS ARCHDOCK_RENDERING_SHADERS)
@@ -1860,15 +1857,6 @@ if(BUILD_TESTING)
             -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_RendererParity.qml)
   set_tests_properties(
     renderer-parity-test
-    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-  add_test(
-    NAME widget-face-test
-    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
-            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
-            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_WidgetFace.qml)
-  set_tests_properties(
-    widget-face-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_test(

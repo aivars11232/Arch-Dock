@@ -5,7 +5,6 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasmoid
-import ArchDock.Rendering 1.0
 
 // An Arch Dock bar: the widgets it holds in a row along its screen edge (a
 // column on a side edge). The bar host sizes the bar's window, as long as
@@ -111,9 +110,7 @@ ContainmentItem {
             const plugin = String(child.plasmaApplet.pluginName)
             places.push({ id: String(child.plasmaApplet.id), plugin: plugin,
                           rect: Qt.rect(corner.x, corner.y, item.width, item.height),
-                          icon: WidgetKinds.iconWidget(plugin) ? String(child.plasmaApplet.icon || "") : "",
-                          face: child.drawn.faceDrawn ? child.drawn.facePicture : "",
-                          symbol: WidgetKinds.symbolWidget(plugin, child.plasmaApplet.icon),
+                          icon: root.iconWidgetPlugins.includes(plugin) ? String(child.plasmaApplet.icon || "") : "",
                           title: String(child.plasmaApplet.title || ""), cap: cap,
                           expanded: item.expanded === true,
                           hovered: cap ? startCapHover.hovered : child.hovered,
@@ -173,8 +170,13 @@ ContainmentItem {
     readonly property real wantedReach: dockApplet && dockApplet.barReach !== undefined
         ? Math.max(0, Number(dockApplet.barReach)) : 0
     readonly property var shownPastRects: dockApplet && dockApplet.barShownRects ? dockApplet.barShownRects : []
-    // Which widgets the dock draws as its own, and how, is WidgetKinds'.
-    readonly property var launcherPlugins: WidgetKinds.launcherPlugins
+    readonly property var launcherPlugins: ["org.kde.plasma.kickoff", "org.kde.plasma.kicker",
+        "org.kde.plasma.kickerdash"]
+    // Widgets that show only their icon on a panel, as Plasma's launchers do:
+    // the dock draws that icon as one of its own (its tile, 3D icons,
+    // holograms), the widget staying under it, unseen, for its clicks and
+    // its menu.
+    readonly property var iconWidgetPlugins: launcherPlugins
     function slotWith(plugins) {
         let found = null
         for (const child of row.children)
@@ -526,21 +528,18 @@ ContainmentItem {
             property bool dying: false
             // What the bar's arrangement names it by.
             readonly property string token: group ? "group:" + groupId : plasmaApplet ? String(plasmaApplet.id) : ""
-            // The dock draws an icon widget's icon (`widgetPlaces`), and,
-            // while it draws 3D icons or holograms, the face of a widget that
-            // shows more than an icon, from a picture of it taken each
-            // second; the widget itself stays here, unseen, taking its clicks
-            // and its menu.
-            DrawnWidget {
-                id: drawnWidget
-                applet: slot.plasmaApplet
-                widget: slot.applet
-                drawsIcons: root.dockApplet !== null && root.dockApplet.barDrawsWidgetIcons === true
-                drawsFaces: root.dockApplet !== null && root.dockApplet.barDrawsWidgetFaces === true
-                shown: slot.visible
-                onUpdated: root.queueWidgetPlaces()
+            // An icon widget's icon is drawn by the dock (`widgetPlaces`); the
+            // widget itself stays here, unseen, taking its clicks and its menu.
+            readonly property bool iconDrawnByDock: plasmaApplet !== null && applet !== null
+                && root.iconWidgetPlugins.includes(String(plasmaApplet.pluginName))
+                && root.dockApplet !== null && root.dockApplet.barDrawsWidgetIcons === true
+            Binding {
+                when: slot.applet !== null
+                target: slot.applet
+                property: "opacity"
+                value: slot.iconDrawnByDock ? 0 : 1
+                restoreMode: Binding.RestoreBindingOrValue
             }
-            property alias drawn: drawnWidget
             readonly property bool hovered: slotHover.hovered
             HoverHandler { id: slotHover }
             onHoveredChanged: root.queueWidgetPlaces()
@@ -549,6 +548,17 @@ ContainmentItem {
             onWidthChanged: root.queueWidgetPlaces()
             onHeightChanged: root.queueWidgetPlaces()
             onDragShiftChanged: root.queueWidgetPlaces()
+            Connections {
+                target: slot.plasmaApplet
+                ignoreUnknownSignals: true
+                function onIconChanged() { root.queueWidgetPlaces() }
+                function onTitleChanged() { root.queueWidgetPlaces() }
+            }
+            Connections {
+                target: slot.applet
+                ignoreUnknownSignals: true
+                function onExpandedChanged() { root.queueWidgetPlaces() }
+            }
             Component.onCompleted: root.queueWidgetPlaces()
             Component.onDestruction: root.queueWidgetPlaces()
             z: root.movingSlot === slot ? 10 : 0

@@ -39,6 +39,11 @@ The owner's list of 2026-10-13 (bugs, Studio fixes, UI themes, Phases 3 to
 
 Their evidence is in `build-codex-adrep/evidence/OWNER-LIST-PIECE-N/`.
 
+The breakage fixes of November 2026 (the six-step plan made after the
+breakage audit of 25 November) are one running report,
+`BREAKAGE-FIX-2026-11.md`, with a section per step; their evidence is in
+`/mnt/F/archdock-audit-2026-10-08/evidence/BREAKAGE-FIX-S<n>/`.
+
 These files are operational records, like `docs/CURRENT_STATE.md`:
 `tools/prepare-arch-source.py` leaves everything under `docs/repairs/` out of
 the source export and the package, and `source-exporter-test` checks that.
