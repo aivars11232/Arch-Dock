@@ -60,7 +60,13 @@ void IntentionalStopTest::recordsAndClearsForThisSession()
     QCOMPARE(object.value(QStringLiteral("reason")).toString(), QStringLiteral("quit"));
     QCOMPARE(object.value(QStringLiteral("session")).toString(), sessionIdentity());
     QVERIFY(sessionIdentity().endsWith(QStringLiteral("/7")));
+    // A stop signal stops Arch Dock for now: a record of one (left by an
+    // older version, which counted it as a Quit) keeps nothing stopped, and
+    // is removed.
     QVERIFY2(record(QStringLiteral("signal"), &error), qPrintable(error));
+    QVERIFY(!active());
+    QVERIFY(!QFileInfo::exists(path));
+    QVERIFY2(record(QStringLiteral("quit"), &error), qPrintable(error));
     QVERIFY(active());
     QVERIFY2(clear(&error), qPrintable(error));
     QVERIFY(!active());

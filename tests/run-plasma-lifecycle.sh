@@ -1877,6 +1877,18 @@ run_session() {
         "$unrelated_containment_id" "$unrelated_snapshot" 'Studio free-panel creation'
     log_session_phase 'created verified Studio free-panel host'
 
+    # Arch Dock's start-up check makes the built-in Bottom panel (shown by
+    # default) in Plasma 5 s after the last change to the desktop, and each
+    # change starts that wait again. The template phases compare Plasma's
+    # panel set before and after, so they start once that panel is there;
+    # otherwise it appears in the middle of whichever check runs then.
+    local bottom_wait
+    for ((bottom_wait = 0; bottom_wait < 300; ++bottom_wait)); do
+        [[ "$(owned_panel_record bottom 2>/dev/null || true)" =~ ^[0-9]+\|[0-9a-f-]+$ ]] && break
+        sleep 0.1
+    done
+    wait_for_owned_panel bottom
+
     local free_ids_before_template
     free_ids_before_template="$(free_panel_ids_json)"
     local free_count_before_template
@@ -1965,10 +1977,9 @@ run_session() {
         printf 'Added free entries were not persisted in order.\n' >&2
         exit 1
     }
-    [[ -z "$(panel_entry_ids "$template_panel_id")" ]] || {
-        printf 'An empty free panel showed entries.\n' >&2
-        exit 1
-    }
+    # An Empty panel holds its own folders, files and applications (since
+    # 27 October), in their order.
+    wait_for_panel_entry_ids "$template_panel_id" "$alpha_id,$folder_id" 'empty content'
     apply_panel_settings "$template_panel_id" "{'type': <'launcher'>}" 'launcher content'
     wait_for_panel_entry_ids "$template_panel_id" "$alpha_id,$folder_id" 'launcher content'
     require_true_reply "$(panel_call addPanelEntries "$template_panel_id" "['$beta_url']")"
@@ -2540,10 +2551,9 @@ run_session() {
         printf 'Empty native panel ownership marker was not persisted: %s\n' "$empty_record" >&2
         exit 1
     }
-    [[ "$(native_widget_count "$empty_containment_id")" == '0' ]] || {
-        printf 'Empty native panel unexpectedly contains widgets.\n' >&2
-        exit 1
-    }
+    # An Empty edge panel carries the dock widget like the others, for its
+    # own items (since 27 October), and nothing else.
+    require_visual_dock "$empty_containment_id" "$empty_panel_id" empty
     require_native_panel_geometry \
         "$empty_containment_id" 76 custom 720 720 '*' 'top empty panel creation'
     require_unrelated_panel_unchanged \
@@ -2554,10 +2564,8 @@ run_session() {
         exit 1
     }
     require_true_reply "$(panel_call createNativeKdePanel "$empty_panel_id")"
-    [[ "$(native_widget_count "$empty_containment_id")" == '0' ]] || {
-        printf 'Empty native panel retained a legacy control applet.\n' >&2
-        exit 1
-    }
+    # The legacy control applet is gone again; the dock stays.
+    require_visual_dock "$empty_containment_id" "$empty_panel_id" empty
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'empty renderer reconciliation'
     require_true_reply "$(panel_call removeNativeKdePanel "$empty_panel_id")"
@@ -3139,10 +3147,13 @@ run_session() {
     wait_for_free_host_absent "$studio_containment_id" "$studio_applet_id"
     wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
 
+    # The widget went while Arch Dock was not running, as when Plasma loses
+    # it over a restart: the next Arch Dock does not delete the panel but,
+    # once Plasma has had time to load (90 s) and the widget stayed missing
+    # on a second look, puts it back on the desktop with its settings.
     stop_arch_dock
     start_arch_dock arch-dock-free-zero-match.log
     start_signal_monitor nativePanelRecoveryFinished
-    wait_for_panel_registry_value "$studio_panel_id" freeHostState detached
     wait_for_signal_monitor nativePanelRecoveryFinished
     [[ "$(panel_entry_ids "$template_panel_id")" == "$lifecycle_order" &&
         "$(panel_registry_value "$template_panel_id" panelRotationMode)" == 'clockwise' ]] || {
@@ -3150,56 +3161,62 @@ run_session() {
         exit 1
     }
     log_session_phase 'preserved free content order and rotation through a service restart'
-    [[ "$(panel_registry_value "$studio_panel_id" freeDesktopContainmentId)" == '-1' &&
-        "$(panel_registry_value "$studio_panel_id" freeDockAppletId)" == '-1' &&
-        -z "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" &&
-        "$(panel_registry_value "$studio_panel_id" freeRecoveryError)" == 'owned-host-not-found' &&
+    local put_back_attempt put_back_count=''
+    for ((put_back_attempt = 0; put_back_attempt < 240; ++put_back_attempt)); do
+        put_back_count="$(free_host_match_count "$studio_panel_id" "$studio_token" 2>/dev/null || true)"
+        [[ "$put_back_count" == '1' ]] && break
+        sleep 1
+    done
+    [[ "$put_back_count" == '1' &&
+        "$(panel_registry_value "$studio_panel_id" freeHostState)" == 'hosted-owned' &&
+        "$(panel_registry_value "$studio_panel_id" freeOwnershipToken)" == "$studio_token" &&
         "$(free_panel_count)" == "$free_count_before_cleanup" &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
         "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
         "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
-        printf 'Zero-match free-host recovery did not persist one safe detached record.\n' >&2
+        printf 'A free panel whose widget was lost was not put back: matches=%s record=%s\n' \
+            "${put_back_count:-unavailable}" "$(panel_registry_record_snapshot "$studio_panel_id" 2>/dev/null || true)" >&2
         exit 1
     }
     require_current_free_panel_host \
-        "$template_panel_id" "$template_token" 'zero-match-preserved template'
+        "$template_panel_id" "$template_token" 'lost-host put-back template'
     require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'zero free-host match detach'
-
-    local detached_studio_snapshot
-    detached_studio_snapshot="$(panel_registry_record_snapshot "$studio_panel_id")"
-    stop_arch_dock
-    start_arch_dock arch-dock-free-zero-match-repeated.log
-    start_signal_monitor nativePanelRecoveryFinished
-    wait_for_signal_monitor nativePanelRecoveryFinished
-    [[ "$(panel_registry_record_snapshot "$studio_panel_id")" == "$detached_studio_snapshot" &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
-        "$(free_panel_count)" == "$free_count_before_cleanup" ]] || {
-        printf 'Repeated zero-match synchronization changed the detached free-panel record.\n' >&2
-        exit 1
-    }
-    require_current_free_panel_host \
-        "$template_panel_id" "$template_token" 'repeated-zero-preserved template'
+        "$unrelated_containment_id" "$unrelated_snapshot" 'lost free host put back'
+    log_session_phase 'put a free panel whose widget was lost back on the desktop instead of deleting it'
 
     start_signal_monitor nativePanelRecoveryFinished
     panel_call removePanel "$studio_panel_id" >/dev/null
     wait_for_panel_registry_absent "$studio_panel_id"
+    wait_for_free_host_match_count "$studio_panel_id" "$studio_token" 0
     wait_for_signal_monitor nativePanelRecoveryFinished
     [[ "$(free_panel_count)" == "$((free_count_before_cleanup - 1))" &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '0' &&
         "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
         "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
-        printf 'Removing the detached free record changed a live or unrelated applet.\n' >&2
+        printf 'Removing the put-back free panel changed a live or unrelated applet.\n' >&2
         exit 1
     }
     require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'detached free record removal'
+        "$unrelated_containment_id" "$unrelated_snapshot" 'put-back free panel removal'
 
     template_containment_id="$(panel_registry_value \
         "$template_panel_id" freeDesktopContainmentId)"
     template_applet_id="$(panel_registry_value "$template_panel_id" freeDockAppletId)"
+    # The final free panel has a second copy on the desktop, as after a put
+    # back that Plasma's late restore doubled: Remove Panel takes both.
+    local template_name duplicate_fixture remove_reply
+    template_name="$(panel_registry_value "$template_panel_id" name)"
+    duplicate_fixture="$(create_duplicate_free_host_fixture \
+        "$template_containment_id" "$template_panel_id" "$template_token")"
+    [[ "$duplicate_fixture" == *'|'* ]] || {
+        printf 'Could not add a second copy of the final free panel: %s\n' "$duplicate_fixture" >&2
+        exit 1
+    }
+    wait_for_free_host_match_count "$template_panel_id" "$template_token" 2
     start_signal_monitor nativePanelRecoveryFinished
-    panel_call removePanel "$template_panel_id" >/dev/null
+    remove_reply="$(panel_call removePanel "$template_panel_id")"
+    [[ "$(gvariant_map_boolean success <<<"$remove_reply")" == 'true' ]] || {
+        printf 'Remove Panel refused a free panel with two copies: %s\n' "$remove_reply" >&2
+        exit 1
+    }
     wait_for_panel_registry_absent "$template_panel_id"
     wait_for_free_host_match_count "$template_panel_id" "$template_token" 0
     wait_for_free_host_absent "$template_containment_id" "$template_applet_id"
@@ -3214,7 +3231,41 @@ run_session() {
     }
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'verified free-host cleanup'
-    log_session_phase 'detached zero matches idempotently and removed the final verified free host'
+    log_session_phase 'removed the final verified free host with its second copy'
+
+    # Its settings were kept; Bring back makes a new free panel with them,
+    # on the desktop with a widget of its own, and the kept copy goes.
+    local removed_file removed_key back_reply back_panel_id back_token
+    removed_file="$XDG_DATA_HOME/Arch Dock/Arch Dock/removed-panels.json"
+    removed_key="$(jq -er --arg name "$template_name" \
+        'first(.[] | select(.record.name == $name) | .key)' "$removed_file")" || {
+        printf 'The removed free panel was not kept: %s\n' "$(cat "$removed_file" 2>/dev/null)" >&2
+        exit 1
+    }
+    back_reply="$(panel_call bringBackRemovedPanel "$removed_key")"
+    [[ "$(gvariant_map_boolean success <<<"$back_reply")" == 'true' ]] || {
+        printf 'Bring back failed: %s\n' "$back_reply" >&2
+        exit 1
+    }
+    back_panel_id="$(gvariant_map_string panelId <<<"$back_reply")"
+    wait_for_panel_registry_value "$back_panel_id" freeHostState hosted-owned
+    back_token="$(panel_registry_value "$back_panel_id" freeOwnershipToken)"
+    [[ "$(panel_registry_value "$back_panel_id" name)" == "$template_name" &&
+        "$(free_host_match_count "$back_panel_id" "$back_token")" == '1' &&
+        "$(jq --arg key "$removed_key" '[.[] | select(.key == $key)] | length' "$removed_file")" == '0' ]] || {
+        printf 'The free panel brought back is not the kept one, or has no widget of its own.\n' >&2
+        exit 1
+    }
+    log_session_phase 'brought a removed free panel back with its settings and its own widget'
+    start_signal_monitor nativePanelRecoveryFinished
+    panel_call removePanel "$back_panel_id" >/dev/null
+    wait_for_panel_registry_absent "$back_panel_id"
+    wait_for_free_host_match_count "$back_panel_id" "$back_token" 0
+    wait_for_signal_monitor nativePanelRecoveryFinished
+    [[ "$(free_panel_count)" == "$((free_count_before_cleanup - 2))" ]] || {
+        printf 'Removing the panel brought back left a free panel behind.\n' >&2
+        exit 1
+    }
 
     local removal_registry_snapshot
     removal_registry_snapshot="$(panel_registry_record_snapshot "$panel_id")"

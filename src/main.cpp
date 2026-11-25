@@ -122,9 +122,10 @@ int main(int argc, char *argv[])
         resumeCommand = resumeCommand || argument == QStringLiteral("--resume");
         activated = activated || argument == QStringLiteral("--dbus-activated");
     }
-    // `arch-dock --resume`, a panel's Retry: ends a stop asked for earlier
-    // without starting Arch Dock in this process; the panel then asks the
-    // session bus again, which starts Arch Dock as on any other day.
+    // `arch-dock --resume`, a panel's Start: ends a stop asked for earlier
+    // and asks the session bus to start Arch Dock, which it does as on any
+    // other day (not in this process). A stopped Arch Dock answers no panel,
+    // so nothing else would ask the bus.
     if (resumeCommand)
     {
         QCoreApplication resume(argc, argv);
@@ -134,6 +135,12 @@ int main(int argc, char *argv[])
             qWarning().noquote() << error;
             return EXIT_FAILURE;
         }
+        if (QDBusConnectionInterface *bus = QDBusConnection::sessionBus().interface())
+        {
+            const QDBusReply<void> started = bus->startService(ServiceName);
+            if (!started.isValid())
+                qWarning().noquote() << "Arch Dock could not be started:" << started.error().message();
+        }
         return EXIT_SUCCESS;
     }
     // The session bus starts this process on demand. After the user quit,
@@ -142,8 +149,8 @@ int main(int argc, char *argv[])
     {
         QCoreApplication stopped(argc, argv);
         WindowWatcher::releaseKWinScripts();
-        qInfo() << "Arch Dock was quit for this session; it refuses on-demand activation"
-                << "until it is started again.";
+        qInfo().noquote() << "Arch Dock was quit for this login and does not start on its own;"
+                          << "start it from the application menu or with a panel's Start button.";
         return ActivationRefusedExitCode;
     }
     std::unique_ptr<QCoreApplication> application;
@@ -301,9 +308,10 @@ int main(int argc, char *argv[])
         },
         Qt::QueuedConnection);
 
-    // TERM and INT, as sent by "Quit Application" or Ctrl+C, stop Arch Dock
-    // the way Quit does. KILL cannot run any of this: it is treated as a
-    // crash, and the next activation request starts Arch Dock again.
+    // TERM and INT, as sent by System Monitor, pkill or Ctrl+C, stop Arch
+    // Dock cleanly for now: like KILL, which cannot run any of this, they
+    // leave no stop behind, and the next activation request starts Arch Dock
+    // again. Only Quit keeps it stopped for the login.
     std::unique_ptr<QSocketNotifier> stopNotifier;
     if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, stopSignalPipe) == 0)
     {

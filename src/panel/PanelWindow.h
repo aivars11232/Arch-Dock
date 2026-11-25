@@ -85,9 +85,10 @@ public:
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
     [[nodiscard]] qulonglong presentationRequestRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
-    // Leaves the event loop after recording that the user wants Arch Dock to
-    // stay stopped, returning any audition to the saved desktop and releasing
-    // the KWin watcher whose window reports would start it again.
+    // Leaves the event loop, returning any audition to the saved desktop.
+    // For a Quit (any `reason` but "signal") it first records that the user
+    // wants Arch Dock to stay stopped and releases the KWin watcher whose
+    // window reports would start it again; a stop signal stops it for now.
     QVariantMap stopIntentionally(const QString &reason);
     // A built-in theme's values for Panel Studio to load into a panel's draft,
     // without values for fields that do not act on that panel.
@@ -150,10 +151,15 @@ public slots:
     QVariantMap createFreePanel();
     QVariantMap createFreePanelFromTemplate(int containmentId, const QString &ownershipToken);
     QVariantMap adoptFreePanelApplet(int desktopContainmentId, int dockAppletId);
-    // A panel's widget reports that its owner removed it from Plasma, or
-    // the Plasma panel it sits in (`removing`), or that the removal was
-    // undone. Once Plasma has deleted it, the panel is removed entirely; a
-    // built-in edge panel is hidden instead. Profiles keep their own copies.
+    // A panel's widget (`appletId`, Plasma's id for it) reports that its
+    // owner removed it from Plasma, or the Plasma panel it sits in
+    // (`removing`), or that the removal was undone. Once Plasma has deleted
+    // it, the panel is removed entirely, its settings kept to bring back; a
+    // built-in edge panel is hidden instead. A report from a widget that is
+    // not the panel's own (a stray copy) changes nothing.
+    void panelRemovalReported(const QString &panelId, bool removing, int appletId);
+    // The same report from a widget of an older Arch Dock, which does not
+    // name itself; it waits for the same checks.
     void panelRemovalRequested(const QString &panelId, bool removing);
     void saveFreePanelPosition(const QString &panelId, int x, int y);
     bool setNativePanelType(const QString &panelId, const QString &type);
@@ -294,7 +300,20 @@ public slots:
     bool createNativeKdePanel(const QString &panelId);
     bool addKdeWidget(const QString &panelId, const QString &appletId);
     bool removeNativeKdePanel(const QString &panelId);
-    void removePanel(const QString &panelId);
+    // A panel's Remove Panel: { success, errorCode, message }, the message in
+    // plain words for the panel to show when the panel could not be removed.
+    // The panel's settings are kept to bring back.
+    QVariantMap removePanel(const QString &panelId);
+    // Remove Panel from a panel's own widget, which names its owner token:
+    // a leftover widget carrying the number of a newer panel is refused.
+    QVariantMap removePanelOfWidget(const QString &panelId, const QString &ownerToken);
+    // Panels removed earlier whose settings are kept, newest first, for
+    // Panel Studio: { key, name, kind ("free", "bar" or "edge"), edge,
+    // removedAt, cause }.
+    QVariantList removedPanels() const;
+    // Makes a new panel of the kept one's kind with its settings, and drops
+    // the kept copy: { success, panelId, errorCode, message }.
+    QVariantMap bringBackRemovedPanel(const QString &key);
     bool openKdeWidgetPreview(const QString &panelId, const QString &appletId);
     QVariantList availableScreens() const;
     int screenIndexForPanel(const QString &panelId) const;
@@ -495,6 +514,8 @@ private:
     void recoverNativePanels(bool allowMissingHostRecovery);
     void synchronizeFreePanels();
     void restoreFreePanelHost(const ArchDock::FreePanelController &controller, const QString &panelId);
+    // Moves a free panel's widget to the place and size its record holds.
+    void moveFreePanelToSavedPlace(const QString &panelId);
     [[nodiscard]] ArchDock::FreePanelCreationResult createFreePanelTransaction(
         const ArchDock::FreePanelCreationRequest &request);
     [[nodiscard]] ArchDock::FreePanelController::HostOperations freePanelHostOperations() const;
@@ -528,6 +549,12 @@ private:
         const QString &panelId,
         const QString &ownershipToken) const;
     [[nodiscard]] ArchDock::FreePanelRemovalOutcome removeOwnedFreePanelHostByIdentity(
+        const QString &panelId,
+        const QString &ownershipToken) const;
+    // Removes every widget showing the panel: how many were removed, or
+    // nothing when Plasma did not answer or the desktop or a copy is locked
+    // (then none is removed).
+    [[nodiscard]] std::optional<int> removeEveryOwnedFreePanelHost(
         const QString &panelId,
         const QString &ownershipToken) const;
     [[nodiscard]] ArchDock::FreePanelRemovalOutcome removeVerifiedFreeTemplateBridge(
@@ -706,9 +733,31 @@ private:
     QSet<QString> m_restoredFreeHosts;
     // Panels their owner removed in Plasma, waiting for Plasma to delete
     // them (a removal can be undone until then), and the check that waits.
-    QSet<QString> m_removalRequested;
+    // A report is acted on only once Plasma has not had the widget on two
+    // looks at least half a minute apart, with its desktops loaded; it ends
+    // when Plasma restarts, and after ten minutes when the widget stayed.
+    struct PendingRemoval
+    {
+        // The widget that reported, or -1 from an older widget.
+        int appletId = -1;
+        QElapsedTimer received;
+        // Since when Plasma has not had the widget; invalid while it has.
+        QElapsedTimer missingSince;
+    };
+    QHash<QString, PendingRemoval> m_removalRequested;
     QTimer m_removalCheckTimer;
     void checkRequestedRemovals();
+    // A panel's settings are kept (RemovedPanelStore) before its record is
+    // deleted: the kept copy's key, or empty (and `error`) when they could
+    // not be, in which case the panel is not deleted. A copy kept for a
+    // panel that then was not deleted is forgotten again; a deletion is
+    // told in the log in one plain line.
+    QString keepRemovedPanelSettings(const QVariantMap &record, const QString &cause, QString *error);
+    void forgetKeptPanelSettings(const QString &key);
+    void reportRemovedPanel(const QVariantMap &record, const QString &cause);
+    // Plasma has its desktops (its layout is loaded): a widget it does not
+    // have then is really gone.
+    bool plasmaDesktopsLoaded() const;
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     // Free panels as drawn on the screen, with the room each one's folder

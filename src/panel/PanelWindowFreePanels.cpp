@@ -6,6 +6,7 @@
 #include "PanelWindow.h"
 #include "PanelWindowHelpers.h"
 
+#include "../persistence/RemovedPanelStore.h"
 #include "../presets/PresetApplication.h"
 
 #include <QDBusConnection>
@@ -101,11 +102,22 @@ void PanelWindow::synchronizeFreePanels()
         // whose widget was gone.
         else if (result.outcome == ArchDock::FreePanelLifecycleOutcome::Detached)
         {
-            if (m_panelRegistry.removeDetachedFreePanel(panelId))
-                qInfo() << "Free panel" << panelId << "is removed: an older version left it off the desktop.";
+            // Its settings are kept first; without a kept copy it stays.
+            const QVariantMap kept = m_panelRegistry.panelSnapshot(panelId);
+            const QString cause = QStringLiteral("an older version had left it off the desktop");
+            QString keepError;
+            const QString keptKey = keepRemovedPanelSettings(kept, cause, &keepError);
+            if (keptKey.isEmpty())
+                qWarning() << "Free panel" << panelId << "that an older version left off the desktop stays:"
+                           << "its settings could not be kept:" << keepError;
+            else if (m_panelRegistry.removeDetachedFreePanel(panelId))
+                reportRemovedPanel(kept, cause);
             else
+            {
+                forgetKeptPanelSettings(keptKey);
                 qWarning() << "Could not remove free panel" << panelId
                            << "that an older version left off the desktop.";
+            }
         }
     }
     if (recheck && !m_freeHostRetryTimer.isActive())
@@ -134,6 +146,11 @@ void PanelWindow::restoreFreePanelHost(const ArchDock::FreePanelController &cont
     m_missingFreeHosts.remove(panelId);
     qInfo() << "The desktop widget of free panel" << panelId
             << "was gone from Plasma; the panel is back on the desktop.";
+    moveFreePanelToSavedPlace(panelId);
+}
+
+void PanelWindow::moveFreePanelToSavedPlace(const QString &panelId)
+{
     // Where it stood, at its size. A refused move leaves the widget where
     // Plasma placed it.
     if (const auto definition = runtimePanelDefinition(panelId))
@@ -153,6 +170,11 @@ void PanelWindow::restoreFreePanelHost(const ArchDock::FreePanelController &cont
 
 void PanelWindow::panelRemovalRequested(const QString &panelId, bool removing)
 {
+    panelRemovalReported(panelId, removing, -1);
+}
+
+void PanelWindow::panelRemovalReported(const QString &panelId, bool removing, int appletId)
+{
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return;
@@ -163,12 +185,53 @@ void PanelWindow::panelRemovalRequested(const QString &panelId, bool removing)
     {
         return;
     }
+    // Only the panel's own widget speaks for it. A second copy of the panel
+    // (one put back while Plasma later restored the first, say) or a widget
+    // Arch Dock itself took away going, or coming back, is not the panel
+    // being removed or kept.
+    const bool free = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
+        QStringLiteral("free");
+    const int ownApplet = free
+        ? m_panelRegistry.panelValue(panelId, QStringLiteral("freeDockAppletId")).toInt()
+        : m_panelRegistry.panelValue(panelId, QStringLiteral("nativeDockAppletId")).toInt();
+    if (appletId >= 0 && ownApplet >= 0 && appletId != ownApplet)
+    {
+        if (removing)
+            qInfo().noquote() << QStringLiteral("A second copy of panel %1 (widget %2) was removed from Plasma; "
+                                                "the panel itself (widget %3) stays.")
+                                     .arg(panelId).arg(appletId).arg(ownApplet);
+        return;
+    }
     if (!removing)
     {
         m_removalRequested.remove(panelId);
         return;
     }
-    m_removalRequested.insert(panelId);
+    // Plasma (or Arch Dock) has only just started and is still setting up
+    // its layout: a widget going away now is not its owner removing the
+    // panel. If the widget is really gone, the panel is put back like any
+    // lost one.
+    if (m_freeHostGraceClock.isValid() && m_freeHostGraceClock.elapsed() < 90000)
+    {
+        qInfo() << "Panel" << panelId
+                << "was reported removed while Plasma or Arch Dock was starting; the report is not acted on.";
+        // Looked at again shortly, so that a widget or Plasma panel that is
+        // really gone is put back.
+        if (free)
+        {
+            if (!m_freeHostRetryTimer.isActive())
+                m_freeHostRetryTimer.start();
+        }
+        else
+        {
+            scheduleNativePanelRecovery();
+        }
+        return;
+    }
+    PendingRemoval pending;
+    pending.appletId = appletId;
+    pending.received.start();
+    m_removalRequested.insert(panelId, pending);
     if (!m_removalCheckTimer.isActive())
     {
         m_removalCheckTimer.start();
@@ -181,48 +244,146 @@ void PanelWindow::checkRequestedRemovals()
 
     ArchDock::FreePanelController controller(
         m_panelRegistry, freePanelHostOperations());
-    const QStringList requested(m_removalRequested.cbegin(), m_removalRequested.cend());
+    // Plasma may still be loading its layout after it or Arch Dock started:
+    // a widget not found yet is not a widget deleted.
+    const bool grace = m_freeHostGraceClock.isValid() && m_freeHostGraceClock.elapsed() < 90000;
+    const QStringList requested = m_removalRequested.keys();
     for (const QString &panelId : requested)
     {
+        // The calls below ask Plasma and can let other events run, which may
+        // add or drop reports: each is read as a copy and written back.
+        if (!m_removalRequested.contains(panelId))
+            continue;
         if (!m_panelRegistry.panelIds().contains(panelId))
         {
             m_removalRequested.remove(panelId);
             continue;
         }
+        PendingRemoval pending = m_removalRequested.value(panelId);
+        const auto keepWaiting = [this, &panelId](const PendingRemoval &state)
+        {
+            if (state.received.elapsed() > 10 * 60 * 1000)
+            {
+                m_removalRequested.remove(panelId);
+                qInfo() << "Panel" << panelId
+                        << "stays: ten minutes after it was reported removed, the removal is neither"
+                        << "confirmed nor finished.";
+                return;
+            }
+            const auto found = m_removalRequested.find(panelId);
+            if (found != m_removalRequested.end())
+                *found = state;
+        };
+        if (grace)
+        {
+            keepWaiting(pending);
+            continue;
+        }
         // Gone means deleted by Plasma: while a removal can still be undone,
         // the widget or the Plasma panel is still there.
-        if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
-            QStringLiteral("free"))
+        const bool free = m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
+            QStringLiteral("free");
+        if (free)
         {
-            const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, true);
-            if (!result.success || result.outcome != ArchDock::FreePanelLifecycleOutcome::Detached)
+            const ArchDock::FreePanelLifecycleResult result = controller.synchronize(panelId, false);
+            if (!result.success)
             {
+                // Plasma did not answer, or answered twice: nothing is decided.
+                keepWaiting(pending);
                 continue;
             }
-            m_removalRequested.remove(panelId);
-            m_missingFreeHosts.remove(panelId);
-            if (m_panelRegistry.removeDetachedFreePanel(panelId))
-                qInfo() << "Free panel" << panelId << "is removed with its desktop widget.";
-            else
-                qWarning() << "Could not remove free panel" << panelId << "after its widget was removed.";
-            continue;
+            // Deferred: its widget is not in Plasma's layout. Detached: an
+            // earlier try here let go of it already, then could not finish.
+            if (result.outcome != ArchDock::FreePanelLifecycleOutcome::Deferred &&
+                result.outcome != ArchDock::FreePanelLifecycleOutcome::Detached)
+            {
+                // Still on the desktop: the removal was undone, or never was.
+                pending.missingSince.invalidate();
+                keepWaiting(pending);
+                continue;
+            }
         }
-        const std::optional<bool> exists = nativePanelExistence(nativePanelId(panelId));
-        if (!exists.has_value() || *exists)
+        else
         {
+            // A panel with no Plasma panel recorded cannot be found gone.
+            const int native = nativePanelId(panelId);
+            const std::optional<bool> exists = native >= 0 ? nativePanelExistence(native) : std::nullopt;
+            if (!exists.has_value() || *exists)
+            {
+                if (exists.has_value())
+                    pending.missingSince.invalidate();
+                keepWaiting(pending);
+                continue;
+            }
+        }
+        // Gone: confirmed only by a second look at least half a minute later,
+        // with Plasma's desktops loaded.
+        if (!pending.missingSince.isValid())
+        {
+            pending.missingSince.start();
+            keepWaiting(pending);
             continue;
         }
-        m_removalRequested.remove(panelId);
-        if (m_panelRegistry.isBuiltIn(panelId))
+        if (pending.missingSince.elapsed() < 30000 || !plasmaDesktopsLoaded())
+        {
+            keepWaiting(pending);
+            continue;
+        }
+        // From here the report stays until the panel is gone from Arch Dock
+        // too: a step that fails is tried again at the next look, and the
+        // panel is not put back meanwhile.
+        if (!free && m_panelRegistry.isBuiltIn(panelId))
         {
             // Bottom, Top and Side stay in the panel list, hidden.
             if (!m_panelRegistry.updatePanelChecked(panelId, {{QStringLiteral("visible"), false}}))
-                qWarning() << "Could not hide edge panel" << panelId << "after its Plasma panel was removed.";
+            {
+                qWarning() << "Could not hide edge panel" << panelId
+                           << "after its Plasma panel was removed; trying again shortly.";
+                keepWaiting(pending);
+                continue;
+            }
+            m_removalRequested.remove(panelId);
+            qInfo() << "Edge panel" << panelId << "is hidden: its Plasma panel was removed.";
+            continue;
+        }
+        // Its settings are kept before its record goes; without a kept copy
+        // nothing is deleted (the report is looked at again later).
+        const QVariantMap kept = m_panelRegistry.panelSnapshot(panelId);
+        const QString cause = free ? QStringLiteral("its widget was removed in Plasma")
+                                   : QStringLiteral("its Plasma panel was removed");
+        QString keepError;
+        const QString keptKey = keepRemovedPanelSettings(kept, cause, &keepError);
+        if (keptKey.isEmpty())
+        {
+            qWarning().noquote() << QStringLiteral("Panel %1 is not removed: its settings could not be kept (%2).")
+                                        .arg(panelId, keepError);
+            pending.missingSince.invalidate();
+            keepWaiting(pending);
+            continue;
+        }
+        bool removed = false;
+        if (free)
+        {
+            const ArchDock::FreePanelLifecycleResult detached = controller.synchronize(panelId, true);
+            removed = detached.success && detached.outcome == ArchDock::FreePanelLifecycleOutcome::Detached
+                && m_panelRegistry.removeDetachedFreePanel(panelId);
+            m_missingFreeHosts.remove(panelId);
         }
         else
         {
             m_panelRegistry.removePanel(panelId);
-            qInfo() << "Edge panel" << panelId << "is removed with its Plasma panel.";
+            removed = !m_panelRegistry.panelIds().contains(panelId);
+        }
+        if (removed)
+        {
+            m_removalRequested.remove(panelId);
+            reportRemovedPanel(kept, cause);
+        }
+        else
+        {
+            forgetKeptPanelSettings(keptKey);
+            qWarning() << "Could not remove panel" << panelId << "after Plasma removed it; trying again shortly.";
+            keepWaiting(pending);
         }
     }
     if (m_removalRequested.isEmpty())
@@ -230,6 +391,47 @@ void PanelWindow::checkRequestedRemovals()
         m_removalCheckTimer.stop();
     }
     updateDesktopSuite();
+}
+
+bool PanelWindow::plasmaDesktopsLoaded() const
+{
+    const std::optional<int> count = evaluatePlasmaScriptResultOptional(
+        QStringLiteral("print('ARCHDOCK_RESULT:' + String(desktops().length));"));
+    return count.has_value() && *count > 0;
+}
+
+QString PanelWindow::keepRemovedPanelSettings(const QVariantMap &record, const QString &cause,
+                                              QString *error)
+{
+    if (record.isEmpty())
+    {
+        if (error) *error = QStringLiteral("removed-panel-record-empty");
+        return {};
+    }
+    ArchDock::RemovedPanelStore store;
+    return store.keep(record, cause, error);
+}
+
+void PanelWindow::forgetKeptPanelSettings(const QString &key)
+{
+    ArchDock::RemovedPanelStore store;
+    QString error;
+    if (!store.forget(key, &error))
+        qWarning() << "A kept copy of a panel that was not removed stays listed:" << error;
+}
+
+void PanelWindow::reportRemovedPanel(const QVariantMap &record, const QString &cause)
+{
+    // The removal has gone through: only now does the oldest kept panel
+    // make room for this one.
+    ArchDock::RemovedPanelStore store;
+    QString trimError;
+    if (!store.trim(&trimError))
+        qWarning() << "The list of removed panels could not be shortened:" << trimError;
+    qInfo().noquote() << QStringLiteral("Panel \"%1\" (%2) is removed: %3. Its settings are kept; "
+                                        "Panel Studio can bring it back (Panels, then Bring back).")
+                             .arg(record.value(QStringLiteral("name")).toString(),
+                                  record.value(QStringLiteral("id")).toString(), cause);
 }
 
 QVariantMap PanelWindow::createFreePanel()
@@ -1085,6 +1287,55 @@ print("ARCHDOCK_RESULT:" + String(outcome));
                                .arg(plasmaScriptStringLiteral(panelId))
                                .arg(plasmaScriptStringLiteral(ownershipToken));
     return freePanelRemovalOutcome(evaluatePlasmaScriptResultOptional(script));
+}
+
+std::optional<int> PanelWindow::removeEveryOwnedFreePanelHost(
+    const QString &panelId,
+    const QString &ownershipToken) const
+{
+    if (panelId.isEmpty() || ownershipToken.isEmpty())
+    {
+        return std::nullopt;
+    }
+    // Every widget showing this panel under its token, the same match as
+    // discovery: used when the owner removes a panel that has two copies on
+    // the desktop. Answers how many were removed. Plasma takes a widget away
+    // after the script has run, so the answer is the count removed, not a
+    // count of what is left; nothing is removed (and -1 answered) while the
+    // desktop or a copy is locked, when Plasma would refuse.
+    const QString script = QStringLiteral(R"JS(
+const allDesktops = desktops();
+const found = [];
+let locked = false;
+for (let desktopIndex = 0; desktopIndex < allDesktops.length; ++desktopIndex) {
+    const desktop = desktopById(Number(allDesktops[desktopIndex].id));
+    if (!desktop)
+        continue;
+    const docks = desktop.widgets("org.archdock.dock");
+    for (let dockIndex = 0; dockIndex < docks.length; ++dockIndex) {
+        const dock = desktop.widgetById(Number(docks[dockIndex].id));
+        if (!dock || dock.type !== "org.archdock.dock")
+            continue;
+        dock.currentConfigGroup = ["General"];
+        const bootstrap = String(dock.readConfig("bootstrapFreeDock", true)).toLowerCase();
+        if (String(dock.readConfig("panelId", "")) === %1 &&
+            String(dock.readConfig("panelType", "")) === "empty" &&
+            String(dock.readConfig("ownerToken", "")) === %2 &&
+            (bootstrap === "false" || bootstrap === "0")) {
+            found.push(dock);
+            locked = locked || desktop.locked === true || dock.locked === true;
+        }
+    }
+}
+if (!locked)
+    for (const dock of found)
+        dock.remove();
+print("ARCHDOCK_RESULT:" + String(locked ? -1 : found.length));
+)JS")
+                               .arg(plasmaScriptStringLiteral(panelId))
+                               .arg(plasmaScriptStringLiteral(ownershipToken));
+    const std::optional<int> removed = evaluatePlasmaScriptResultOptional(script);
+    return removed.has_value() && *removed >= 0 ? removed : std::nullopt;
 }
 
 ArchDock::FreePanelRemovalOutcome PanelWindow::removeVerifiedFreeTemplateBridge(

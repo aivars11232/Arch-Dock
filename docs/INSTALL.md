@@ -41,11 +41,13 @@ To stop Arch Dock, run `arch-dock --quit` or choose **Quit Arch Dock** on the
 application menu entry (right-click it in the launcher). It then stays stopped,
 although installed applets and the KWin window watcher would otherwise start it
 on demand, until it is started explicitly again (`arch-dock`, the menu entry,
-`arch-dock --settings`) or you log in again. Terminate (TERM or INT, as System
-Monitor's **Quit Application** sends) stops it the same way. Kill (KILL) cannot
-run any code: it is treated as a crash, and the next activation request starts
-Arch Dock again. While it is stopped, on-demand activation is refused with
-`org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75.
+`arch-dock --settings`, a panel's **Start** button) or you log in again.
+Terminate (TERM or INT, as System Monitor and `pkill` send) and Kill (KILL)
+stop it only for now: no stop is kept, and the next activation request (a
+panel, a window event) starts Arch Dock again, as after a crash. While a Quit
+is in force, on-demand activation is refused with
+`org.freedesktop.DBus.Error.Spawn.ChildExited` and exit status 75, and the
+journal says how to start Arch Dock again.
 
 ### Arch Dock's own bars
 
@@ -275,8 +277,9 @@ systemctl --user start arch-dock.service
 Use the D-Bus route normally. If an owner was already started independently,
 systemd cannot adopt that process as its main process. D-Bus activation and
 the executable guard still prevent a second backend; use systemd control
-when it is the initial launcher. Stopping the unit sends TERM, which keeps
-Arch Dock stopped as Quit does; starting the unit starts it again.
+when it is the initial launcher. Stopping the unit sends TERM, which stops
+Arch Dock for now: a panel or a window event starts it again on demand. Use
+Quit to keep it stopped; starting the unit starts it again.
 Installation never starts or enables this unit.
 
 ## Configuration recovery and upgrades

@@ -250,6 +250,10 @@ Window {
     // own or another dock's), read when the new panel page opens: there is
     // one panel to an edge, so those cannot take a new one.
     property var occupiedEdges: []
+    // Panels removed earlier whose settings Arch Dock kept, newest first,
+    // read when the new panel page opens: each can be brought back from
+    // there as it was.
+    property var removedPanelList: []
     function newPanelPlaceFree(edge) {
         return edge === "free" || !occupiedEdges.includes(edge);
     }
@@ -454,6 +458,7 @@ Window {
     // not, the user is asked first.
     function openNewPanelPage(edge) {
         occupiedEdges = Array.from(panelController.occupiedScreenEdges() || []);
+        removedPanelList = Array.from(panelController.removedPanels() || []);
         const wanted = newPanelKinds.includes(String(edge)) ? String(edge) : "free";
         const place = newPanelPlaceFree(wanted) ? wanted : "free";
         if (auditionBusy) {
@@ -2314,7 +2319,20 @@ Window {
             refreshProjection();
             return;
         }
-        if (action === "create-free") {
+        if (action === "bring-back-panel") {
+            if (hasPendingChanges || auditionBusy)
+                return;
+            const result = panelController.bringBackRemovedPanel(String(data.key || ""));
+            removedPanelList = Array.from(panelController.removedPanels() || []);
+            if (result && result.success === true && String(result.panelId || "").length > 0) {
+                openPanelEditor(String(result.panelId));
+                if (String(result.message || "").length > 0)
+                    studioWarning = String(result.message);
+            } else {
+                studioError = String(result && result.message ? result.message
+                    : qsTr("The panel could not be brought back."));
+            }
+        } else if (action === "create-free") {
             if (hasPendingChanges)
                 return;
             const result = panelController.createFreePanel();
@@ -3012,6 +3030,54 @@ Window {
                     checkable: true
                     checked: root.expandedCompactPreview
                     onToggled: root.expandedCompactPreview = checked
+                }
+            }
+
+            // Panels removed earlier, kept with their settings: on the new
+            // panel page, each with a button that adds it again as it was.
+            // Shown only while there is one.
+            ColumnLayout {
+                objectName: "studio-removed-panels"
+                visible: root.mainTabIndex === 1 && root.newPanelPicked && root.removedPanelList.length > 0
+                Layout.fillWidth: true
+                spacing: 4
+
+                Label {
+                    text: qsTr("Removed panels")
+                    color: root.studioTheme.text
+                    font.weight: Font.DemiBold
+                }
+                Repeater {
+                    model: root.newPanelPicked ? root.removedPanelList : []
+                    delegate: RowLayout {
+                        required property var modelData
+
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            readonly property string kindText: modelData.kind === "free" ? qsTr("free panel")
+                                : modelData.kind === "bar" ? qsTr("bar on the %1 edge").arg(String(modelData.edge || ""))
+                                : qsTr("panel on the %1 edge").arg(String(modelData.edge || ""))
+                            text: qsTr("%1 (%2), removed %3")
+                                .arg(String(modelData.name || qsTr("Panel")))
+                                .arg(kindText)
+                                .arg(Qt.formatDateTime(modelData.removedAt, "d MMM yyyy, HH:mm"))
+                            color: root.studioTheme.text
+                            elide: Text.ElideRight
+                        }
+                        Button {
+                            objectName: "studio-bring-back-panel"
+                            text: qsTr("Bring back")
+                            icon.name: "edit-undo"
+                            enabled: !root.hasPendingChanges && !root.auditionBusy
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Add this panel again with the settings it had")
+                            ToolTip.delay: 600
+                            onClicked: root.performStudioAction("bring-back-panel", { key: String(modelData.key) })
+                        }
+                    }
                 }
             }
 

@@ -176,6 +176,17 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                 // back, after the same wait as at the backend's start.
                 m_freeHostGraceClock.restart();
                 m_missingFreeHosts.clear();
+                // A removal reported to the Plasma that went away is not
+                // trusted across its restart: a widget whose removal was
+                // final is missing for good and is put back like any lost
+                // one, never deleted on the old word.
+                if (!m_removalRequested.isEmpty())
+                {
+                    qInfo() << "Plasma restarted; removals reported before are not acted on:"
+                            << m_removalRequested.keys();
+                    m_removalRequested.clear();
+                    m_removalCheckTimer.stop();
+                }
                 if (newOwner.isEmpty())
                 {
                     ++m_nativePanelRecoveryGeneration;
@@ -497,18 +508,29 @@ QVariantMap PanelWindow::quit()
 
 QVariantMap PanelWindow::stopIntentionally(const QString &reason)
 {
+    // Only Arch Dock's own Quit (the menu entry, `arch-dock --quit`) keeps it
+    // stopped for the rest of the login. A stop signal (System Monitor's End
+    // or Quit, pkill, a package update's restart) stops it for now, as a
+    // crash does: the next request from a panel or the KWin watcher starts
+    // it again. That is how people end a program that misbehaves, and a stop
+    // that silently outlived it left the desktop without its panels.
     // Record first: from here on an activation request must find the stop.
-    // A stop signal after this program's own file was replaced is a package
-    // update's restart, not a Quit: Arch Dock starts again when its panels
-    // ask, so they keep their looks and icons.
-    const bool update = reason == QStringLiteral("signal") && ArchDock::IntentionalStop::executableReplaced();
+    const bool quit = reason != QStringLiteral("signal");
     QString error;
-    const bool recorded = !update && ArchDock::IntentionalStop::record(reason, &error);
-    if (update)
+    const bool recorded = quit && ArchDock::IntentionalStop::record(reason, &error);
+    if (!quit)
     {
-        qInfo().noquote() << "Arch Dock stops for its update and starts again when asked.";
+        qInfo().noquote() << (ArchDock::IntentionalStop::executableReplaced()
+            ? QStringLiteral("Arch Dock stops for its update and starts again when a panel asks for it.")
+            : QStringLiteral("Arch Dock was stopped by a signal (System Monitor or pkill); "
+                             "it starts again when a panel or the application menu asks for it."));
     }
-    else if (!recorded)
+    else if (recorded)
+    {
+        qInfo().noquote() << "Arch Dock was quit and stays stopped for this login, until it is"
+                          << "started from the application menu or with a panel's Start button.";
+    }
+    else
     {
         qWarning().noquote() << "Arch Dock stops without staying stopped:" << error;
     }
@@ -519,9 +541,12 @@ QVariantMap PanelWindow::stopIntentionally(const QString &reason)
     // Panel Studio's draft is dropped and Plasma put back before the quit.
     clearPanelSettingsPreview();
     restoreStudioDraftHosts();
-    // Arch Dock's own bars go with it.
+    // Arch Dock's own bars go with it. After a Quit the KWin watcher is
+    // released, since its window reports would start Arch Dock again; after
+    // a signal it stays, so the next window event does, as after a crash.
     m_barHost.stop();
-    WindowWatcher::releaseKWinScripts();
+    if (quit)
+        WindowWatcher::releaseKWinScripts();
     QMetaObject::invokeMethod(QCoreApplication::instance(), &QCoreApplication::quit,
                               Qt::QueuedConnection);
     return {{QStringLiteral("success"), true},

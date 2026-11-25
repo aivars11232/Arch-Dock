@@ -377,6 +377,7 @@ install(FILES
 qt_add_library(archdock-profile-backend STATIC
   src/persistence/ConfigurationBackup.h src/persistence/ConfigurationBackup.cpp
   src/persistence/ProfileStore.h src/persistence/ProfileStore.cpp
+  src/persistence/RemovedPanelStore.h src/persistence/RemovedPanelStore.cpp
   src/panel/ProfileApplyTransaction.h src/panel/ProfileApplyTransaction.cpp
   src/panel/ProfileManager.h src/panel/ProfileManager.cpp
   src/integration/ProfileShortcutManager.h src/integration/ProfileShortcutManager.cpp
@@ -765,7 +766,8 @@ if(BUILD_TESTING)
   qt_add_executable(profile-apply-transaction-test tests/ProfileApplyTransactionTest.cpp)
   qt_add_executable(profile-manager-test tests/ProfileManagerTest.cpp)
   qt_add_executable(profile-shortcut-manager-test tests/ProfileShortcutManagerTest.cpp)
-  foreach(profile_test configuration-backup-test profile-store-test profile-apply-transaction-test profile-manager-test profile-shortcut-manager-test)
+  qt_add_executable(removed-panel-store-test tests/RemovedPanelStoreTest.cpp)
+  foreach(profile_test configuration-backup-test profile-store-test profile-apply-transaction-test profile-manager-test profile-shortcut-manager-test removed-panel-store-test)
     target_link_libraries(${profile_test} PRIVATE archdock-profile-backend Qt6::Test)
     add_test(NAME ${profile_test} COMMAND ${profile_test})
   endforeach()

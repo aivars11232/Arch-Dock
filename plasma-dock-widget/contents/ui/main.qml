@@ -23,7 +23,7 @@ PlasmoidItem {
 
     DropBackend { id: dropBackend }
 
-    // Retry on an Arch Dock that does not answer: a stop asked for earlier
+    // Start on an Arch Dock that does not answer: a stop asked for earlier
     // (Quit, or an older Arch Dock stopped for its update) ends with the
     // click, and the panel asks again; the session bus then starts Arch
     // Dock as usual, outside Plasma.
@@ -38,11 +38,13 @@ PlasmoidItem {
 
     // Plasma tells a widget when its owner removes it, or the Plasma panel it
     // sits in, and again if the removal is undone. Arch Dock removes the
-    // panel entirely once Plasma has deleted it; a profile keeps its own
-    // copy.
+    // panel entirely once Plasma has deleted it, keeping its settings to
+    // bring back; a profile keeps its own copy. The widget names itself, so
+    // that a stray second copy of a panel going away is not taken for the
+    // panel's own widget.
     function reportRemoval(removing) {
         if (panelId.length > 0)
-            callDock("panelRemovalRequested", [panelId, removing]);
+            callDock("panelRemovalReported", [panelId, removing, Number(Plasmoid.id)]);
     }
     Connections {
         target: Plasmoid
@@ -806,7 +808,10 @@ PlasmoidItem {
     Timer {
         id: fullNoticeTimer
         interval: 4000
-        onTriggered: root.fullNotice = ""
+        onTriggered: {
+            root.fullNotice = ""
+            interval = 4000
+        }
     }
 
     function openPanelStudio() {
@@ -1638,6 +1643,19 @@ PlasmoidItem {
                     })
                 }
 
+                // Behind the stopped notice where the panel's icons are, in
+                // the look of the panel's other notices, so it can be read.
+                Rectangle {
+                    readonly property bool overIcons: emptyHint.visible && root.entries.length > 0
+                    visible: overIcons
+                    anchors.centerIn: emptyHint
+                    width: emptyHint.width + 2 * Kirigami.Units.largeSpacing
+                    height: emptyHint.height + 2 * Kirigami.Units.smallSpacing
+                    radius: Kirigami.Units.smallSpacing
+                    color: Qt.rgba(0, 0, 0, 0.75)
+                    z: 19
+                }
+
                 Column {
                     id: emptyHint
 
@@ -1649,11 +1667,13 @@ PlasmoidItem {
                     anchors.verticalCenterOffset: root.drawsBarSurface && root.vertical ? barSlotOffset(parent.height) : 0
                     z: 20
                     spacing: Kirigami.Units.smallSpacing
-                    visible: root.entries.length === 0
+                    // On an empty panel; on a free panel with icons also while
+                    // Arch Dock is stopped (see backendStopped).
+                    visible: root.entries.length === 0 || (root.backendStopped && !compact)
                     // Along an edge or in a bar the panel is too thin for words:
                     // its sign alone, sized to the panel, the words when the
-                    // pointer rests on it, and a click on it does what Retry
-                    // would.
+                    // pointer rests on it, and a click on it does what the
+                    // button would (Start or Retry).
                     readonly property bool compact: !root.freeSurface
                     readonly property bool retries: !dockService.registered || root.requestFailed
                     // A widget added from Plasma's widget list has no panel
@@ -1661,8 +1681,10 @@ PlasmoidItem {
                     // is off); it must not invite drops.
                     readonly property bool unbound: root.panelId.length === 0
                         && !Plasmoid.configuration.bootstrapFreeDock
+                    // Arch Dock not running: quit, or not started yet. Start
+                    // ends a Quit and starts it (see retry()).
                     readonly property string message: !dockService.registered
-                        ? qsTr("Arch Dock service is unavailable")
+                        ? (compact ? qsTr("Arch Dock is stopped. Click to start it.") : qsTr("Arch Dock is stopped"))
                         : root.requestFailed
                             ? qsTr("Could not load dock entries")
                             : unbound
@@ -1693,6 +1715,10 @@ PlasmoidItem {
                         source: dockService.registered
                             ? (root.requestFailed ? "data-error" : emptyHint.unbound ? "dialog-information" : "list-add")
                             : "network-disconnect"
+                        // Light on the dark notice over icons, as on any
+                        // dark notice of KDE's.
+                        Kirigami.Theme.inherit: root.entries.length === 0
+                        Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
                         HoverHandler {
                             id: emptyHintHover
                             enabled: emptyHint.compact
@@ -1712,10 +1738,13 @@ PlasmoidItem {
                         wrapMode: Text.WordWrap
                         width: Math.min(implicitWidth, Math.max(120, parent.width - 2 * Kirigami.Units.largeSpacing))
                         text: emptyHint.message
+                        // White on the dark notice over icons.
+                        color: root.entries.length > 0 ? "white" : Kirigami.Theme.textColor
                     }
                     QQC2.Button {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: qsTr("Retry")
+                        objectName: "dock-empty-hint-button"
+                        text: dockService.registered ? qsTr("Retry") : qsTr("Start")
                         visible: !emptyHint.compact && emptyHint.retries
                         onClicked: emptyHint.retry()
                     }
@@ -1968,7 +1997,23 @@ PlasmoidItem {
             root.publishGuards();
             root.publishPresentationState();
             root.consumePresentationRequest();
+            if (registered)
+                root.backendStopped = false;
+            else
+                stoppedNoticeDelay.restart();
         }
+        Component.onCompleted: if (!registered) stoppedNoticeDelay.restart()
+    }
+
+    // Arch Dock gone for more than a moment (quit, or not started again): a
+    // free panel says so with its Start button even while it shows icons. A
+    // restart (an update's, or after a crash) is over before the panel
+    // speaks.
+    property bool backendStopped: false
+    Timer {
+        id: stoppedNoticeDelay
+        interval: 3000
+        onTriggered: root.backendStopped = !dockService.registered
     }
 
     PlasmaDBus.Properties {
@@ -2019,7 +2064,23 @@ PlasmoidItem {
         text: qsTr("Remove Panel")
         icon.name: "delete"
         visible: root.panelId.length > 0
-        onTriggered: root.callDock("removePanel", [root.panelId])
+        // When the panel stays (Plasma refused or did not answer, or Arch
+        // Dock itself did not), the panel says why for a few seconds.
+        onTriggered: root.callDock("removePanelOfWidget",
+                                   [root.panelId, String(Plasmoid.configuration.ownerToken || "")], function(reply) {
+            const result = root.normalizeReply(reply)
+            if (result && result.success === false && String(result.message || "").length > 0)
+                root.showRemovalNotice(String(result.message))
+        }, function() {
+            root.showRemovalNotice(dockService.registered
+                ? qsTr("Arch Dock did not answer, so the panel stays. Try again in a moment.")
+                : qsTr("Arch Dock is stopped, so the panel stays. Start it, then remove the panel."))
+        })
+    }
+    function showRemovalNotice(message) {
+        fullNotice = message
+        fullNoticeTimer.interval = 8000
+        fullNoticeTimer.restart()
     }
 
     // New panels come from Panel Studio's own page for them, not from a

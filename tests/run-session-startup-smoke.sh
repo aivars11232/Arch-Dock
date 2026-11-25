@@ -361,7 +361,7 @@ hold_stopped() {
 
 run_intentional_quit_smoke() {
     local owner="$1" stop_file="$XDG_RUNTIME_DIR/arch-dock-intentional-stop.json" pid reply
-    log_session_phase 'ADFIX-TASK-001 a killed backend recovers; Quit and TERM stay stopped'
+    log_session_phase 'ADFIX-TASK-001 a killed or terminated backend recovers; Quit stays stopped'
     # KILL runs nothing in the process, so it is a crash: the KWin watcher's
     # next report or an applet's request activates the backend again.
     # The watcher usually reports before a plasmashell restart could: the name
@@ -400,18 +400,30 @@ run_intentional_quit_smoke() {
         --method org.freedesktop.DBus.StartServiceByName org.archdock.ArchDock 0)"
     [[ "$reply" == '(uint32 2,)' ]]
 
-    # TERM, which System Monitor's "Quit Application" sends, is a Quit.
+    # TERM, which System Monitor and pkill send, stops Arch Dock for now: no
+    # stop is kept and the KWin watcher stays, so the next activation request
+    # starts it again, as after a crash.
     kill -TERM "$pid"
     wait "$pid" 2>/dev/null || true
     ARCHDOCK_SESSION_ARCH_DOCK_PID=''
-    wait_for_no_arch_dock_owner 'TERM'
-    jq -e '.reason == "signal"' "$stop_file" >/dev/null
-    wait_for_kwin_script_state org.archdock.windowwatcher.runtime false 'TERM'
-    hold_stopped 'TERM'
+    [[ ! -e "$stop_file" ]] || { printf 'TERM kept Arch Dock stopped.\n' >&2; return 1; }
+    restart_plasmashell
+    owner="$pid"
+    pid="$(wait_for_arch_dock_owner "$owner" 'TERM recovery')"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID="$pid"
+    [[ ! -e "$stop_file" ]] || { printf 'A terminated backend recorded a stop.\n' >&2; return 1; }
+    wait_for_kwin_script_state org.archdock.windowwatcher.runtime true 'TERM recovery'
+    require_no_studio 'TERM recovery through the watcher and applets'
+    log_session_phase "TERM stopped Arch Dock for now; it came back through activation: $owner -> $pid"
 
-    # From the menu a stopped Arch Dock starts with
-    # Panel Studio in front, also after Quit, whose stop the start clears.
+    # From the menu a stopped Arch Dock starts with Panel Studio in front,
+    # also after Quit, whose stop the start clears.
     log_session_phase 'ADREP-TASK-001 the application entry starts a stopped Arch Dock'
+    "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >>"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
+        cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
+    }
+    wait_for_no_arch_dock_owner 'the Quit before the first menu start'
+    ARCHDOCK_SESSION_ARCH_DOCK_PID=''
     require_menu_start 'while Arch Dock is stopped'
     "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >>"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
         cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
@@ -427,7 +439,8 @@ run_intentional_quit_smoke() {
         printf 'Quit or crash recovery produced a runtime error.\n' >&2; return 1
     fi
     log_session_phase 'ADFIX-TASK-001 intentional Quit versus crash PASS'
-    # A panel's Retry: --resume ends a Quit without starting Arch Dock.
+    # A panel's Start: --resume ends a Quit and asks the session bus to start
+    # Arch Dock, which starts it in the background (no Studio).
     "$ARCHDOCK_STARTUP_STAGED_BINARY" --quit >>"$ARCHDOCK_TEST_LOG_DIR/quit.log" 2>&1 || {
         cat "$ARCHDOCK_TEST_LOG_DIR/quit.log" >&2; return 1;
     }
@@ -436,7 +449,10 @@ run_intentional_quit_smoke() {
     [[ -e "$stop_file" ]] || { printf 'Quit left no stop to resume.\n' >&2; return 1; }
     "$ARCHDOCK_STARTUP_STAGED_BINARY" --resume || { printf 'Resume failed.\n' >&2; return 1; }
     [[ ! -e "$stop_file" ]] || { printf 'Resume did not end the stop.\n' >&2; return 1; }
-    log_session_phase 'A panel Retry resumes a stopped Arch Dock PASS'
+    pid="$(wait_for_arch_dock_owner '' 'a panel Start')"
+    ARCHDOCK_SESSION_ARCH_DOCK_PID="$pid"
+    require_no_studio 'a panel Start'
+    log_session_phase 'A panel Start resumes a stopped Arch Dock and starts it PASS'
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

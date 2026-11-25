@@ -69,10 +69,14 @@ bool active()
         if (file.open(QIODevice::ReadOnly))
             object = QJsonDocument::fromJson(file.read(MaximumBytes)).object();
     }
+    // A stop signal (System Monitor, pkill) only stops Arch Dock for now;
+    // older versions recorded one as a Quit, which is not kept either.
     if (object.value(QStringLiteral("format")).toString() == Format &&
-        object.value(QStringLiteral("session")).toString() == sessionIdentity())
+        object.value(QStringLiteral("session")).toString() == sessionIdentity() &&
+        object.value(QStringLiteral("reason")).toString() != QStringLiteral("signal"))
         return true;
-    // A request from an earlier login, or something this code did not write.
+    // A request from an earlier login, a stop signal's, or something this
+    // code did not write.
     QFile::remove(path);
     return false;
 }

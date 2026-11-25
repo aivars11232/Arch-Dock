@@ -87,7 +87,9 @@ keeps them, Cancel drops them.
   the ✕ and ⚙ beside each one, and the **+** outside the bar to add more.
 - **Stopping:** right-click the Arch Dock entry in the application menu and
   choose **Quit Arch Dock**, or run `arch-dock --quit`. It stays stopped
-  until you start it again or log in again.
+  until you start it again (the menu entry, or **Start** on a panel) or log
+  in again. Ending it in System Monitor stops it only for now: it comes back
+  when a panel needs it.
 
 ## Requirements
 

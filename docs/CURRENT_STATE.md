@@ -1,5 +1,78 @@
 # Arch Dock current state
 
+## Panels are not lost; removed panels are kept; no silent "off" — 2026-11-25
+
+- Removal reports: the dock widget calls
+  `panelRemovalReported(panelId, removing, appletId)`
+  (`panelRemovalRequested` stays, forwarding applet -1). A report from an
+  applet other than the record's own (`freeDockAppletId` /
+  `nativeDockAppletId`) is ignored. A report in the first 90 s after
+  Arch Dock or Plasma started is not acted on (log line) but starts the
+  free-panel re-check (`m_freeHostRetryTimer`) or
+  `scheduleNativePanelRecovery()`, so a widget really gone is put back.
+  `checkRequestedRemovals` treats a panel as gone only after two looks at
+  least 30 s apart (`PendingRemoval.missingSince`) while
+  `plasmaDesktopsLoaded()`; a free panel is "missing" when
+  `synchronize(panelId, false)` says Deferred, or Detached (an earlier try
+  let go of it), an edge panel when its `nativePanelId` is gone (no id:
+  never). The report stays until the panel is gone from Arch Dock too: a
+  failed hide, keep or delete step is tried again at the next look
+  (`synchronizeFreePanels` skips panels with a report, so nothing is put
+  back meanwhile). Pending entries expire after 10 minutes; the hash is
+  copied and written back, never referenced across a Plasma call. Built-in
+  panels are hidden.
+- Kept settings: `RemovedPanelStore` (`removed-panels.json` in the app data
+  folder; newest 10, at most 20 stored, 8 MB cap; no reading or writing
+  through a symlink). The deletion paths here (confirmed removal, Detached
+  free panels, Remove Panel) call `keepRemovedPanelSettings` first and
+  delete only with a kept copy; a failed deletion forgets the copy again.
+  `keep()` drops nothing: `trim()` runs from `reportRemovedPanel`, after a
+  deletion went through, so a refused removal leaves the list as it was.
+  Applying a profile is not one of these paths (it has its configuration
+  backup). `removedPanels()` lists
+  them; `bringBackRemovedPanel(key)` creates a panel of the same kind (free,
+  bar, Plasma edge panel; an edge with a Plasma panel or another dock on it
+  refuses, as Panel Studio's add page does), applies the record without its
+  host keys (and without its name if another panel has it), puts a free
+  panel at its saved place, and forgets the copy only once the settings are
+  saved. Panel Studio's new-panel page lists them with Bring back.
+- Remove Panel: `removePanel` returns `{success, errorCode, message}`; on a
+  two-copies conflict `removeEveryOwnedFreePanelHost` removes every copy
+  with the record's token (refused when Plasma's widgets are locked) and
+  the record is finished directly. The widget calls
+  `removePanelOfWidget(panelId, ownerToken)`, which refuses a free-panel
+  widget whose token is not the record's and a panel id Arch Dock no longer
+  has (`panel-not-found`; `removePanel` itself still answers success for an
+  unknown id), and shows a refusal for 8 s, also when the D-Bus call fails
+  (Arch Dock quit or not answering).
+- Stops: TERM/INT record no stop (`IntentionalStop::active()` also drops
+  old `reason: "signal"` records) and leave the KWin scripts loaded, so the
+  next window change, a panel or the menu starts Arch Dock again; quit
+  keeps a stop (on-demand activation refused; a direct start such as the
+  menu entry runs) and releases the KWin scripts; each logs one plain line.
+  `arch-dock --resume` clears the stop and asks the session bus to start
+  the service. The dock widget shows "Arch Dock is stopped" + Start on a
+  free panel (over its icons after 3 s, `backendStopped`) and on an edge
+  panel with nothing on it (compact: the sign, words on hover); bars go
+  with the bar host while Arch Dock is stopped.
+- Tests: `RemovedPanelStoreTest`, `IntentionalStopTest`,
+  `PanelWindowCapabilityTest::barsFollowTheirRecords` (remove and bring back
+  a bar; refused while a Plasma panel stands on its edge; a widget's Remove
+  Panel for an unknown panel), `run-session-startup-smoke.sh` (TERM
+  recovers; Start starts it), `run-plasma-lifecycle.sh` (zero-match phase
+  expects the put-back; final phase: two copies, Remove Panel, Bring back).
+  The lifecycle test had not run in full since October: the template
+  phases now start once the built-in Bottom panel is in Plasma (its
+  start-up recovery 5 s after the last desktop change raced their
+  panel-set comparison, failing the code before this step the same way),
+  and its Empty checks follow 36ce959 (an Empty free panel shows its own
+  entries; an Empty edge panel carries the dock widget). Its screen-off
+  phase crashes the private plasmashell 6.8.3 (SIGSEGV in `KConfigGroup`
+  under `evaluateScript`) with the code before this step too: open.
+- Step 1 of `docs/repairs/BREAKAGE-FIX-2026-11.md`; paused on 25 November
+  before the complete suite finished (91 of 137 passed when it was
+  stopped); its report comes with the remaining checks.
+
 ## `main` is the published 0.1.1-54 again; unfinished widget work on a branch — 2026-11-25
 
 - The four commits after 0.1.1-54 (`b4d4a3e`, `2db8255`, `ba0225e`,

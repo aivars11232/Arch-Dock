@@ -2848,12 +2848,54 @@ void PanelWindowCapabilityTest::barsFollowTheirRecords()
     // which a Plasma panel's removal is confirmed; Arch Dock's own Remove
     // does, with no Plasma panel to ask.
     backend.panelRemovalRequested(left, true);
+    backend.panelRemovalReported(left, true, 7);
     QTest::qWait(5500);
     QVERIFY(registry->panelIds().contains(left));
-    backend.removePanel(left);
+    const QString leftName = registry->panelName(left);
+    QVERIFY(backend.removePanel(left).value("success").toBool());
     QVERIFY(!registry->panelIds().contains(left));
     QTRY_COMPARE(bars().size(), 1);
     QVERIFY(bars().contains(right));
+
+    // Its settings are kept: Panel Studio lists it, and Bring back makes it
+    // again as it was, at its own place and length, then lists it no more.
+    const QVariantList removed = backend.removedPanels();
+    QVERIFY(!removed.isEmpty());
+    const QVariantMap kept = removed.first().toMap();
+    QCOMPARE(kept.value("name").toString(), leftName);
+    QCOMPARE(kept.value("kind").toString(), QStringLiteral("bar"));
+    QCOMPARE(kept.value("edge").toString(), QStringLiteral("bottom"));
+    // Bring back follows Panel Studio's rule for a new bar: it may join other
+    // bars on its edge, but not a Plasma panel standing there. The built-in
+    // bottom panel is such a Plasma panel here, so the bar stays out, and
+    // stays listed, until that panel is hidden.
+    QVERIFY(registry->panelValue("bottom", "visible").toBool());
+    const QVariantMap refused = backend.bringBackRemovedPanel(kept.value("key").toString());
+    QVERIFY(!refused.value("success").toBool());
+    QCOMPARE(refused.value("errorCode").toString(), QStringLiteral("edge-taken"));
+    QCOMPARE(backend.removedPanels().first().toMap().value("key"), kept.value("key"));
+    registry->setPanelValue("bottom", "visible", false);
+    const QVariantMap back = backend.bringBackRemovedPanel(kept.value("key").toString());
+    QVERIFY2(back.value("success").toBool(), qPrintable(back.value("errorCode").toString()));
+    const QString again = back.value("panelId").toString();
+    QVERIFY(registry->panelIds().contains(again));
+    QCOMPARE(registry->panelName(again), leftName);
+    QCOMPARE(registry->panelDefinition(again)->host.edgeHost, QStringLiteral("bar"));
+    QTRY_COMPARE(bars().size(), 2);
+    QCOMPARE(bars().value(again).value("alignment").toString(), QStringLiteral("start"));
+    QCOMPARE(bars().value(again).value("fixedLength").toInt(), 640);
+    for (const QVariant &entry : backend.removedPanels())
+        QVERIFY(entry.toMap().value("key") != kept.value("key"));
+    QVERIFY(!backend.bringBackRemovedPanel(kept.value("key").toString()).value("success").toBool());
+
+    // A widget's own Remove Panel: a panel Arch Dock no longer has is
+    // refused with words for the widget to show; a bar goes as with Remove.
+    const QVariantMap unknown = backend.removePanelOfWidget(QStringLiteral("panel-404"), QString{});
+    QVERIFY(!unknown.value("success").toBool());
+    QCOMPARE(unknown.value("errorCode").toString(), QStringLiteral("panel-not-found"));
+    QVERIFY(!unknown.value("message").toString().isEmpty());
+    QVERIFY(backend.removePanelOfWidget(again, QString{}).value("success").toBool());
+    QVERIFY(!registry->panelIds().contains(again));
 }
 
 void PanelWindowCapabilityTest::studioAddsBars()

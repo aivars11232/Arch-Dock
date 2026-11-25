@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+- **Panels are not lost on Plasma's word alone.** When Plasma reported a
+  panel's widget removed, Arch Dock deleted the panel and its settings
+  within seconds, with nothing kept (so a free panel went on 31 October).
+  A removal now counts only when Plasma has loaded its desktops and the
+  panel is still missing at two looks at least 30 seconds apart; nothing
+  counts in the first 90 seconds after Arch Dock or Plasma starts (a
+  widget that is really gone then is put back), a report from a second
+  copy of a panel's widget speaks only for that copy, and a report not
+  confirmed and carried out within 10 minutes is dropped. The built-in
+  Bottom, Top and Side panels are hidden, never deleted.
+- **Removed panels can be brought back.** Before a panel is deleted by
+  Remove Panel, after Plasma removed its widget, or as a leftover of an
+  older version, its settings are kept (the newest ten). Panel Studio's
+  page for a new panel lists them under "Removed panels"; Bring back makes
+  the panel again with its settings, where it stood. Applying a profile
+  replaces panels as before, with its own configuration backup.
+- **Remove Panel says when it cannot remove.** With two copies of a free
+  panel on the desktop it removed neither and said nothing; it now removes
+  every copy. When Plasma refuses (widgets locked) or does not answer, or
+  Arch Dock is stopped, the panel stays and says why for a few seconds. A
+  leftover widget whose panel has moved on, or is gone, cannot remove
+  another panel and says so.
+- **Ending Arch Dock is not "quit for the whole login".** Ended from System
+  Monitor or with pkill, Arch Dock kept itself off until the next login,
+  silently. It now starts again as soon as anything asks for it: a panel,
+  a window change, or the application menu. Quit still keeps it stopped
+  until Start, the application menu, or the next login. Every stop writes
+  one plain line to the log, and the old "stopped by a signal" records are
+  ignored.
+- **A panel says "Arch Dock is stopped" and offers Start.** An empty panel
+  said "Arch Dock service is unavailable" with Retry, and a free panel with
+  icons said nothing. Now a free panel says "Arch Dock is stopped" with a
+  Start button (over its icons after 3 seconds), and so does an edge panel
+  with nothing on it (its sign, the words on hover, a click starts it).
+  Start ends a Quit and starts Arch Dock. Arch Dock's own bars go while it
+  is stopped, as before.
+
 ## 0.1.1-54 — 2026-10-30
 
 - **File dialogs show your disks.** Icon Properties' Choose custom icon,

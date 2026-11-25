@@ -73,3 +73,58 @@ panel-scene-test, icon-scene-test, dock-entry-test, rendering-import-smoke,
 decoration-3d-smoke, source-exporter-test). All 990 committed files are the
 same in the clone and the workspace. Logs:
 `evidence/BREAKAGE-FIX-S6/recheck/`.
+
+## Step 1: panels are not lost, removed panels are kept, no silent "off" (paused)
+
+Committed on 25 November at the owner's request to pause for the day,
+before this step's cycle was finished: the complete suite was stopped after
+91 of 137 tests (all 91 passed, `evidence/BREAKAGE-FIX-S1/suite.log`), and
+the second read-only review was stopped after its documentation part (its
+four wording points are fixed in this commit). Report 1 and the fresh-clone
+recheck (Report 2) follow when the step is finished.
+
+Checked so far:
+
+- Focused tests: `removed-panel-store-test`, `intentional-stop-test`,
+  `panel-registry-test`, `configuration-backup-test`,
+  `session-startup-runtime-test` passed; `panel-window-capability-test`
+  105 passed, 4 skipped, and `barsFollowTheirRecords` failed once on its own
+  setup (the built-in Plasma Bottom panel stood on the bar's edge, where
+  Bring back follows Panel Studio's rule); the test now checks both cases
+  and passes.
+- Private test desktops with the owner's 29 October free panel (icons and
+  empty), the same steps as on 0.1.1-54 (`evidence/BREAKAGE-FIX-S1/`,
+  sheets in `sheets/`):
+
+  | | 0.1.1-54 | Step 1 |
+  |---|---|---|
+  | Ended with TERM | stop kept, still off 10 s later | no stop kept, back within 10 s |
+  | Quit, panel with icons | says nothing | "Arch Dock is stopped" + Start over the icons |
+  | Quit, empty panel | "Arch Dock service is unavailable" + Retry | "Arch Dock is stopped" + Start |
+  | Two copies, Remove Panel | returns nothing, both stay | both go, settings kept |
+  | Panel Studio, new panel page | nothing kept | "Removed panels" + Bring back; Bring back works |
+  | Plasma removes the widget | record gone within 5 s, nothing kept | 60 s after start: not acted on, widget put back; 211 s after start: record still there at 30 s, gone at 45 s, settings kept |
+
+- `tests/run-plasma-lifecycle.sh` (not in CTest) passed in full in 205 s,
+  with its screen-off phase left out (see below). It had not run in full
+  since October: two checks were out of date since `36ce959` (Empty
+  panels) and the template phases raced the built-in Bottom panel's
+  start-up recovery; the code before this step (a build of `2d70771`)
+  failed the same way, and the test now follows the current behaviour.
+- Two read-only reviews; the first found four points beyond the bar test
+  (a refused removal could drop the oldest kept panel; a failed last step
+  of a confirmed removal put the panel back; Remove Panel was silent for a
+  panel no longer known and when Arch Dock itself did not answer), all
+  fixed. A removal reported in the first 90 s after a start is now looked
+  at again, so a widget that is really gone is put back.
+
+Open:
+
+- The lifecycle test's screen-off phase crashes the private test session's
+  plasmashell 6.8.3 (segmentation fault in `KConfigGroup` under its script
+  engine) with the code before this step as well (three core dumps on
+  25 November). Not part of this step; it needs its own look, since a
+  screen going away on the owner's desktop may meet the same crash.
+- On the test desktop only, Panel Studio showed "Panel settings could not
+  be loaded (panel-not-found)" after the last panel was removed: that
+  desktop's panel list has no built-in panels, which the owner's has.

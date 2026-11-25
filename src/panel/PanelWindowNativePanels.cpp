@@ -8,6 +8,7 @@
 
 #include "../NativeContainmentLifecycle.h"
 #include "../PanelPlacement.h"
+#include "../persistence/RemovedPanelStore.h"
 #include "../PlasmaScriptResult.h"
 
 #include <QDBusConnection>
@@ -1218,47 +1219,262 @@ QStringList PanelWindow::occupiedScreenEdges() const
     return edges;
 }
 
-void PanelWindow::removePanel(const QString &panelId)
+QVariantMap PanelWindow::removePanel(const QString &panelId)
 {
-    if (profileBusy()) return;
+    const auto refused = [&panelId](const QString &errorCode, const QString &message)
+    {
+        qWarning().noquote() << QStringLiteral("Panel %1 was not removed (%2): %3")
+                                    .arg(panelId, errorCode, message);
+        return QVariantMap{{QStringLiteral("success"), false},
+                           {QStringLiteral("errorCode"), errorCode},
+                           {QStringLiteral("message"), message}};
+    };
+    const QVariantMap removed{{QStringLiteral("success"), true}};
+
+    if (profileBusy())
+        return refused(QStringLiteral("profile-recovery-or-apply-active"),
+                       tr("A profile is being applied. Remove the panel again when it has finished."));
 
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
-        return;
+        return removed;
     }
 
     if (m_panelRegistry.isBuiltIn(panelId))
     {
         if (!setPanelVisible(panelId, false))
-        {
-            qWarning() << "Could not hide built-in native panel" << panelId;
-        }
-        return;
+            return refused(QStringLiteral("hide-failed"), tr("Plasma did not hide this panel. Try again."));
+        qInfo() << "Edge panel" << panelId << "is hidden: its owner removed it.";
+        return removed;
     }
+
+    // The panel's settings are kept before anything is removed, so that it
+    // can be brought back; when they cannot be, nothing is removed.
+    const QVariantMap kept = m_panelRegistry.panelSnapshot(panelId);
+    const QString cause = QStringLiteral("its owner removed it");
+    QString keepError;
+    const QString keptKey = keepRemovedPanelSettings(kept, cause, &keepError);
+    if (keptKey.isEmpty())
+        return refused(QStringLiteral("settings-not-kept"),
+                       tr("Arch Dock could not keep this panel's settings to bring it back (%1), so the panel stays.")
+                           .arg(keepError));
+    const auto refusedAndKept = [&](const QString &errorCode, const QString &message)
+    {
+        forgetKeptPanelSettings(keptKey);
+        return refused(errorCode, message);
+    };
 
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() ==
         QStringLiteral("free"))
     {
         ArchDock::FreePanelController controller(
             m_panelRegistry, freePanelHostOperations());
-        const ArchDock::FreePanelLifecycleResult result = controller.remove(panelId);
-        if (!result.success)
+        ArchDock::FreePanelLifecycleResult result = controller.remove(panelId);
+        if (!result.success && result.outcome == ArchDock::FreePanelLifecycleOutcome::Conflict)
         {
-            qWarning() << "Preserving the free-panel record after host removal was refused for"
-                       << panelId << result.errorCode;
-            return;
+            // Two widgets show this panel (one put back while Plasma later
+            // restored the other, say): the owner asked for the panel to go,
+            // so every copy goes, then the panel's record. Plasma takes the
+            // widgets away after the removal script has run, so the record
+            // goes on the script's word, not on a second look.
+            const auto association = m_panelRegistry.freeHostAssociation(panelId);
+            const QString token = association.has_value() ? association->ownershipToken : QString{};
+            const std::optional<int> gone = token.isEmpty()
+                ? std::nullopt : removeEveryOwnedFreePanelHost(panelId, token);
+            if (!gone.has_value() || *gone < 2)
+                return refusedAndKept(result.errorCode,
+                                      tr("This panel has two copies on the desktop, and Plasma did not remove them "
+                                         "(the desktop's widgets may be locked). Try again, or remove the copies "
+                                         "in Plasma's edit mode."));
+            qInfo() << "Free panel" << panelId << "had" << *gone << "copies on the desktop; all were removed.";
+            if (!m_panelRegistry.detachFreeHostAssociation(panelId, token, QStringLiteral("owned-host-removed"))
+                || !m_panelRegistry.removeDetachedFreePanel(panelId))
+                return refusedAndKept(QStringLiteral("free-record-removal-persist-failed"),
+                                      tr("The panel's copies were removed, but Arch Dock could not remove its record. Try again."));
+            reportRemovedPanel(kept, cause);
+            updateDesktopSuite();
+            return removed;
         }
+        if (!result.success)
+            return refusedAndKept(result.errorCode,
+                                  result.errorCode == QStringLiteral("owned-host-query-failed")
+                                      ? tr("Plasma did not answer. Try again in a moment.")
+                                      : tr("Plasma refused to remove this panel's widget. Try again, or remove it in Plasma's edit mode."));
+        reportRemovedPanel(kept, cause);
         updateDesktopSuite();
-        return;
+        return removed;
     }
 
     // A bar of Arch Dock's own leaves the bar host with its record.
     if (!barHosted(panelId) && !removeNativeKdePanel(panelId))
     {
-        qWarning() << "Preserving the panel record after native removal was refused for"
-                   << panelId;
-        return;
+        return refusedAndKept(QStringLiteral("native-removal-refused"),
+                              tr("Plasma refused to remove this panel. Try again, or remove it in Plasma's edit mode."));
     }
     m_panelRegistry.removePanel(panelId);
+    reportRemovedPanel(kept, cause);
     updateDesktopSuite();
+    return removed;
+}
+
+QVariantMap PanelWindow::removePanelOfWidget(const QString &panelId, const QString &ownerToken)
+{
+    // A widget whose panel Arch Dock no longer has: there is nothing of
+    // Arch Dock's to remove, and the widget itself goes in Plasma's edit
+    // mode, which the widget says.
+    if (!m_panelRegistry.panelIds().contains(panelId))
+    {
+        qInfo() << "A widget asked to remove panel" << panelId << ", which Arch Dock no longer has.";
+        return {{QStringLiteral("success"), false},
+                {QStringLiteral("errorCode"), QStringLiteral("panel-not-found")},
+                {QStringLiteral("message"),
+                 tr("Arch Dock no longer has this panel; remove the widget in Plasma's edit mode.")}};
+    }
+    // A widget left over from a removed panel can carry the number of a
+    // newer panel (numbers are used again): its Remove Panel must not
+    // remove that panel. A free panel's widget carries its panel's token.
+    if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() == QStringLiteral("free"))
+    {
+        const auto association = m_panelRegistry.freeHostAssociation(panelId);
+        const QString token = association.has_value() ? association->ownershipToken.trimmed() : QString{};
+        if (!ownerToken.isEmpty() && !token.isEmpty() && ownerToken != token)
+        {
+            qInfo() << "A leftover widget asked to remove panel" << panelId << "; it is not that panel's widget.";
+            return {{QStringLiteral("success"), false},
+                    {QStringLiteral("errorCode"), QStringLiteral("not-this-panels-widget")},
+                    {QStringLiteral("message"),
+                     tr("This widget is left over from a panel that was removed; remove it in Plasma's edit mode.")}};
+        }
+    }
+    return removePanel(panelId);
+}
+
+namespace
+{
+// What kind of panel a kept record was, as Panel Studio names it.
+QString removedPanelKind(const QVariantMap &record)
+{
+    if (record.value(QStringLiteral("edge")).toString() == QStringLiteral("free"))
+        return QStringLiteral("free");
+    return record.value(QStringLiteral("edgeHost")).toString() == QStringLiteral("bar")
+        ? QStringLiteral("bar") : QStringLiteral("edge");
+}
+}
+
+QVariantList PanelWindow::removedPanels() const
+{
+    QVariantList result;
+    const ArchDock::RemovedPanelStore store;
+    for (const ArchDock::RemovedPanelStore::Entry &entry : store.entries())
+    {
+        result.append(QVariantMap{
+            {QStringLiteral("key"), entry.key},
+            {QStringLiteral("name"), entry.record.value(QStringLiteral("name")).toString()},
+            {QStringLiteral("kind"), removedPanelKind(entry.record)},
+            {QStringLiteral("edge"), entry.record.value(QStringLiteral("edge")).toString()},
+            {QStringLiteral("removedAt"), entry.removedAt.toLocalTime()},
+            {QStringLiteral("cause"), entry.cause}});
+    }
+    return result;
+}
+
+QVariantMap PanelWindow::bringBackRemovedPanel(const QString &key)
+{
+    const auto failed = [](const QString &errorCode, const QString &message)
+    {
+        qWarning().noquote() << "A removed panel was not brought back:" << errorCode;
+        return QVariantMap{{QStringLiteral("success"), false},
+                           {QStringLiteral("errorCode"), errorCode},
+                           {QStringLiteral("message"), message}};
+    };
+    if (profileBusy())
+        return failed(QStringLiteral("profile-recovery-or-apply-active"),
+                      tr("A profile is being applied. Try again when it has finished."));
+
+    ArchDock::RemovedPanelStore store;
+    const auto entry = store.entry(key);
+    if (!entry.has_value())
+        return failed(QStringLiteral("removed-panel-not-found"), tr("This removed panel is no longer kept."));
+    const QVariantMap &record = entry->record;
+    const QString kind = removedPanelKind(record);
+    const QString edge = record.value(QStringLiteral("edge")).toString();
+
+    // A new panel of the same kind, made the usual way, then given the kept
+    // settings: Plasma (or the bar host) gets a widget of its own for it.
+    QString panelId;
+    if (kind == QStringLiteral("free"))
+    {
+        const QList<QScreen *> screens = QGuiApplication::screens();
+        const int savedScreen = record.value(QStringLiteral("screen")).toInt();
+        ArchDock::FreePanelCreationRequest request;
+        request.origin = ArchDock::FreePanelCreationOrigin::Studio;
+        request.screenIndex = screens.isEmpty()
+            ? -1
+            : qBound(0, savedScreen >= 0 && savedScreen < screens.size() ? savedScreen : m_settings.monitorIndex(),
+                     screens.size() - 1);
+        const ArchDock::FreePanelCreationResult created = createFreePanelTransaction(request);
+        if (!created.success)
+            return failed(created.errorCode, tr("Plasma did not add the panel to the desktop. Try again."));
+        panelId = created.panelId;
+    }
+    else
+    {
+        if (occupiedScreenEdges().contains(edge))
+            return failed(QStringLiteral("edge-taken"),
+                          tr("Another panel already stands on the screen's %1 edge. Remove it first.").arg(edge));
+        const QString type = record.value(QStringLiteral("type")).toString();
+        panelId = kind == QStringLiteral("bar") ? createBar(edge, type) : createNativePanel(edge, type);
+        if (panelId.isEmpty())
+            return failed(QStringLiteral("panel-creation-failed"), tr("The panel could not be added. Try again."));
+    }
+
+    // Everything but what ties the old record to its place in Plasma, which
+    // the new panel has of its own.
+    static const QStringList hostKeys{
+        QStringLiteral("hostKind"), QStringLiteral("edge"), QStringLiteral("edgeHost"),
+        QStringLiteral("screen"), QStringLiteral("screenId"),
+        QStringLiteral("nativePanelId"), QStringLiteral("nativeControlAppletId"),
+        QStringLiteral("nativeDockAppletId"), QStringLiteral("nativeOwnershipToken"),
+        QStringLiteral("nativeRecoveryState"), QStringLiteral("nativeRecoveryError"),
+        QStringLiteral("freeDesktopContainmentId"), QStringLiteral("freeDockAppletId"),
+        QStringLiteral("freeOwnershipToken"), QStringLiteral("freeHostMode"),
+        QStringLiteral("freeHostState"), QStringLiteral("freeCreationState"),
+        QStringLiteral("freeCreationError"), QStringLiteral("freeRollbackError"),
+        QStringLiteral("freeRecoveryError")};
+    QVariantMap values = record;
+    for (const QString &hostKey : hostKeys) values.remove(hostKey);
+    values.insert(QStringLiteral("visible"), true);
+    // Its old name, unless another panel has taken it meanwhile.
+    const QString name = values.value(QStringLiteral("name")).toString();
+    for (const QString &otherId : m_panelRegistry.panelIds())
+    {
+        if (otherId != panelId && m_panelRegistry.panelName(otherId) == name)
+        {
+            values.remove(QStringLiteral("name"));
+            break;
+        }
+    }
+    const bool settingsBack = m_panelRegistry.updatePanelChecked(panelId, values);
+    if (kind == QStringLiteral("free"))
+        moveFreePanelToSavedPlace(panelId);
+    updateDesktopSuite();
+    if (!settingsBack)
+    {
+        // The kept copy stays, so the settings are not lost with it.
+        qWarning() << "Panel" << panelId << "is added, but its kept settings could not be saved to it;"
+                   << "the kept copy stays listed.";
+        return {{QStringLiteral("success"), true},
+                {QStringLiteral("panelId"), panelId},
+                {QStringLiteral("message"),
+                 tr("The panel was added with a new panel's settings: its kept settings could not be saved to it. "
+                    "They stay under Removed panels.")}};
+    }
+    QString forgetError;
+    if (!store.forget(key, &forgetError))
+        qWarning() << "The kept copy of a panel brought back stays listed:" << forgetError;
+    qInfo().noquote() << QStringLiteral("Panel \"%1\" is back as %2.")
+                             .arg(record.value(QStringLiteral("name")).toString(), panelId);
+    return {{QStringLiteral("success"), true},
+            {QStringLiteral("panelId"), panelId},
+            {QStringLiteral("message"), QString{}}};
 }
