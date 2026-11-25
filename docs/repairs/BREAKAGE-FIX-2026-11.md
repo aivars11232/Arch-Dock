@@ -63,3 +63,13 @@ in bar files that Steps 2 and 4 change.
 when it is finished and tested. The audit lists what it needs: no diagnostic
 timer, face pictures taken only when a face changes, and Plasma's widgets
 hidden only while their drawing is on screen.
+
+### Report 2
+
+Fresh clone of `origin/main` at `de4ca02`, built with one job (2110 s), the
+step's tests one at a time: 11 of 11 passed in 256 s (bar-host-smoke,
+bar-view-test, barlayout-test, barwidgets-test, icon-solid-test,
+panel-scene-test, icon-scene-test, dock-entry-test, rendering-import-smoke,
+decoration-3d-smoke, source-exporter-test). All 990 committed files are the
+same in the clone and the workspace. Logs:
+`evidence/BREAKAGE-FIX-S6/recheck/`.
