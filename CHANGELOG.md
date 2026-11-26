@@ -42,6 +42,40 @@
   panel's menu also offers Start Arch Dock (an edge panel with icons shows
   no notice over them). Arch Dock's own bars go while it is stopped, as
   before.
+- **AI-made 3D icons are a choice again, off by default.** Since 0.1.1-53
+  every 3D icon was the AI-made "Modelled" object, made with all four cores
+  for tens of seconds each and drawn at 40,000 triangles. 3D icons are made
+  at once from their picture again (Auto); Modelled is offered per panel as
+  "Modelled (AI, made in the background)". Panels saved by 0.1.1-53 or -54
+  go back to Auto and to Medium quality once: the panel, the flat look it
+  remembers, and saved profiles (after a backup). Chosen again, Modelled
+  stays. The AI maker runs apart from Plasma, at the lowest priority and
+  within a memory limit of its own, so running out of memory can no longer
+  take Plasma down with it; it waits for another time when less than
+  4.5 GB is free, stops at its first failure of its own instead of trying
+  every icon, and a picture it cannot read no longer marks its icon as
+  failed for good.
+- **Holograms are calmer while you are not pointing at a panel.** Holograms
+  and panel decorations move on one shared clock: 15 steps a second while
+  the pointer is away from every panel, 30 while it is over one (it was 30
+  always, each decoration on its own timer).
+- **Holograms rest while their panel cannot be seen.** A panel covered by
+  windows (solid windows on the desktop in use that hold all of it; for an
+  edge panel or a bar, a full-screen window), a panel that auto-hides, or a
+  bar of Arch Dock's own that has hidden itself no longer redraws its
+  holograms. A see-through or minimised window, one on another desktop,
+  and Show Desktop cover nothing; a full-screen window covers an edge panel
+  only while it is in front. Only the motion rests: the panel stays drawn,
+  and folders and previews stay as they are. After KWin restarts, Arch Dock
+  reads its windows anew.
+- **Lighter in use.** A 3D panel works out where its icons are drawn only
+  when something moved, not after every frame. Opening or closing a window
+  rebuilds only that window's icon, not every icon's 3D part. Panel Studio
+  no longer wakes Arch Dock every 2 seconds: it reads the status readings
+  (CPU, memory and the rest) only while a page or the preview shows them,
+  never reloads its settings for a reading, and no longer writes over what
+  you are typing; its preview still follows applications started, closed
+  or pinned. 3D icons on flat panels use lighter smoothing.
 
 ## 0.1.1-54 — 2026-10-30
 

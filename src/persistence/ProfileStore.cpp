@@ -31,6 +31,16 @@ void error(QString *target, const QString &code)
 {
     if (target) *target = code;
 }
+// One backup of the profiles before they are rewritten: all of Arch Dock's
+// settings for the profiles' usual folder, the folder itself for another.
+bool backUpProfiles(const QString &root, const QString &reason, QString *code)
+{
+    ConfigurationBackup backup = root == QFileInfo(ProfileStore::defaultRoot()).absoluteFilePath()
+        ? ConfigurationBackup{} : ConfigurationBackup(QDir(root).filePath(QStringLiteral(".config-backups")),
+            {{QStringLiteral("profiles"), {root, true}}});
+    return !backup.capture(reason, code).isEmpty()
+        && backup.prune(QSettings().value(QStringLiteral("backup/retentionCount"), 5).toInt(), code);
+}
 bool safeAssetRelativePath(const QString &relative)
 {
     const auto parts = relative.split(QLatin1Char('/'));
@@ -505,14 +515,8 @@ std::optional<ProfileDefinition> ProfileStore::save(
             QJsonDocument(stored.value(QStringLiteral("panels")).toArray()).toJson(QJsonDocument::Compact));
         if (migration.status != PanelMigrationStatus::Success)
         { error(errorCode, QStringLiteral("profile-source-changed")); return {}; }
-        if (migration.rewriteRequired)
-        {
-            ConfigurationBackup backup = m_root == QFileInfo(defaultRoot()).absoluteFilePath()
-                ? ConfigurationBackup{} : ConfigurationBackup(QDir(m_root).filePath(QStringLiteral(".config-backups")),
-                    {{QStringLiteral("profiles"), {m_root, true}}});
-            if (backup.capture(QStringLiteral("legacy-profile-rewrite"), errorCode).isEmpty() ||
-                !backup.prune(QSettings().value(QStringLiteral("backup/retentionCount"), 5).toInt(), errorCode)) return {};
-        }
+        if (migration.rewriteRequired && !backUpProfiles(m_root, QStringLiteral("legacy-profile-rewrite"), errorCode))
+            return {};
         checked->revision++;
     }
     else if (QDir(m_root).entryList({QStringLiteral("*.json")}, QDir::Files).size() >= MaximumProfiles)
@@ -531,6 +535,39 @@ std::optional<ProfileDefinition> ProfileStore::save(
     if (!stored || *stored != *checked)
     { error(errorCode, QStringLiteral("profile-readback-mismatch")); return {}; }
     return stored;
+}
+
+bool ProfileStore::lightenLegacy3DDefaults(QStringList *lightened, QString *errorCode) const
+{
+    error(errorCode, {});
+    QList<ProfileDefinition> changed;
+    const auto files = QDir(m_root).entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const auto &file : files)
+    {
+        auto profile = load(file.completeBaseName());
+        // One that cannot be read is left as it is, as profiles() leaves it.
+        if (!profile) continue;
+        bool touched = false;
+        for (auto &panel : profile->panels)
+        {
+            auto record = panel.toPersistedMap();
+            if (!SettingsMigration::lightenLegacy3DDefaults(&record)) continue;
+            if (const auto light = PanelDefinition::fromLegacyMap(record))
+            {
+                panel = *light;
+                touched = true;
+            }
+        }
+        if (touched) changed.append(*profile);
+    }
+    if (changed.isEmpty()) return true;
+    if (!backUpProfiles(m_root, QStringLiteral("light-3d-defaults"), errorCode)) return false;
+    for (const auto &profile : std::as_const(changed))
+    {
+        if (!save(profile, errorCode).has_value()) return false;
+        if (lightened) lightened->append(profile.id);
+    }
+    return true;
 }
 
 std::optional<ProfileDefinition> ProfileStore::create(const QString &name,

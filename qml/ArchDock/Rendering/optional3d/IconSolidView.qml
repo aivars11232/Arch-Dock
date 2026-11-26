@@ -41,8 +41,10 @@ View3D {
     camera: camera
     environment: SceneEnvironment {
         backgroundMode: SceneEnvironment.Transparent
+        // Two samples a pixel: an icon is small, and each one's own view
+        // multiplies what four would cost the graphics chip.
         antialiasingMode: SceneEnvironment.MSAA
-        antialiasingQuality: SceneEnvironment.High
+        antialiasingQuality: SceneEnvironment.Medium
     }
 
     // Far off with a narrow view: the solid's back fills the icon's square

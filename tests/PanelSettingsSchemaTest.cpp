@@ -177,7 +177,7 @@ void PanelSettingsSchemaTest::sceneQualityIsBoundedAndReversible()
     const auto normalized = PanelDefinition::fromLegacyMap(values);
     QVERIFY(normalized.has_value());
     QCOMPARE(normalized->surface.parameters3D
-                 .value(QStringLiteral("quality")).toString(), QStringLiteral("high"));
+                 .value(QStringLiteral("quality")).toString(), QStringLiteral("medium"));
 }
 
 void PanelSettingsSchemaTest::materialsAndFlatLookRoundTrip()

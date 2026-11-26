@@ -12,8 +12,12 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QDBusVariant>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QHash>
 #include <QScreen>
 #include <QSet>
 #include <QTimer>
@@ -302,6 +306,96 @@ QVariantList PanelWindow::freePanelAreas(const QString &exceptPanelId) const
         areas.append(it.value());
     }
     return areas;
+}
+
+qulonglong PanelWindow::coverRevision() const
+{
+    return m_coverRevision;
+}
+
+bool PanelWindow::panelAreaCovered(const QVariantMap &area, bool underWindows) const
+{
+    bool numbers = true;
+    const auto number = [&area, &numbers](const QString &key)
+    {
+        bool ok = false;
+        const double value = area.value(key).toDouble(&ok);
+        numbers = numbers && ok && std::isfinite(value) && std::abs(value) <= 1000000;
+        return value;
+    };
+    const double x = number(QStringLiteral("x"));
+    const double y = number(QStringLiteral("y"));
+    const double width = number(QStringLiteral("width"));
+    const double height = number(QStringLiteral("height"));
+    return numbers && !m_showingDesktop
+        && windowsCoverArea(m_windowModel.windows(), QRectF(x, y, width, height), underWindows,
+                            m_windowWatcher.shownNativePanels());
+}
+
+void PanelWindow::kwinShowingDesktopChanged(bool showing)
+{
+    setShowingDesktop(showing);
+}
+
+void PanelWindow::askShowingDesktop()
+{
+    QDBusMessage ask = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/KWin"),
+        QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
+    ask << QStringLiteral("org.kde.KWin") << QStringLiteral("showingDesktop");
+    auto *answer = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(ask), this);
+    connect(answer, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<QDBusVariant> reply = *call;
+        if (reply.isValid())
+            setShowingDesktop(reply.value().variant().toBool());
+        call->deleteLater();
+    });
+}
+
+void PanelWindow::setShowingDesktop(bool showing)
+{
+    if (m_showingDesktop == showing)
+    {
+        return;
+    }
+    m_showingDesktop = showing;
+    scheduleCoverCheck();
+}
+
+void PanelWindow::scheduleCoverCheck()
+{
+    // 200 ms after a change, and at most that often while windows keep
+    // changing (one being dragged); the last change is always included.
+    if (!m_coverTimer.isActive())
+    {
+        m_coverTimer.start();
+    }
+}
+
+void PanelWindow::checkCover()
+{
+    // Plasma's own panels as shown are part of what may cover a free panel.
+    size_t panels = 0;
+    for (const QRect &panel : m_windowWatcher.shownNativePanels())
+    {
+        panels = qHashMulti(panels, panel.x(), panel.y(), panel.width(), panel.height());
+    }
+    const size_t signature = qHashMulti(windowCoverSignature(m_windowModel.windows()), m_showingDesktop, panels);
+    if (signature == m_coverSignature)
+    {
+        return;
+    }
+    m_coverSignature = signature;
+    ++m_coverRevision;
+    emit coverRevisionChanged();
+
+    QDBusMessage propertiesChanged = QDBusMessage::createSignal(
+        QStringLiteral("/Control"),
+        QStringLiteral("org.freedesktop.DBus.Properties"),
+        QStringLiteral("PropertiesChanged"));
+    propertiesChanged << QStringLiteral("local.PanelWindow")
+                      << QVariantMap{{QStringLiteral("coverRevision"), m_coverRevision}}
+                      << QStringList{};
+    QDBusConnection::sessionBus().send(propertiesChanged);
 }
 
 QVariantMap PanelWindow::panelInteractionGuards(const QString &panelId) const

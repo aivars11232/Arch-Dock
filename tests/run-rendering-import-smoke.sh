@@ -1831,6 +1831,9 @@ run_outer() {
             -import "$import_root" \
             -input "$ARCHDOCK_RENDERING_SCRIPT_DIR/tst_RendererParity.qml"
 
+    # No AI models in the private session, wherever they are installed: a
+    # 3D icon set to Modelled keeps its picture's relief, and the suite never
+    # starts the AI maker.
     env \
         HOME="$ARCHDOCK_RENDERING_STATE_ROOT/home" \
         ARCHDOCK_RENDERING_PARENT_BUS="${DBUS_SESSION_BUS_ADDRESS:-}" \
@@ -1850,6 +1853,7 @@ run_outer() {
         ARCHDOCK_RENDERING_STAGED_BINARY="$stage_root/bin/arch-dock" \
         DESKTOP_SESSION=archdock-rendering-test \
         KDE_FULL_SESSION=true \
+        ARCHDOCK_ICON_OBJECT_MODELS=/nonexistent \
         PATH="$stage_root/bin:$PATH" \
         QML_IMPORT_PATH="$import_root" \
         QML2_IMPORT_PATH="$import_root" \

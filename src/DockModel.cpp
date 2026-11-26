@@ -128,7 +128,8 @@ DockModel::DockModel(WindowModel &windowModel, QObject *parent)
             {
                 static const QList<int> ignored{
                     WindowModel::FrameGeometryRole, WindowModel::ScreenIndexRole,
-                    WindowModel::MaximizedRole, WindowModel::FullScreenRole};
+                    WindowModel::MaximizedRole, WindowModel::FullScreenRole,
+                    WindowModel::HiddenRole, WindowModel::OpacityRole};
                 const bool shown = roles.isEmpty() || std::any_of(roles.cbegin(), roles.cend(),
                     [](int role) { return !ignored.contains(role); });
                 if (shown)

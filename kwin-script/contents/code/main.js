@@ -1,7 +1,7 @@
 // Arch Dock's KWin window watcher. It runs inside KWin and reports every
 // window to the Arch Dock backend over D-Bus (/WindowWatcher) when it appears,
 // changes (active, minimized, caption, geometry, screen, maximized,
-// fullscreen, virtual desktop, activity) and closes. The backend's window model, the task entries and the
+// fullscreen, virtual desktop, activity, see-through) and closes. The backend's window model, the task entries and the
 // "hide for maximized windows" visibility mode are built on these reports.
 print("Arch Dock KWin script loaded.");
 
@@ -51,6 +51,9 @@ function windowState(window) {
         maximized: typeof window.maximized === "boolean" ? window.maximized : maximizeMode === 3,
         fullScreen: window.fullScreen === true,
         onCurrentDesktop: onCurrentDesktop(window),
+        // How see-through KWin makes the window (1 = solid): a window seen
+        // through hides nothing under it.
+        opacity: typeof window.opacity === "number" ? window.opacity : 1,
         canActivate: window.wantsInput === true && window.deleted !== true,
         canMinimize: window.minimizable === true && window.deleted !== true,
         canClose: window.closeable === true && window.deleted !== true
@@ -127,6 +130,8 @@ function watchWindow(window) {
         window.desktopsChanged.connect(function() { sendWindowUpdated(window); });
     if (window.activitiesChanged)
         window.activitiesChanged.connect(function() { sendWindowUpdated(window); });
+    if (window.opacityChanged)
+        window.opacityChanged.connect(function() { sendWindowUpdated(window); });
 }
 
 // Switching the virtual desktop or activity changes which windows show.

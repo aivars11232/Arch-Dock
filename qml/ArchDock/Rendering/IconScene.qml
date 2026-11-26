@@ -113,9 +113,18 @@ Item {
     readonly property real hologramSeed: (Math.abs(String(iconSource).split("").reduce(function(sum, letter) {
         return (sum * 31 + letter.charCodeAt(0)) % 9973
     }, 7)) % 97) / 9.7
+    // Whether the icon's panel can be seen, as its host tells: not while
+    // the panel hides or windows cover it, nor while the icon is off its
+    // track. The compositor keeps asking a covered desktop for frames, so
+    // only the host can tell.
+    property bool shown: true
     // The holograms' time, from the one clock they all share; still, and
-    // without flicker, under reduced motion and while the icon is not seen.
-    readonly property bool hologramMoving: (hologramDrawn || standHologramDrawn) && visible && !reducedMotion
+    // without flicker, under reduced motion and while the icon is not seen:
+    // hidden, its panel not seen, or its window hidden or minimised.
+    readonly property bool windowShown: Window.visibility !== Window.Hidden
+        && Window.visibility !== Window.Minimized
+    readonly property bool hologramMoving: (hologramDrawn || standHologramDrawn) && visible && shown
+        && windowShown && !reducedMotion
     readonly property real hologramTime: hologramMoving ? HologramClock.time * hologram.speed : 0
     readonly property real standHologramTime: hologramMoving ? HologramClock.time * standHologram.speed : 0
     readonly property bool hologramLightMoving: hologramMoving
@@ -416,10 +425,11 @@ Item {
     // transparency (IconSolid.js), the scene scaling its depth. Taken anew
     // when the icon changes.
     property real solidDepth: 0
-    // "modelled": the icon made into an object; "rounded": the picture's
-    // parts inflated into rounded volumes; "block": the picture cut out as
-    // a block.
-    property string solidRelief: "modelled"
+    // "auto": made at once from the picture, a block or rounded by the
+    // picture's own kind; "rounded": the picture's parts inflated into
+    // rounded volumes; "block": the picture cut out as a block; "modelled":
+    // the icon made into an object, only when chosen.
+    property string solidRelief: "auto"
     // How far the scene stretches the solid's depth to show it at Icon
     // depth (IconSolid.depthStretch).
     readonly property real solidStretch: IconSolid.depthStretch(solidMesh, solidDepth)

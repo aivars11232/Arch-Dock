@@ -130,6 +130,59 @@ QByteArray SettingsMigration::serializeVersionTwo(
     return QJsonDocument(records).toJson(QJsonDocument::Compact);
 }
 
+namespace
+{
+bool lightenValues(QVariantMap *values)
+{
+    bool changed = false;
+    if (values->value(QStringLiteral("scene3DIconRelief")).toString() == QStringLiteral("modelled"))
+    {
+        values->insert(QStringLiteral("scene3DIconRelief"), QStringLiteral("auto"));
+        changed = true;
+    }
+    if (values->value(QStringLiteral("scene3DQuality")).toString() == QStringLiteral("high"))
+    {
+        values->insert(QStringLiteral("scene3DQuality"), QStringLiteral("medium"));
+        changed = true;
+    }
+    return changed;
+}
+
+bool lightenNested(QVariantMap *owner, const QString &key)
+{
+    if (!owner->contains(key))
+    {
+        return false;
+    }
+    QVariantMap nested = owner->value(key).toMap();
+    if (!lightenValues(&nested))
+    {
+        return false;
+    }
+    owner->insert(key, nested);
+    return true;
+}
+}
+
+bool SettingsMigration::lightenLegacy3DDefaults(QVariantMap *record)
+{
+    if (!record)
+    {
+        return false;
+    }
+    bool changed = lightenValues(record);
+    // The flat look a 3D panel remembers is kept twice, at the top and in
+    // its 2D surface.
+    changed = lightenNested(record, QStringLiteral("previousFlatLook")) || changed;
+    QVariantMap surface2D = record->value(QStringLiteral("surface2D")).toMap();
+    if (lightenNested(&surface2D, QStringLiteral("previousFlatLook")))
+    {
+        record->insert(QStringLiteral("surface2D"), surface2D);
+        changed = true;
+    }
+    return changed;
+}
+
 QString SettingsMigration::statusName(PanelMigrationStatus status)
 {
     switch (status)

@@ -25,9 +25,15 @@ Item {
     property url textureSource: ""
     property var entryGeometry: []
     property var entryVisuals: []
-    property string quality: "high"
+    // The entries' rows (PanelScene.entryRowModel), one node for each: the
+    // same rows as the flat delegates', so both always agree.
+    property QtObject entryRowModel: null
+    property string quality: "medium"
     property real panelOpacity: 1
     property bool sceneConcealed: false
+    // The panel cannot be seen but stays drawn (covered, or its bar hidden):
+    // every motion rests; the view stays as it is and takes input.
+    property bool sceneResting: false
     property real layoutAngle: 0
     property real collapseProgress: 0
     property string mechanism: "open"
@@ -47,7 +53,9 @@ Item {
     property var decorationChoices: ({})
     property bool decorationAnimated: true
     property real decorationSpeed: 1
-    readonly property bool motionAllowed: rendererReady && !sceneConcealed && visible && panelOpacity > 0
+    readonly property bool motionAllowed: rendererReady && !sceneConcealed && !sceneResting && visible
+        && panelOpacity > 0
+    readonly property bool inputAllowed: rendererReady && !sceneConcealed && visible && panelOpacity > 0
     readonly property real emissionScale: Math.max(0, Math.min(2, glowIntensity)) * (hovered ? 1.18 : 1)
     readonly property var panelParts: partsForScope("panel")
     readonly property var entryParts: partsForScope("entry")
@@ -61,13 +69,15 @@ Item {
     }
 
     // Quality: low draws at three quarters of the size without smoothing;
-    // medium at full size with multisampling; high (the default) at full
-    // size, supersampled, so edges, textures and the stands are not pixelly.
+    // medium (the default) at full size with multisampling; high at full
+    // size, supersampled at four times the pixels, so edges, textures and
+    // the stands are not pixelly at the cost of every redraw.
     readonly property string effectiveQuality:
-        ["low", "medium", "high"].includes(quality) ? quality : "high"
+        ["low", "medium", "high"].includes(quality) ? quality : "medium"
     readonly property real resolutionScale: effectiveQuality === "low" ? 0.75 : 1
-    readonly property int textureLimit: effectiveQuality === "low" ? 1024
-        : effectiveQuality === "high" ? 2048 : 1536
+    // Medium draws as large as high does (a wide edge panel stays sharp);
+    // only its smoothing is lighter.
+    readonly property int textureLimit: effectiveQuality === "low" ? 1024 : 2048
     readonly property real boundedScale: Math.min(resolutionScale,
         textureLimit / Math.max(1, viewWidth, viewHeight))
     readonly property int targetWidth: Math.max(1, Math.ceil(viewWidth * boundedScale))
@@ -493,7 +503,7 @@ Item {
     readonly property real iconLighting: bounded("iconLighting", 0.5, 0, 1)
     readonly property string iconRelief: {
         const word = String((sceneDefinition || ({})).iconRelief || "")
-        return word === "block" || word === "rounded" ? word : "modelled"
+        return word === "block" || word === "rounded" || word === "modelled" ? word : "auto"
     }
     readonly property quaternion iconFacing: entryFrame.sceneRotation.inverted()
         .times(camera.sceneRotation)
@@ -749,7 +759,10 @@ Item {
     // place, drawn as light.
     readonly property bool panelHologramShown: panelHologram.on
     readonly property bool hologramShown: iconHologram.on || panelHologramShown || standHologramShown
+    // Still while the panel is not seen: concealed, or its window hidden or
+    // minimised.
     readonly property bool hologramMoving: hologramShown && motionAllowed && visible && !sceneConcealed
+        && Window.visibility !== Window.Hidden && Window.visibility !== Window.Minimized
         && !reducedMotion
     property bool holdingHologramClock: false
     function holdHologramClock(wanted) {
@@ -957,8 +970,25 @@ Item {
         }
         return count
     }
+    // Each entry's item and place, by its row's key: a node keeps its own
+    // whatever is added, removed or moved before it.
+    readonly property var entryItemsByKey: {
+        const result = Object.create(null)
+        for (const item of entryVisuals)
+            if (item) result[item.entryKey] = item
+        return result
+    }
+    readonly property var entryGeometryByKey: {
+        const result = Object.create(null)
+        for (const rect of entryGeometry)
+            if (rect) result[rect.entryKey] = rect
+        return result
+    }
+    // The plates under the icons, for the triangle count (in any order).
     readonly property var tileMeshes: entryVisuals.map(function(entry) {
-        const visual = entry ? entry.meshVisualItem : null
+        return tileMeshFor(entry ? entry.meshVisualItem : null)
+    })
+    function tileMeshFor(visual) {
         if (!visual || !visual.tileRenderingEnabled) return null
         const values = visual.tileSettings || ({})
         const logicalSize = Math.max(1, Number(visual.logicalSize || 52))
@@ -978,7 +1008,7 @@ Item {
             thickness: 2 * thickness / logicalSize,
             bevel: 2 * Math.max(0, Math.min(12, root.number(values, "iconTileBevel", 0))) / logicalSize,
             diameter: diameter})
-    })
+    }
     // How large an icon is drawn in its bubble: a little smaller in a bubble
     // with straight sides, which hug the icon's own, so it stands clear of
     // them; a ball round it is wider than the icon by its corners and
@@ -1024,14 +1054,13 @@ Item {
             * (root.iconHologram.on ? 0.5 : 1) * bubbleIconShare(shape)
         return { diameter: diameter, height: height, middle: middle }
     }
-    // The bubble over each tile: the tile's outline risen as a dome round
-    // the icon, standing on the tile's face.
-    readonly property var bubbleMeshes: entryVisuals.map(function(entry) {
-        const visual = entry ? entry.meshVisualItem : null
+    // The bubble over an icon's tile: the tile's outline risen as a dome
+    // round the icon, standing on the tile's face.
+    function bubbleMeshFor(visual) {
         if (!bubbleWanted(visual)) return null
         const fit = bubbleFit(visual)
         return cachedBubble(String(visual.resolvedIconStyle.iconShape), fit.height, fit.diameter)
-    })
+    }
     // Bubbles already built, by what shapes them: icons with alike bubbles
     // share one, and whatever leaves an icon's bubble as it was (a hover, a
     // press, a new size) hands back the same mesh and builds nothing.
@@ -1099,7 +1128,12 @@ Item {
     // when a mesh changes (plain arrays: the JavaScript engine's typed arrays
     // and weak maps stay out of this hot path).
     readonly property var platformTriangles: flatTriangles(platformMesh)
-    function hitTestsChanged() { root.hitRevision++ }
+    onPedestalKindChanged: projectionStale = true
+    onPlatformTopChanged: projectionStale = true
+    function hitTestsChanged() {
+        root.hitRevision++
+        root.projectionStale = true
+    }
     onPlatformMeshChanged: hitTestsChanged()
     onEntryGeometryChanged: hitTestsChanged()
     onEntryVisualsChanged: hitTestsChanged()
@@ -1551,7 +1585,7 @@ Item {
         return hitMemoSet(key, entryPointVisibleUncached(index, point))
     }
     function entryPointVisibleUncached(index, point) {
-        if (!motionAllowed || !worldEntries.objectAt(index) || !worldEntries.objectAt(index).visible)
+        if (!inputAllowed || !worldEntries.objectAt(index) || !worldEntries.objectAt(index).visible)
             return false
         const hits = pictureHits(point)
         const own = hits.find(function(hit) { return hit.index === index })
@@ -1590,7 +1624,7 @@ Item {
         return hitMemoSet(key, containsInputPointUncached(point))
     }
     function containsInputPointUncached(point) {
-        if (!motionAllowed) return false
+        if (!inputAllowed) return false
         if (Number.isFinite(meshHitDistance(platform, platformMesh, point, platformTriangles))) return true
         for (const hit of pictureHits(point))
             if (entryPointVisible(hit.index, point)) return true
@@ -2041,19 +2075,30 @@ Item {
         return { start: { x: start.x + dx / length * gap, y: start.y + dy / length * gap },
                  direction: { x: dx / length, y: dy / length } }
     }
+    // Whether the projection below is out of date. Every change it depends
+    // on marks it: the view's size, the camera, the panel's frame, every
+    // icon's resting square (its anchor, which a hologram's float and light
+    // do not move) and stand, and whatever moves the hit tests. A frame that
+    // changes none of it (a hologram's flicker, a decoration's lights, thirty
+    // times a second) leaves the projection as it is; worked out after every
+    // frame, it took over a millisecond each time. It is looked at once a
+    // second all the same, should a change come without a signal.
+    property bool projectionStale: true
+    property double projectedAt: 0
+    // True once every icon was projected.
     function updateProjection() {
-        if (!rendererReady || width <= 0 || height <= 0) return
+        if (!rendererReady || width <= 0 || height <= 0) return false
         const result = []
         for (let i = 0; i < worldEntries.count; ++i) {
             const node = worldEntries.objectAt(i)
-            if (!node || !node.inputAnchor) return
+            if (!node || !node.inputAnchor) return false
             // The icon's resting square, as the camera sees it.
             const anchor = node.inputAnchor, half = node.size / 2
             const points = [[-half, -half], [half, -half], [half, half], [-half, half]].map(p =>
                 root.projectScenePoint(anchor.mapPositionToScene(Qt.vector3d(p[0], p[1], 0))))
             const left = Math.min(...points.map(p => p.x)), top = Math.min(...points.map(p => p.y))
             const right = Math.max(...points.map(p => p.x)), bottom = Math.max(...points.map(p => p.y))
-            if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return
+            if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return false
             const center = root.projectScenePoint(anchor.scenePosition)
             // Its stand as drawn: the foot on the platform and the stand's
             // reach there, so an opened folder keeps clear of the whole.
@@ -2084,6 +2129,7 @@ Item {
         if (Number.isFinite(centre.x) && Number.isFinite(centre.y)
                 && (centre.x !== projectedCentre.x || centre.y !== projectedCentre.y))
             projectedCentre = Qt.point(centre.x, centre.y)
+        return true
     }
 
     // The box round a mesh's corners in its own units, [least x, y, z,
@@ -2190,7 +2236,14 @@ Item {
         onTriggered: {
             if (!root.completedFrameObserved)
                 root.observeCompletedFrame()
-            root.updateProjection()
+            if (root.projectionStale || Date.now() - root.projectedAt > 1000) {
+                // Marked again by any change while it is worked out.
+                root.projectionStale = false
+                if (root.updateProjection())
+                    root.projectedAt = Date.now()
+                else
+                    root.projectionStale = true
+            }
             root.updateOverflow()
             if (root.editMode)
                 root.updateEndOnAxes()
@@ -2815,6 +2868,8 @@ Item {
                 z: root.cameraDistance
                 eulerRotation.z: root.shownRoll
                 clipNear: 1
+                onSceneTransformChanged: root.projectionStale = true
+                onClipNearChanged: root.projectionStale = true
                 // Picking (View3D.pickAll) and Qt's viewport mapping use a
                 // projection the camera keeps from its last change, which a
                 // view that only changes shape - a margin growing across the
@@ -2831,6 +2886,7 @@ Item {
         Node {
             id: sceneContent
             objectName: "mesh-scene-content"
+            onSceneTransformChanged: root.projectionStale = true
             // An edge panel turns about its screen's edge (edgeFrame).
             position: root.edgePanel ? root.edgeFrame.position
                 : Qt.vector3d(root.shownPosition.x, root.shownPosition.y,
@@ -2845,17 +2901,28 @@ Item {
         Node {
             id: entryFrame
             eulerRotation.z: -root.layoutAngle
+        // One node for each of the panel's own rows: an entry added, removed
+        // or moved (a window opening or closing) adds, removes or moves only
+        // its own node, at the same moment as its flat delegate, and every
+        // other node keeps its textures and solid.
         Repeater3D {
             id: worldEntries
-            // A count model preserves nodes and textures during rotation.
-            model: root.geometryWithinBudget ? root.entryGeometry.length : 0
+            model: root.geometryWithinBudget && root.entryRowModel ? root.entryRowModel : 0
+            onCountChanged: root.projectionStale = true
             delegate: Node {
                 id: entryNode
                 required property int index
+                required property string entryKey
                 objectName: "mesh-entry-" + index
-                readonly property var rect: root.entryGeometry[index] || ({})
-                readonly property var entry: root.entryVisuals[index] || null
-                readonly property var visual: entry ? entry.meshVisualItem : null
+                onSizeChanged: root.projectionStale = true
+                onPedestalTopChanged: root.projectionStale = true
+                onPedestalScaleChanged: root.projectionStale = true
+                onPositionChanged: root.projectionStale = true
+                readonly property var rect: root.entryGeometryByKey[entryKey] || ({})
+                // Typed: finding the same item again tells nothing below it
+                // that anything changed.
+                readonly property Item entry: root.entryItemsByKey[entryKey] || null
+                readonly property Item visual: entry ? entry.meshVisualItem : null
                 readonly property var iconMotion: root.motionAllowed && entry ? entry.iconMotion : ({})
                 readonly property var glyphMotion: root.motionAllowed && entry ? entry.glyphMotion : ({})
                 readonly property var tileMotion: root.motionAllowed && entry ? entry.tileMotion : ({})
@@ -3114,9 +3181,9 @@ Item {
                 readonly property real tileLift: visual ? Math.max(-24, Math.min(96,
                     root.number(visual.tileSettings, "iconTileElevation", 0)))
                     * size / Math.max(1, Number(visual.logicalSize || 52)) : 0
-                readonly property var tileMesh: root.tileMeshes[index] || null
+                readonly property var tileMesh: root.tileMeshFor(visual)
                 readonly property var tileMaterial: root.tileMaterial(visual)
-                readonly property var bubbleMesh: root.bubbleMeshes[index] || null
+                readonly property var bubbleMesh: root.bubbleMeshFor(visual)
                 readonly property var bubbleMaterial: root.bubbleMaterial(visual)
                 // Where the bubble's middle lies: the icon's own middle, in
                 // the tile's frame.
@@ -3961,6 +4028,7 @@ Item {
                     Node {
                         id: inputAnchor
                         objectName: "mesh-input-anchor-" + entryNode.index
+                        onSceneTransformChanged: root.projectionStale = true
                         x: entryNode.iconX
                         y: entryNode.footLift + entryNode.size / 2
                     }

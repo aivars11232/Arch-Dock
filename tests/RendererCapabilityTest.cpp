@@ -16,7 +16,9 @@
 #include <QPointingDevice>
 #include <QQmlAbstractUrlInterceptor>
 #include <QQmlComponent>
+#include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlExpression>
 #include <QQmlListReference>
 #include <QQmlProperty>
 #include <QQuickItem>
@@ -180,6 +182,105 @@ private slots:
         QTRY_COMPARE(item->property("contentY").toDouble(), 60.0);
         send(Qt::MouseEventSynthesizedBySystem, Qt::NoScrollPhase, -180, &seat);
         QTRY_COMPARE(item->property("contentY").toDouble(), 6.0);
+    }
+
+    // The 3D icons are made from the panel's own rows, the flat delegates'
+    // rows: an entry added before the others adds one node, and every other
+    // node keeps its item and moves with it; two entries with one id stay
+    // two, each with its own item.
+    void entryNodesFollowTheirRows()
+    {
+        if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+            return; // The private RHI invocation is the real scene gate.
+        const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+            QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+        const auto package = ArchDock::ThemePackage::load(themeRoot
+            + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+        QVERIFY2(package.isValid(), qPrintable(package.primaryCode()));
+        const QString glyph = QUrl::fromLocalFile(QFINDTESTDATA("data/truth-glyph-logo.svg")).toString();
+        QQmlEngine engine;
+        engine.addImportPath(importRoot());
+        QQmlComponent component(&engine);
+        component.setData(R"(
+            import QtQuick
+            import ArchDock.Rendering 1.0
+            PanelScene {
+                panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 120,
+                                   scene3DQuality: "low", iconSize: 40, layoutPadding: 10,
+                                   scene3DIconDepth: 0})
+                entryDelegateContext: ({hostKind: "free"})
+                hostCapabilities: ({rotation: {available: true}})
+            }
+        )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/RowsConsumer.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        const auto entries = [&glyph](const QStringList &ids) {
+            QVariantList result;
+            for (const QString &id : ids)
+                result.append(QVariantMap{{"id", id}, {"displayName", id}, {"iconName", glyph}});
+            return result;
+        };
+        QQuickWindow window;
+        std::unique_ptr<QObject> object(component.createWithInitialProperties({
+            {QStringLiteral("themeDefinition"), package.package->runtimeProjection()},
+            {QStringLiteral("orderedEntries"), entries({"one", "two"})}}));
+        QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+        auto *scene = qobject_cast<QQuickItem *>(object.get());
+        QVERIFY(scene);
+        scene->setParentItem(window.contentItem());
+        window.resize(qCeil(scene->width()), qCeil(scene->height()));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(),
+                                 QStringLiteral("true3d"), 5000);
+        auto *renderer = objectValue(scene->property("activeSurfaceRenderer"));
+        QVERIFY(renderer);
+        const auto evaluate = [renderer](const QString &text) {
+            QQmlExpression expression(qmlContext(renderer), renderer, text);
+            return expression.evaluate();
+        };
+        const auto itemAt = [scene](int index) {
+            QVariant item;
+            QMetaObject::invokeMethod(scene, "entryItemAt", Q_RETURN_ARG(QVariant, item), Q_ARG(QVariant, index));
+            return objectValue(item);
+        };
+        const auto node = [&evaluate](int index) {
+            return objectValue(evaluate(QStringLiteral("worldEntries.objectAt(%1)").arg(index)));
+        };
+        const auto nodesMatch = [&](int count) {
+            if (evaluate(QStringLiteral("worldEntries.count")).toInt() != count) return false;
+            for (int index = 0; index < count; ++index)
+                if (!node(index) || !itemAt(index) || objectValue(node(index)->property("entry")) != itemAt(index))
+                    return false;
+            return true;
+        };
+        QCOMPARE(objectValue(evaluate(QStringLiteral("worldEntries.model"))),
+                 objectValue(scene->property("entryRowModel")));
+        QTRY_VERIFY(nodesMatch(2));
+        QPointer<QObject> one = node(0), two = node(1);
+
+        scene->setProperty("orderedEntries", entries({"zero", "one", "two"}));
+        QTRY_VERIFY(nodesMatch(3));
+        QCOMPARE(node(1), one.data());
+        QCOMPARE(node(2), two.data());
+        QPointer<QObject> zero = node(0);
+
+        // Moved, not side by side: each node goes with its entry, and its
+        // place is its own entry's.
+        scene->setProperty("orderedEntries", entries({"two", "zero", "one"}));
+        QTRY_VERIFY(nodesMatch(3));
+        QCOMPARE(node(0), two.data());
+        QCOMPARE(node(1), zero.data());
+        QCOMPARE(node(2), one.data());
+        for (int index = 0; index < 3; ++index)
+            QVERIFY(evaluate(QStringLiteral("worldEntries.objectAt(%1).rect.entryKey === worldEntries.objectAt(%1).entryKey")
+                                 .arg(index)).toBool());
+
+        // Two entries with one id stay two, each with its own item.
+        scene->setProperty("orderedEntries", entries({"one", "one"}));
+        QTRY_VERIFY(nodesMatch(2));
+        QCOMPARE(objectValue(node(0)->property("entry"))->property("entryKey").toString(), QStringLiteral("one"));
+        QCOMPARE(objectValue(node(1)->property("entry"))->property("entryKey").toString(),
+                 QStringLiteral("one") + QChar(1) + QStringLiteral("2"));
     }
 
     void realScenePixelsQualityAndFallback_data()
@@ -578,19 +679,36 @@ private slots:
                 QTRY_VERIFY_WITH_TIMEOUT(pixels() != solidIcons, 8000);
                 QTest::qWait(300);
                 const QImage blockIcons = pixels();
-                // Asked for nothing, the icon is to be made into an object
-                // (IconModel); where objects cannot be made (no models here),
-                // it keeps its picture's own kind of relief meanwhile.
-                auto modelled = deep;
-                modelled.remove("scene3DIconRelief");
-                scene->setProperty("panelDefinition", modelled);
-                QTRY_COMPARE(renderer->property("iconRelief").toString(), QStringLiteral("modelled"));
+                // Asked for nothing, the icon is made at once from its
+                // picture (Auto: its own kind of relief); no object is asked
+                // of the AI helper.
+                auto automatic = deep;
+                automatic.remove("scene3DIconRelief");
+                // Each step waits for its own new mesh, not the last step's.
+                QSignalSpy autoTaken(solid, SIGNAL(meshChanged()));
+                QVERIFY(autoTaken.isValid());
+                scene->setProperty("panelDefinition", automatic);
+                QTRY_COMPARE(renderer->property("iconRelief").toString(), QStringLiteral("auto"));
                 const auto shownKind = [solid]() {
                     const QVariant mesh = solid->property("mesh");
                     if (QObject *object = objectValue(mesh)) return object->property("kind").toString();
                     return plainValue(mesh).toMap().value(QStringLiteral("kind")).toString();
                 };
-                QTRY_VERIFY_WITH_TIMEOUT(shownKind() == QStringLiteral("rounded") || shownKind() == QStringLiteral("block"), 8000);
+                QTRY_VERIFY_WITH_TIMEOUT(autoTaken.count() > 0, 8000);
+                const QString autoKind = shownKind();
+                QVERIFY2(autoKind == QStringLiteral("rounded") || autoKind == QStringLiteral("block"), qPrintable(autoKind));
+                QVERIFY(!solid->property("twoSided").toBool());
+                // Modelled, only when chosen: where objects cannot be made
+                // (no models here), the icon keeps its picture's own kind of
+                // relief meanwhile.
+                auto modelled = deep;
+                modelled.insert("scene3DIconRelief", "modelled");
+                QSignalSpy modelledTaken(solid, SIGNAL(meshChanged()));
+                QVERIFY(modelledTaken.isValid());
+                scene->setProperty("panelDefinition", modelled);
+                QTRY_COMPARE(renderer->property("iconRelief").toString(), QStringLiteral("modelled"));
+                QTRY_VERIFY_WITH_TIMEOUT(modelledTaken.count() > 0, 8000);
+                QCOMPARE(shownKind(), autoKind);
                 QVERIFY(!solid->property("twoSided").toBool());
                 if (!evidence.isEmpty()) {
                     QVERIFY(flatIcons.save(QDir(evidence).filePath("icons-flat.png")));

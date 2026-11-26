@@ -618,6 +618,7 @@ PlasmoidItem {
         refreshConfiguration();
         refreshEntries();
         refreshNativeHostState();
+        coverAsked += 1;
     }
 
     function bootstrapFreeDock() {
@@ -1100,7 +1101,48 @@ PlasmoidItem {
             Timer {
                 id: areaReport
                 interval: 400
-                onTriggered: representation.reportArea()
+                onTriggered: {
+                    representation.reportArea()
+                    representation.checkCovered()
+                }
+            }
+            // Whether windows hide all of what the panel draws: a free panel
+            // lies under windows, an edge panel or a bar under a full-screen
+            // one only. Asked when windows change what they cover and when
+            // the panel has moved; only by the representation shown.
+            function checkCovered() {
+                if (!authoritativeHost)
+                    return
+                if (root.panelId.length === 0 || !dockService.registered) {
+                    root.panelCovered = false
+                    return
+                }
+                const bounds = panelScene.drawnBounds
+                const a = panelScene.mapToGlobal(bounds.x, bounds.y)
+                const b = panelScene.mapToGlobal(bounds.x + bounds.width, bounds.y + bounds.height)
+                let left = Math.min(a.x, b.x), top = Math.min(a.y, b.y)
+                let right = Math.max(a.x, b.x), bottom = Math.max(a.y, b.y)
+                // Only what can be seen: nothing of the panel is drawn past
+                // the window that draws it (the desktop, its Plasma panel or
+                // its bar), so what reaches past it needs no covering.
+                const drawing = panelScene.Window.window
+                if (drawing) {
+                    left = Math.max(left, drawing.x)
+                    top = Math.max(top, drawing.y)
+                    right = Math.min(right, drawing.x + drawing.width)
+                    bottom = Math.min(bottom, drawing.y + drawing.height)
+                }
+                const area = { x: left, y: top, width: Math.max(0, right - left),
+                               height: Math.max(0, bottom - top) }
+                const asked = root.panelId
+                root.callDock("panelAreaCovered", [area, root.freeSurface], function(reply) {
+                    if (root.panelId === asked)
+                        root.panelCovered = root.normalizeReply(reply) === true
+                }, function() { root.panelCovered = false })
+            }
+            Connections {
+                target: root
+                function onCoverAskedChanged() { representation.checkCovered() }
             }
             Connections {
                 target: panelScene
@@ -1464,7 +1506,10 @@ PlasmoidItem {
                     hideFolderExpansion()
                 }
             }
-            onAuthoritativeHostChanged: publishHostConcealed()
+            onAuthoritativeHostChanged: {
+                publishHostConcealed()
+                checkCovered()
+            }
             Component.onCompleted: publishHostConcealed()
 
             onActiveFocusChanged: root.panelKeyboardFocus = activeFocus
@@ -1645,6 +1690,9 @@ PlasmoidItem {
                     onWheelUsed: if (root.activeDockRepresentation)
                         root.activeDockRepresentation.hideWindowPreview()
                     sceneConcealed: !presentationController.hostVisible
+                    // Covered by windows, or its bar hidden at the edge: only
+                    // its motion rests.
+                    sceneResting: root.panelCovered || root.barHidden
                     geometryCompatibilityProfile: root.freeSurface
                         ? "live" : "canonical"
                     entryDelegateContext: ({
@@ -1830,9 +1878,10 @@ PlasmoidItem {
                             showReflection: root.configuration.showReflections
                             showIndicator: false
                             reducedMotion: root.configuration.reducedMotion === true
+                            shown: !root.barScene || root.barScene.entriesAnimatable
                             solidOnFlat: root.barWidgetIconSolid
                             solidDepth: root.barWidgetIconSolid && root.barScene ? Number(root.barScene.flatIconDepth) : 0
-                            solidRelief: root.barScene ? String(root.barScene.flatIconRelief || "modelled") : "modelled"
+                            solidRelief: root.barScene ? String(root.barScene.flatIconRelief || "auto") : "auto"
                             solidTurn: root.barScene ? Number(root.barScene.flatIconTurn) : 15
                             solidLighting: root.barScene ? Number(root.barScene.flatIconLighting) : 0.5
                         }
@@ -1958,9 +2007,10 @@ PlasmoidItem {
                 return parent.sceneEntryPointVisible(liveEntry.mapToItem(parent, point.x, point.y));
             }
             sceneVisible: parent.sceneVisible
+            panelShown: parent.scenePanelShown !== false
             meshVisualActive: parent.sceneMeshActive
             solidDepth: Number(parent.sceneIconDepth || 0)
-            solidRelief: String(parent.sceneIconRelief || "modelled")
+            solidRelief: String(parent.sceneIconRelief || "auto")
             solidOnFlat: Boolean(parent.sceneIconSolidOnFlat)
             solidTurn: Number(parent.sceneIconTurn || 0)
             solidLighting: Number(parent.sceneIconLighting === undefined ? 0.5 : parent.sceneIconLighting)
@@ -2017,6 +2067,16 @@ PlasmoidItem {
         Component.onCompleted: if (!registered) stoppedNoticeDelay.restart()
     }
 
+    // Whether windows hide all of the panel, as Arch Dock last answered
+    // (PanelWindow.panelAreaCovered): its motion rests while they do.
+    // coverAsked grows whenever it should be asked again.
+    property bool panelCovered: false
+    property int coverAsked: 0
+    // A bar of Arch Dock's own that has hidden itself (BarWindow.concealed;
+    // Plasma's windows have no such property): its motion rests too. Only
+    // the motion: what the bar is and reaches stays as it is.
+    readonly property bool barHidden: Boolean(Window.window && Window.window.concealed === true)
+
     // Arch Dock gone for more than a moment (quit, or not started again): a
     // free panel says so with its Start button even while it shows icons. A
     // restart (an update's, or after a crash) is over before the panel
@@ -2044,6 +2104,8 @@ PlasmoidItem {
                 root.refreshEntries();
             if (changedProperties.nativeVisibilityRevision !== undefined)
                 root.refreshNativeHostState();
+            if (changedProperties.coverRevision !== undefined)
+                root.coverAsked += 1;
             if (changedProperties.presentationRequestRevision !== undefined)
                 root.consumePresentationRequest();
         }

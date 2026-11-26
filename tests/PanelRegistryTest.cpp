@@ -9,6 +9,7 @@
 #include "DockModel.h"
 #include "WindowModel.h"
 #include "panel/IconOverrideTransaction.h"
+#include "panel/ProfileApplyTransaction.h"
 #include "model/IconEntryIdentity.h"
 #include "model/PanelNaming.h"
 #include "model/SettingsMigration.h"
@@ -452,6 +453,7 @@ private slots:
     void provisionsPanelFamiliesAndNativeBridgeState();
     void migratesLegacyBottomPanelSettings();
     void preservesFreePanelForFreeSurface();
+    void lightensOld3DDefaultsOnce();
     void namesPanelsByWhatTheyAre();
     void normalizesFreeHostAssociationStates();
     void migratesLegacyFreeHostAssociationWithoutDataLoss();
@@ -739,6 +741,100 @@ void PanelRegistryTest::preservesFreePanelForFreeSurface()
              QStringLiteral("free"));
     QCOMPARE(registry.panelValue(QStringLiteral("free"), QStringLiteral("type")).toString(),
              QStringLiteral("launcher"));
+}
+
+// 0.1.1-53 and -54 saved 3D panels with the AI-made "Modelled" icons and
+// "high" quality, in the flat look they remember too: once after the update
+// all of it goes back to "auto" and "medium", in both saved copies of the
+// flat look; chosen again later, it stays. Not while an interrupted profile
+// apply waits to be put right, which needs the panels exactly as they were.
+void PanelRegistryTest::lightensOld3DDefaultsOnce()
+{
+    const QVariantMap flatLook{{QStringLiteral("scene3DIconRelief"), QStringLiteral("modelled")},
+                               {QStringLiteral("scene3DQuality"), QStringLiteral("high")}};
+    const auto seed = [&flatLook]() {
+        QJsonArray panels;
+        panels.append(QJsonObject::fromVariantMap(
+            {{QStringLiteral("id"), QStringLiteral("ring")}, {QStringLiteral("name"), QStringLiteral("Ring")},
+             {QStringLiteral("visible"), true}, {QStringLiteral("edge"), QStringLiteral("free")},
+             {QStringLiteral("type"), QStringLiteral("launcher")}, {QStringLiteral("layout"), QStringLiteral("ring")},
+             {QStringLiteral("scene3DIconRelief"), QStringLiteral("modelled")},
+             {QStringLiteral("scene3DQuality"), QStringLiteral("high")},
+             {QStringLiteral("previousFlatLook"), flatLook}}));
+        // Heavy only in the flat look it remembers.
+        panels.append(QJsonObject::fromVariantMap(
+            {{QStringLiteral("id"), QStringLiteral("flat")}, {QStringLiteral("name"), QStringLiteral("Flat")},
+             {QStringLiteral("visible"), true}, {QStringLiteral("edge"), QStringLiteral("free")},
+             {QStringLiteral("type"), QStringLiteral("launcher")}, {QStringLiteral("layout"), QStringLiteral("circular")},
+             {QStringLiteral("previousFlatLook"), flatLook}}));
+        QSettings settings;
+        settings.setValue(QStringLiteral("dock/panels"), QJsonDocument(panels).toJson(QJsonDocument::Compact));
+        settings.remove(QStringLiteral("migrations/lightDefaults3D"));
+        settings.sync();
+    };
+    // The records as saved, by id.
+    const auto saved = []() {
+        QSettings settings;
+        QJsonDocument document = QJsonDocument::fromJson(settings.value(QStringLiteral("dock/panels")).toByteArray());
+        QJsonArray records = document.isArray() ? document.array()
+            : document.object().value(QStringLiteral("panels")).toArray();
+        QHash<QString, QVariantMap> result;
+        for (const auto &record : records)
+            result.insert(record.toObject().value(QStringLiteral("id")).toString(), record.toObject().toVariantMap());
+        return result;
+    };
+    const auto marked = []() {
+        QSettings settings;
+        return settings.value(QStringLiteral("migrations/lightDefaults3D"), false).toBool();
+    };
+
+    // An interrupted profile apply waits: nothing is changed or marked.
+    seed();
+    const QString journal = ArchDock::ProfileApplyTransaction::defaultJournalPath();
+    QVERIFY(QDir().mkpath(QFileInfo(journal).absolutePath()));
+    {
+        QFile file(journal);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("{}");
+    }
+    {
+        PanelRegistry registry;
+        QCOMPARE(registry.panelValue(QStringLiteral("ring"), QStringLiteral("scene3DIconRelief")).toString(),
+                 QStringLiteral("modelled"));
+        QVERIFY(!marked());
+    }
+    QVERIFY(QFile::remove(journal));
+
+    // Then the panels and both copies of their flat looks go back, once.
+    {
+        PanelRegistry registry;
+        QCOMPARE(registry.panelValue(QStringLiteral("ring"), QStringLiteral("scene3DIconRelief")).toString(),
+                 QStringLiteral("auto"));
+        QCOMPARE(registry.panelValue(QStringLiteral("ring"), QStringLiteral("scene3DQuality")).toString(),
+                 QStringLiteral("medium"));
+        QVERIFY(marked());
+    }
+    const auto records = saved();
+    for (const QString &id : {QStringLiteral("ring"), QStringLiteral("flat")})
+    {
+        const QVariantMap record = records.value(id);
+        QVERIFY2(!record.isEmpty(), qPrintable(id));
+        QCOMPARE(record.value(QStringLiteral("previousFlatLook")).toMap()
+                     .value(QStringLiteral("scene3DIconRelief")).toString(), QStringLiteral("auto"));
+        QCOMPARE(record.value(QStringLiteral("previousFlatLook")).toMap()
+                     .value(QStringLiteral("scene3DQuality")).toString(), QStringLiteral("medium"));
+        QCOMPARE(record.value(QStringLiteral("surface2D")).toMap().value(QStringLiteral("previousFlatLook")).toMap()
+                     .value(QStringLiteral("scene3DIconRelief")).toString(), QStringLiteral("auto"));
+    }
+
+    // Chosen again, Modelled stays.
+    {
+        PanelRegistry registry;
+        registry.setPanelValue(QStringLiteral("ring"), QStringLiteral("scene3DIconRelief"), QStringLiteral("modelled"));
+    }
+    PanelRegistry again;
+    QCOMPARE(again.panelValue(QStringLiteral("ring"), QStringLiteral("scene3DIconRelief")).toString(),
+             QStringLiteral("modelled"));
 }
 
 // A free panel nobody named goes by its shape as Panel Studio's Dock layout

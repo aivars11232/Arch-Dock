@@ -31,9 +31,14 @@ Item {
     // is true. The default is false so a host that reports nothing still
     // animates rather than silently freezing.
     property bool sceneConcealed: false
-    readonly property bool entriesAnimatable:
-        !sceneConcealed && visible && opacity > 0
+    // Set by the host while the panel stays in place but cannot be seen:
+    // covered by windows, or in a bar that has hidden at its edge. Only its
+    // motion rests; it is drawn as it is and takes input as before, so it is
+    // whole and answers at once the moment it shows again.
+    property bool sceneResting: false
+    readonly property bool sceneShown: !sceneConcealed && visible && opacity > 0
         && (!Window.window || Window.window.visible)
+    readonly property bool entriesAnimatable: sceneShown && !sceneResting
     property int entryVisualRevision: 0
     property int motionContextRevision: 0
     onThemeDefinitionChanged: motionContextRevision += 1
@@ -76,12 +81,65 @@ Item {
     readonly property int entryCount:
         orderedEntries && orderedEntries.length !== undefined
         ? orderedEntries.length : 0
+    // Each entry's key: its id, and for a second entry with the same id that
+    // id with its count, so no two rows share a key.
+    function entryKeysOf(entries) {
+        const seen = Object.create(null)
+        return (entries || []).map(function(entry, index) {
+            const base = String(entry.id || entry.appId || index)
+            seen[base] = (seen[base] || 0) + 1
+            return seen[base] > 1 ? base + "\u0001" + seen[base] : base
+        })
+    }
     // State snapshots change on every window update. Only membership/order
     // changes may replace delegates; otherwise their open menus lose owners.
-    readonly property string entryIdentityOrder: JSON.stringify(
-        (orderedEntries || []).map(function(entry, index) {
-            return String(entry.id || entry.appId || index)
-        }))
+    readonly property string entryIdentityOrder: JSON.stringify(entryKeysOf(orderedEntries))
+    // The entries' rows, by key: a window opening or closing (or an icon
+    // added, removed or moved) inserts, removes or moves its own row, and
+    // every other entry keeps its delegate, with its icon, its 3D solid and
+    // its menus. A plain list as the model would make them all anew. The 3D
+    // scene makes its icons from the same rows, so both always agree.
+    ListModel { id: entryRows }
+    readonly property QtObject entryRowModel: entryRows
+    function synchronizeEntryRows() {
+        const wanted = JSON.parse(entryIdentityOrder)
+        const kept = new Set(wanted)
+        for (let row = entryRows.count - 1; row >= 0; --row) {
+            if (!kept.has(entryRows.get(row).entryKey))
+                entryRows.remove(row)
+        }
+        for (let place = 0; place < wanted.length; ++place) {
+            if (place < entryRows.count && entryRows.get(place).entryKey === wanted[place])
+                continue
+            let found = -1
+            for (let row = place + 1; row < entryRows.count; ++row) {
+                if (entryRows.get(row).entryKey === wanted[place]) {
+                    found = row
+                    break
+                }
+            }
+            if (found >= 0)
+                entryRows.move(found, place, 1)
+            else
+                entryRows.insert(place, { entryKey: wanted[place] })
+        }
+        while (entryRows.count > wanted.length)
+            entryRows.remove(entryRows.count - 1)
+        // A moved row adds or removes no delegate: the list of the entries'
+        // items is read again, for what reads them by place (the river's
+        // mirror images, the 3D scene's hit areas).
+        Qt.callLater(root.refreshEntryVisuals)
+    }
+    function refreshEntryVisuals() {
+        entryVisualRevision += 1
+    }
+    onEntryIdentityOrderChanged: synchronizeEntryRows()
+    // Holograms move at their full rate while the pointer is over the panel.
+    HologramPointer {}
+    Component.onCompleted: {
+        synchronizeEntryRows()
+        if (surfaceToneKey.length > 0) surfaceToneTimer.restart()
+    }
     readonly property string layoutPath: String(definitionValue(
         "layout", "pathType", "layout", "horizontal"))
     readonly property bool verticalLayout:
@@ -289,8 +347,8 @@ Item {
     readonly property real flatIconDepth: iconSolidNumber("iconDepth", 0.3, 0, 1)
     readonly property real flatIconTurn: iconSolidNumber("iconTurn", 15, -60, 60)
     readonly property real flatIconLighting: iconSolidNumber("iconLighting", 0.5, 0, 1)
-    readonly property string flatIconRelief: ["modelled", "rounded", "block"].includes(String(iconSolidValue("iconRelief", "modelled")))
-        ? String(iconSolidValue("iconRelief", "modelled")) : "modelled"
+    readonly property string flatIconRelief: ["auto", "rounded", "block", "modelled"].includes(String(iconSolidValue("iconRelief", "auto")))
+        ? String(iconSolidValue("iconRelief", "auto")) : "auto"
     readonly property bool reducedMotion:
         animationProfiles
             && animationProfiles.reducedMotion !== undefined
@@ -431,7 +489,7 @@ Item {
     readonly property bool modalPopupOpen: Boolean(runtimeState.modalPopupOpen !== undefined
         ? runtimeState.modalPopupOpen : runtimeState.popupOpen)
     readonly property bool wheelInputAvailable:
-        entryInteractionEnabled && entriesAnimatable && !dragInProgress
+        entryInteractionEnabled && sceneShown && !dragInProgress
         && !editModeActive && !modalPopupOpen && presentationState !== "collapsed"
     readonly property bool wheelTravelAvailable:
         travelGeometryAvailable && motionTarget !== "panel" && wheelInputAvailable
@@ -1489,8 +1547,8 @@ Item {
         resolvedRendererTier, themeId, panelDecoration, rendererStyle, surfaceBox.width, surfaceBox.height,
         barWidgetRoom, surfaceLoader.skinnedReady, surfaceLoader.decorationReady]) : ""
     onSurfaceToneKeyChanged: if (surfaceToneKey.length > 0) surfaceToneTimer.restart()
-    // A scene made inside a bar is measured too, not only one that moves in.
-    Component.onCompleted: if (surfaceToneKey.length > 0) surfaceToneTimer.restart()
+    // A scene made inside a bar is measured too, not only one that moves in
+    // (see Component.onCompleted at the top).
     Timer {
         id: surfaceToneTimer
         // Once the look has been drawn.
@@ -2252,17 +2310,24 @@ Item {
             return parameters
         }
         entryVisuals: root.entryVisuals
-        entryGeometry: root.orderedEntries.map(function(entry, index) {
+        entryRowModel: root.entryRowModel
+        // Each place with its entry's key, from the same pass as the keys of
+        // the rows, so a place is never paired with an older key.
+        entryGeometry: {
+            const keys = root.entryKeysOf(root.orderedEntries)
+            return root.orderedEntries.map(function(entry, index) {
             const output = root.baseEntryGeometryAt(index)
             const rect = output.entryBounds
-            return { centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
+            return { entryKey: keys[index], centerX: rect.x + rect.width / 2, centerY: rect.y + rect.height / 2,
                      width: rect.width, height: rect.height,
                      rotation: output.rotation, onTrack: output.onTrack !== false,
                      visibility: output.trackVisibility === undefined ? 1 : output.trackVisibility,
                      progress: Number(output.pathProgress) || 0,
                      surface: Number(output.surfaceProgress) || 0 }
-        })
-        sceneConcealed: !root.entriesAnimatable
+            })
+        }
+        sceneConcealed: !root.sceneShown
+        sceneResting: root.sceneResting
     }
 
     Repeater {
@@ -2284,7 +2349,7 @@ Item {
             customColor: root.customColor
             panelOpacity: root.panelOpacity
             reducedMotion: root.reducedMotion
-            concealed: !root.entriesAnimatable
+            concealed: !root.sceneShown
             // Under the look drawn along a bar, a segment shows a band of its
             // own only where it was given a background of its own.
             visible: root.collapseProgress < 1 && (!root.surfaceSpanned
@@ -2341,14 +2406,16 @@ Item {
     Repeater {
         id: entryRepeater
 
-        model: JSON.parse(root.entryIdentityOrder)
-        onItemAdded: Qt.callLater(function() { root.entryVisualRevision += 1 })
-        onItemRemoved: Qt.callLater(function() { root.entryVisualRevision += 1 })
+        model: entryRows
+        onItemAdded: Qt.callLater(root.refreshEntryVisuals)
+        onItemRemoved: Qt.callLater(root.refreshEntryVisuals)
 
         delegate: Item {
             id: entryItem
 
             required property int index
+            // The row's key, by which the 3D scene finds this entry's item.
+            required property string entryKey
             readonly property var geometryOutput: root.entryGeometryAt(index)
             readonly property var sceneEntry: root.orderedEntries[index] || ({})
             readonly property int sceneIndex: index
@@ -2455,6 +2522,10 @@ Item {
                 readonly property bool sceneInputEnabled:
                     entryItem.sceneInputEnabled
                 readonly property bool sceneVisible: entryItem.sceneVisible
+                // Whether the panel can be seen at all (not hidden, not
+                // covered): unlike sceneVisible, not whether this entry is
+                // on its track, for one fading off it is still drawn.
+                readonly property bool scenePanelShown: root.entriesAnimatable
                 readonly property var sceneGeometry: entryItem.sceneGeometry
                 readonly property var sceneRuntimeState:
                     entryItem.sceneRuntimeState
@@ -2470,9 +2541,11 @@ Item {
                 // icons' solids.
                 readonly property real sceneIconDepth: surfaceLoader.true3DReady && surfaceLoader.true3DItem
                     ? Number(surfaceLoader.true3DItem.iconDepth || 0) : root.flatIconSolid ? root.flatIconDepth : 0
+                // A 3D panel's hologram card (holograms with 3D icons off)
+                // is a thin slab of the picture: never an AI-made object.
                 readonly property string sceneIconRelief: surfaceLoader.true3DReady && surfaceLoader.true3DItem
-                    ? String(surfaceLoader.true3DItem.iconRelief || "modelled")
-                    : root.flatIconSolid ? root.flatIconRelief : "modelled"
+                    ? (surfaceLoader.true3DItem.iconSolid ? String(surfaceLoader.true3DItem.iconRelief || "auto") : "auto")
+                    : root.flatIconSolid ? root.flatIconRelief : "auto"
                 // 3D icons on a flat panel: the solids' switch, turn and
                 // lighting, for the icons' own 3D views.
                 readonly property bool sceneIconSolidOnFlat: root.flatIconSolid
@@ -2530,9 +2603,10 @@ Item {
             showIndicator: Boolean(root.definitionValue(
                 "indicator", "visible", "showIndicators", true))
             reducedMotion: root.reducedMotion
+            shown: root.entriesAnimatable
             meshVisualActive: Boolean(parent.sceneMeshActive)
             solidDepth: Number(parent.sceneIconDepth || 0)
-            solidRelief: String(parent.sceneIconRelief || "modelled")
+            solidRelief: String(parent.sceneIconRelief || "auto")
             solidOnFlat: root.flatIconSolid
             solidTurn: root.flatIconTurn
             solidLighting: root.flatIconLighting

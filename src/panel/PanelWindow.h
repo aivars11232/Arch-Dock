@@ -67,9 +67,15 @@ class PanelWindow final : public QObject, protected QDBusContext
     Q_PROPERTY(int visibilityRevision READ visibilityRevision NOTIFY visibilityRevisionChanged)
     Q_PROPERTY(qulonglong dockRevision READ dockRevision NOTIFY dockRevisionChanged)
     Q_PROPERTY(qulonglong contentRevision READ contentRevision NOTIFY contentRevisionChanged)
+    // What applications report on their icons changed; a status reading
+    // never moves it.
+    Q_PROPERTY(qulonglong overlayRevision READ overlayRevision NOTIFY overlayRevisionChanged)
     Q_PROPERTY(qulonglong dockEntriesRevision READ dockEntriesRevision NOTIFY dockEntriesRevisionChanged)
     Q_PROPERTY(qulonglong nativePlacementRevision READ nativePlacementRevision NOTIFY nativePlacementRevisionChanged)
     Q_PROPERTY(qulonglong nativeVisibilityRevision READ nativeVisibilityRevision NOTIFY nativeVisibilityRevisionChanged)
+    // Grows when windows changed what they may cover: panels ask again
+    // whether they are covered (panelAreaCovered).
+    Q_PROPERTY(qulonglong coverRevision READ coverRevision NOTIFY coverRevisionChanged)
     Q_PROPERTY(qulonglong presentationRequestRevision READ presentationRequestRevision NOTIFY presentationRequestRevisionChanged)
 
 public:
@@ -81,8 +87,10 @@ public:
     [[nodiscard]] qulonglong dockRevision() const;
     [[nodiscard]] qulonglong dockEntriesRevision() const;
     [[nodiscard]] qulonglong contentRevision() const { return m_contentRevision; }
+    [[nodiscard]] qulonglong overlayRevision() const { return m_overlayRevision; }
     [[nodiscard]] qulonglong nativePlacementRevision() const;
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
+    [[nodiscard]] qulonglong coverRevision() const;
     [[nodiscard]] qulonglong presentationRequestRevision() const;
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
     // Leaves the event loop, returning any audition to the saved desktop.
@@ -94,6 +102,10 @@ public:
     // without values for fields that do not act on that panel.
     Q_INVOKABLE QVariantMap panelThemeCandidate(const QString &panelId,
                                                 const QString &themeId) const;
+    // Panel Studio shows status readings now (a status source's switch on
+    // its Segments page, a status pill in its preview): the sources are
+    // sampled while it does.
+    Q_INVOKABLE void setStudioStatusShown(bool shown);
 
 public slots:
     void showSettings();
@@ -337,6 +349,13 @@ public slots:
     bool reportFreePanelArea(const QString &panelId, double x, double y,
                              double width, double height, double room);
     [[nodiscard]] QVariantList freePanelAreas(const QString &exceptPanelId) const;
+    // Whether windows hide all of a panel drawn at `area` on the desktop (x,
+    // y, width and height in the desktop's logical pixels), so its motion
+    // may rest. Only windows shown on the desktop in use, and solid, hide
+    // anything: any of them for a panel drawn under windows (a free panel's
+    // `underWindows`), full-screen ones only for a panel drawn above them
+    // (an edge panel or a bar).
+    [[nodiscard]] bool panelAreaCovered(const QVariantMap &area, bool underWindows) const;
     // How much of its track a 3D free panel's icons get as drawn, as its
     // widget last measured it (PanelScene3D.seenTrackFactor): a tilt shortens
     // the track as seen, so the panel holds fewer. Nothing of it is saved.
@@ -371,12 +390,18 @@ signals:
     void dockRevisionChanged();
     void dockEntriesRevisionChanged();
     void contentRevisionChanged();
+    void overlayRevisionChanged();
     void nativePlacementRevisionChanged();
     void nativeVisibilityRevisionChanged();
+    void coverRevisionChanged();
     void presentationRequestRevisionChanged();
     void nativePanelRecoveryFinished();
     void barHostRecordsChanged();
     void barHostWindowsChanged();
+
+private Q_SLOTS:
+    // KWin's org.kde.KWin showingDesktopChanged.
+    void kwinShowingDesktopChanged(bool showing);
 
 private:
     [[nodiscard]] ArchDock::ProfileApplyTransaction::Operations profileOperations();
@@ -711,6 +736,11 @@ private:
     QTimer m_contentTimer;
     qulonglong m_contentRevision = 0;
     bool m_contentPublishing = false;
+    qulonglong m_overlayRevision = 0;
+    // A panel as the desktop draws it shows the status; Panel Studio shows
+    // its readings (setStudioStatusShown).
+    bool m_panelStatusShown = false;
+    bool m_studioStatusShown = false;
     KWinActionBridge m_actionBridge;
     WindowWatcher m_windowWatcher;
     QPointer<QWindow> m_settingsWindow;
@@ -752,6 +782,23 @@ private:
     };
     QHash<QString, PendingRemoval> m_removalRequested;
     QTimer m_removalCheckTimer;
+    // Window changes that may cover or uncover a panel are told at most five
+    // times a second, and only when what windows cover changed (checkCover).
+    void scheduleCoverCheck();
+    void checkCover();
+    QTimer m_coverTimer;
+    qulonglong m_coverRevision = 0;
+    size_t m_coverSignature = 0;
+    // Show Desktop is on: every window is out of sight, and covers nothing.
+    // KWin's scripts do not tell it; KWin itself does, over D-Bus.
+    bool m_showingDesktop = false;
+    void setShowingDesktop(bool showing);
+    // The light 3D defaults were put off at start by an interrupted profile
+    // apply; given once it is put right.
+    bool m_lightDefaultsDeferred = false;
+    // Asks KWin whether it shows the desktop now (at start, and when KWin
+    // comes back).
+    void askShowingDesktop();
     void checkRequestedRemovals();
     // A panel's settings are kept (RemovedPanelStore) before its record is
     // deleted: the kept copy's key, or empty (and `error`) when they could

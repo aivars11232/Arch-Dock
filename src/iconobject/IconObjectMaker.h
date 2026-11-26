@@ -29,6 +29,8 @@ public:
     ~IconObjectMaker();
 
     bool ready() const { return m_sessions != nullptr; }
+    // Why the last make() made nothing through no fault of the picture (out
+    // of memory, the network failing); empty when the picture gave no object.
     QString error() const { return m_error; }
 
     // The object for a picture with its own transparency (any size, its
@@ -45,6 +47,7 @@ public:
     double meshTime = 0;
 
 private:
+    std::optional<IconObjectMesh> makeFrom(const QImage &picture);
     struct Sessions;
     std::unique_ptr<Sessions> m_sessions;
     QString m_error;

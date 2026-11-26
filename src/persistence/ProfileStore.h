@@ -60,6 +60,14 @@ public:
     // Existing profiles use their current revision as a compare-and-save guard.
     [[nodiscard]] std::optional<ProfileDefinition> save(const ProfileDefinition &profile,
         QString *errorCode = nullptr) const;
+    // Once after the update from 0.1.1-53 or -54 (ProfileManager keeps the
+    // mark): saved profiles whose panels hold the "modelled" icon relief or
+    // the "high" 3D quality those versions filled in, in a remembered flat
+    // look too, are saved with "auto" and "medium", after one backup. Files
+    // that cannot be read are left as they are. False, with the error, when
+    // the backup or a save failed.
+    [[nodiscard]] bool lightenLegacy3DDefaults(QStringList *lightened = nullptr,
+        QString *errorCode = nullptr) const;
     [[nodiscard]] std::optional<ProfileDefinition> create(const QString &name,
         const QList<PanelDefinition> &panels, QString *errorCode = nullptr) const;
     [[nodiscard]] std::optional<ProfileDefinition> rename(const QString &id,

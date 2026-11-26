@@ -64,6 +64,9 @@ public:
     [[nodiscard]] QString activePanelId() const;
     [[nodiscard]] int revision() const;
     [[nodiscard]] QString migrationDiagnostic() const;
+    // The saved panels could not be read (a newer version's, or a migration
+    // refused): nothing of the configuration is written.
+    [[nodiscard]] bool persistenceBlocked() const { return m_persistenceBlocked; }
 
     Q_INVOKABLE QVariant panelValue(const QString &panelId, const QString &key) const;
     Q_INVOKABLE QVariantMap panelSnapshot(const QString &panelId) const;
@@ -267,6 +270,12 @@ public:
     // it (a panel's, its stands' or its tiles'). The original is
     // only read. Returns {success, url, width, height} or {success, message}.
     Q_INVOKABLE QVariantMap importPicture(const QUrl &sourceUrl) const;
+
+    // The light 3D defaults put off at load while an interrupted profile
+    // apply waited, given once it is put right (in the same run, so that a
+    // "modelled" or "high" chosen after it is never taken back). Marked once
+    // decided. False when they could not all be written.
+    bool applyDeferredLightDefaults();
 
 public slots:
     void setActivePanelId(const QString &panelId);

@@ -96,6 +96,8 @@ QQC2.Pane {
     implicitHeight: column.implicitHeight + 20
 
     FontMetrics { id: nameMetrics; font: root.font }
+    // Its holograms move at their full rate while the pointer is over it.
+    HologramPointer {}
     HoverHandler {
         id: positionObserver
         target: null

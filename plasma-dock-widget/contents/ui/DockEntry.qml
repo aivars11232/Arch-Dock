@@ -45,10 +45,13 @@ Item {
     // False while the panel cannot be seen. Continuous motion is pointless then
     // and costs frames, so the controller withdraws every track.
     property bool sceneVisible: true
+    // False while the panel cannot be seen at all (hidden, or covered by
+    // windows), whatever this entry's place on its track: its holograms rest.
+    property bool panelShown: true
     property bool meshVisualActive: false
     // How deep, and in what shape, the 3D scene makes the icon's solid.
     property real solidDepth: 0
-    property string solidRelief: "modelled"
+    property string solidRelief: "auto"
     // 3D icons on a flat panel: the solid drawn in the icon's own 3D view.
     property bool solidOnFlat: false
     property real solidTurn: 15
@@ -317,10 +320,31 @@ Item {
             closeWindowPreview();
             closeFolderExpansion();
         }
-        setEntryGuard(entryIndex, "drag", dragging);
+        holdGuard("drag", dragging);
     }
-    onContextMenuVisibleChanged:
-        setEntryGuard(entryIndex, "menu", contextMenuVisible)
+    onContextMenuVisibleChanged: holdGuard("menu", contextMenuVisible)
+    // The place each guard this entry holds was set at. An entry keeps its
+    // delegate when entries before it come and go (a window opening): its
+    // guard moves with it, and is cleared where it was set, never left
+    // behind holding the panel open.
+    property var guardPlaces: ({})
+    function holdGuard(name, active) {
+        const places = Object.assign({}, guardPlaces)
+        const held = places[name]
+        if (held !== undefined && (!active || held !== entryIndex)) {
+            setEntryGuard(held, name, false)
+            delete places[name]
+        }
+        if (active && places[name] === undefined) {
+            setEntryGuard(entryIndex, name, true)
+            places[name] = entryIndex
+        }
+        guardPlaces = places
+    }
+    onEntryIndexChanged: {
+        for (const name of Object.keys(guardPlaces))
+            holdGuard(name, true)
+    }
     onInputEnabledChanged: {
         updateTabFocus();
         if (!inputEnabled) {
@@ -335,8 +359,8 @@ Item {
     // An entry that goes away must not leave a guard behind holding the panel
     // open forever.
     Component.onDestruction: {
-        setEntryGuard(entryIndex, "drag", false);
-        setEntryGuard(entryIndex, "menu", false);
+        holdGuard("drag", false);
+        holdGuard("menu", false);
     }
 
     width: baseSize
@@ -434,6 +458,7 @@ Item {
                 showReflection: root.showReflection
                 showIndicator: root.showIndicator
                 reducedMotion: root.reducedMotion
+                shown: root.panelShown
                 meshVisualActive: root.meshVisualActive
                 solidDepth: root.solidDepth
                 solidRelief: root.solidRelief

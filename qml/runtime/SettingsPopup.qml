@@ -1942,9 +1942,15 @@ Window {
                     return (entry.isStatus === true) === (segment.source === "status");
                 });
                 for (const entry of selectable) {
-                    rows.push({ kind: "switch", scope: "panel", key: "segments", segmentIndex: index,
+                    const choice = { kind: "switch", scope: "panel", key: "segments", segmentIndex: index,
                         entryId: String(entry.appId), label: String(entry.displayName || entry.appId),
-                        description: qsTr("Assign exclusively to this segment."), fallback: false });
+                        description: qsTr("Assign exclusively to this segment."), fallback: false };
+                    // A status source's switch shows its reading
+                    // (statusReadingLabel), not kept in the rows, so a
+                    // reading does not rebuild the page.
+                    if (entry.isStatus === true)
+                        choice.statusEntryId = String(entry.appId);
+                    rows.push(choice);
                 }
             }
             rows.push({ kind: "actions", label: qsTr("Order"), actions: [
@@ -2615,9 +2621,63 @@ Window {
         }
     }
 
+    // What the panels show changes all the time (a window's badge, a status
+    // reading every 2 s). The settings are read again for it on entering the
+    // pages that list it (Panels > Segments, Icons > Notifications), and on
+    // Icons > Notifications when what applications report changes; a status
+    // reading never reads them again.
+    readonly property bool segmentsPageShown: mainTabIndex === 1 && subTabIndex === 5 && !newPanelPicked
+    readonly property bool overlayPageShown: mainTabIndex === 2 && subTabIndex === 3
+    onSegmentsPageShownChanged: if (segmentsPageShown) queueEditorReload()
+    onOverlayPageShownChanged: if (overlayPageShown) queueEditorReload()
     Connections {
         target: panelController
-        function onContentRevisionChanged() { root.queueEditorReload(); }
+        function onOverlayRevisionChanged() { if (root.overlayPageShown) root.queueEditorReload(); }
+        // Applications started, closed or pinned: the preview and the
+        // Segments page follow, at most about three times a second.
+        function onDockEntriesRevisionChanged() {
+            if ((embeddedRendererPreview.visible || root.segmentsPageShown) && !liveEntriesTimer.running)
+                liveEntriesTimer.start()
+        }
+    }
+    Timer {
+        id: liveEntriesTimer
+        interval: 300
+        onTriggered: {
+            if (root.auditionBusy || !root.visible || !root.editorSession.loaded || root.hasPendingChanges)
+                return
+            const next = EditorModel.withLiveEntries(root.editorSession, root.editorSnapshot(root.selectedPanelId))
+            if (EditorModel.drawnEntriesKey(next) !== EditorModel.drawnEntriesKey(root.editorSession))
+                root.editorSession = next
+        }
+    }
+
+    // Status readings are sampled for the Studio only while one of its views
+    // shows them: a status source's switch on Panels > Segments, or a status
+    // pill in the preview while the preview is in view.
+    readonly property bool statusChooserShown: segmentsPageShown && fieldDescriptor("segments", "panel") !== null
+        && (panelValue("segments", []) || []).some(function(segment) {
+            return segment && segment.source === "status"
+        })
+    readonly property bool statusPreviewShown: embeddedRendererPreview.visible && rendererPreviewCard.visible
+        && (!studioScroll.contentItem
+            || studioScroll.contentItem.contentY < rendererPreviewCard.y + rendererPreviewCard.height)
+        && (selectedRendererCandidate.segmentEntries || []).some(function(entry) {
+            return entry && entry.isStatus === true
+        })
+    readonly property bool statusReadingsShown: visible && (statusChooserShown || statusPreviewShown)
+    onStatusReadingsShownChanged: {
+        if (typeof panelController.setStudioStatusShown === "function")
+            panelController.setStudioStatusShown(statusReadingsShown)
+    }
+    // Kept as text, so that a sample with no reading changed changes nothing.
+    readonly property string statusReadingsText: statusReadingsShown && typeof systemStatus !== "undefined"
+        && systemStatus ? JSON.stringify(EditorModel.statusReadings(systemStatus.entries)) : ""
+    readonly property var statusReadings: statusReadingsText.length > 0 ? JSON.parse(statusReadingsText) : ({})
+    // A status source's switch names its reading while the Studio shows it.
+    function statusReadingLabel(row) {
+        const reading = row && row.statusEntryId !== undefined ? statusReadings[row.statusEntryId] : undefined
+        return reading && reading.displayName.length > 0 ? reading.displayName : String(row && row.label || "")
     }
 
     Connections {
@@ -3144,7 +3204,10 @@ Window {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         panelDefinition: root.selectedRendererCandidate
-                        orderedEntries: root.selectedRendererCandidate.segmentEntries || []
+                        // Status pills with their readings while the Studio
+                        // shows them.
+                        orderedEntries: EditorModel.withStatusReadings(
+                            root.selectedRendererCandidate.segmentEntries || [], root.statusReadings)
                         useProvidedEntries: root.selectedRendererCandidate.segmentEntries !== undefined
                         showBarePanel: root.previewShowsBarePanel
                         hostCapabilities:

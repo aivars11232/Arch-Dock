@@ -48,6 +48,10 @@ void SystemStatus::setEnabled(bool enabled)
 {
     if (m_enabled == enabled) return;
     m_enabled = enabled;
+    // A reading a few seconds old is still shown when sampling comes back
+    // at once (a panel hidden and shown, a Studio view scrolled away and
+    // back); an older one waits for the next sample.
+    m_awaitingSample = enabled && (!m_age.isValid() || m_age.elapsed() > 4000);
     if (enabled) { m_timer.start(); refresh(); }
     else m_timer.stop();
 }
@@ -57,13 +61,25 @@ void SystemStatus::refresh()
     if (m_inFlight) return;
     m_inFlight = true;
     const Sample previous = m_sample;
-    QMetaObject::invokeMethod(m_worker, [this, previous] {
-        const Sample next = readSample(QStringLiteral("/proc"), QStringLiteral("/sys"), previous);
+    // After a pause the last sample is old: the processor's use measured
+    // from it would be its average over the whole pause, so a short current
+    // interval is measured instead (on the worker, which nothing else waits
+    // for).
+    const bool restart = m_awaitingSample;
+    QMetaObject::invokeMethod(m_worker, [this, previous, restart] {
+        Sample base = previous;
+        if (restart)
+        {
+            base = readSample(QStringLiteral("/proc"), QStringLiteral("/sys"), {});
+            QThread::msleep(250);
+        }
+        const Sample next = readSample(QStringLiteral("/proc"), QStringLiteral("/sys"), base);
         QMetaObject::invokeMethod(this, [this, next] {
             m_inFlight = false;
             ++m_sampleCount;
             m_sample = next;
             m_age.restart();
+            m_awaitingSample = false;
             emit statusChanged();
             // CPU needs a second sample; discovery remains bounded to two.
             if (!m_enabled && m_sampleCount == 1 && next.cpuPrimed)
@@ -75,7 +91,7 @@ void SystemStatus::refresh()
 QVariantMap SystemStatus::metric(const QString &name) const
 {
     auto result = m_sample.metrics.value(name).toMap();
-    if (m_enabled && (!m_age.isValid() || m_age.elapsed() > 6000))
+    if (m_enabled && !m_awaitingSample && (!m_age.isValid() || m_age.elapsed() > 6000))
         result[QStringLiteral("available")] = false;
     return result;
 }
@@ -115,6 +131,17 @@ QVariantList SystemStatus::entries() const
     for (int i = 0; i < names.size(); ++i)
     {
         const auto value = metric(names[i]);
+        // Not sampled, or the first sample not in yet: the sources found
+        // are listed by name alone, with no value that would be out of date.
+        if (!m_enabled || m_awaitingSample)
+        {
+            const bool found = value.value(QStringLiteral("available")).toBool();
+            result.append(QVariantMap{{QStringLiteral("appId"), QStringLiteral("status:") + names[i]},
+                {QStringLiteral("isStatus"), true}, {QStringLiteral("statusAvailable"), found},
+                {QStringLiteral("statusText"), found ? QString() : tr("Unavailable")},
+                {QStringLiteral("displayName"), labels[i]}, {QStringLiteral("iconName"), icons[i]}});
+            continue;
+        }
         const bool available = value.value(QStringLiteral("available")).toBool()
             && m_age.isValid() && m_age.elapsed() <= 6000;
         const QString text = !available ? tr("Unavailable") : names[i] == QStringLiteral("network")

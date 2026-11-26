@@ -19,6 +19,8 @@
 #include <QScreen>
 #include <QStandardPaths>
 
+#include <algorithm>
+
 namespace
 {
     // KWin reapplies installed-package enablement on configuration reload and
@@ -157,6 +159,8 @@ namespace
         window.maximized = state.value(QStringLiteral("maximized")).toBool();
         window.fullScreen = state.value(QStringLiteral("fullScreen")).toBool();
         window.onCurrentDesktop = state.value(QStringLiteral("onCurrentDesktop")).toBool(true);
+        window.hidden = state.value(QStringLiteral("hidden")).toBool();
+        window.opacity = std::clamp(state.value(QStringLiteral("opacity")).toDouble(1.0), 0.0, 1.0);
         window.canActivate = state.value(QStringLiteral("canActivate")).toBool();
         window.canMinimize = state.value(QStringLiteral("canMinimize")).toBool();
         window.canClose = state.value(QStringLiteral("canClose")).toBool();
@@ -185,6 +189,71 @@ WindowWatcher::WindowWatcher(WindowModel &windowModel,
     if (m_available)
     {
         emit availableChanged();
+    }
+
+    // A KWin that restarts (after a crash, Qt's clients reconnect) knows
+    // nothing of the script, and the windows the old one reported never
+    // close: both are put right when its name changes hands.
+    m_kwinWatcher.setConnection(sessionBus);
+    m_kwinWatcher.setWatchMode(QDBusServiceWatcher::WatchForOwnerChange);
+    m_kwinWatcher.addWatchedService(QStringLiteral("org.kde.KWin"));
+    connect(&m_kwinWatcher, &QDBusServiceWatcher::serviceOwnerChanged, this,
+            [this](const QString &, const QString &oldOwner, const QString &newOwner)
+            {
+                kwinChanged(oldOwner, newOwner);
+            });
+    m_reloadTimer.setSingleShot(true);
+    m_reloadTimer.setInterval(500);
+    connect(&m_reloadTimer, &QTimer::timeout, this, &WindowWatcher::reloadKWinScript);
+}
+
+void WindowWatcher::kwinChanged(const QString &oldOwner, const QString &newOwner)
+{
+    if (oldOwner == newOwner)
+    {
+        return;
+    }
+    qInfo() << "KWin" << (newOwner.isEmpty() ? "went away" : "is back") << "- its windows are read anew";
+    m_windowModel.clearWindows();
+    if (!m_nativePanels.isEmpty())
+    {
+        m_nativePanels.clear();
+        emit nativePanelsChanged();
+    }
+    if (!m_untrackedWindows.isEmpty())
+    {
+        m_untrackedWindows.clear();
+        emit untrackedWindowsChanged();
+    }
+    if (m_available)
+    {
+        m_available = false;
+        emit availableChanged();
+    }
+    emit kwinOwnerChanged(!newOwner.isEmpty());
+    m_reloadAttempts = 0;
+    if (newOwner.isEmpty())
+    {
+        m_reloadTimer.stop();
+    }
+    else
+    {
+        m_reloadTimer.start();
+    }
+}
+
+void WindowWatcher::reloadKWinScript()
+{
+    // KWin's scripting comes up a moment after its name: tried a few times.
+    if (loadKWinScript())
+    {
+        m_available = true;
+        emit availableChanged();
+        return;
+    }
+    if (++m_reloadAttempts < 10)
+    {
+        m_reloadTimer.start();
     }
 }
 

@@ -32,6 +32,8 @@ class ScreenEdgeManager;
 class BarWindow : public PlasmaQuick::ContainmentView
 {
     Q_OBJECT
+    // Read by the dock in the bar (its widget's host state).
+    Q_PROPERTY(bool concealed READ concealed NOTIFY concealedChanged)
 
 public:
     BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, const QUrl &view);
@@ -65,6 +67,7 @@ public:
     // moment later, so that the pointer passing between the bar and its
     // popups does not make it blink.
     void setConcealWanted(bool conceal);
+    // Hidden now: the dock in it rests its motion, nothing of it being seen.
     [[nodiscard]] bool concealed() const { return m_concealed; }
     [[nodiscard]] bool pointerInside() const { return m_pointerInside; }
 
@@ -72,12 +75,14 @@ Q_SIGNALS:
     void wantedLengthChanged();
     void wantedReachChanged();
     void pointerInsideChanged();
+    void concealedChanged();
 
 protected:
     bool event(QEvent *event) override;
 
 private:
     void attachEdge();
+    void setConcealed(bool concealed);
 
     LayerShellQt::Window *m_layer = nullptr;
     QPointer<QScreen> m_screen;

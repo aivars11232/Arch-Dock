@@ -41,6 +41,7 @@ Item {
     readonly property var panelHologramColours: HologramLook.colours(sceneParameters, "Panel")
     readonly property bool panelHologramDrawn: panelHologram.on && !true3DReady
     readonly property bool panelHologramMoving: panelHologramDrawn && visible && !reducedMotion && !sceneConcealed
+        && !sceneResting
     property bool holdingHologramClock: false
     function holdHologramClock(wanted) {
         if (wanted === holdingHologramClock)
@@ -99,10 +100,16 @@ Item {
     // Scene geometry for the active baked track, from LayoutEngine.
     property var trackMetrics: ({})
     property bool sceneConcealed: false
+    // The panel cannot be seen but stays drawn (PanelScene.sceneResting):
+    // motion only rests.
+    property bool sceneResting: false
     property var true3DCapability: ({ rendererAvailable: false, reasonCode: "renderer-unavailable" })
     property var entryGeometry: []
     property var sceneParameters: ({})
     property var entryVisuals: []
+    // The entries' rows (PanelScene.entryRowModel): the 3D scene makes its
+    // icons from the same rows as the flat delegates.
+    property QtObject entryRowModel: null
     property real collapseProgress: 0
     property string mechanism: "open"
     property string sceneQuality: "medium"
@@ -393,6 +400,7 @@ Item {
             appearance: Qt.binding(function() { return root.appearance }),
             customColor: Qt.binding(function() { return root.customColor }),
             entryVisuals: Qt.binding(function() { return root.entryVisuals }),
+            entryRowModel: Qt.binding(function() { return root.entryRowModel }),
             layoutAngle: Qt.binding(function() { return root.layoutAngle }),
             collapseProgress: Qt.binding(function() { return root.collapseProgress }),
             mechanism: Qt.binding(function() { return root.mechanism }),
@@ -402,6 +410,7 @@ Item {
             quality: Qt.binding(function() { return root.sceneQuality }),
             panelOpacity: Qt.binding(function() { return root.panelOpacity }),
             sceneConcealed: Qt.binding(function() { return root.sceneConcealed }),
+            sceneResting: Qt.binding(function() { return root.sceneResting }),
             editMode: Qt.binding(function() { return root.sceneEditMode })
         })
     }
@@ -503,7 +512,7 @@ Item {
             motionTracks: root.motionTracks
             sparkleIntensity: root.sparkleIntensity
             reducedMotion: root.reducedMotion
-            sceneConcealed: root.sceneConcealed
+            sceneConcealed: root.sceneConcealed || root.sceneResting
         }
     }
 
@@ -527,7 +536,7 @@ Item {
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
             reducedMotion: root.reducedMotion
-            sceneConcealed: root.sceneConcealed
+            sceneConcealed: root.sceneConcealed || root.sceneResting
         }
     }
 
@@ -544,7 +553,7 @@ Item {
             tintColor: root.tintColor
             glowIntensity: root.glowIntensity
             reducedMotion: root.reducedMotion
-            sceneConcealed: root.sceneConcealed
+            sceneConcealed: root.sceneConcealed || root.sceneResting
             panelOpacity: root.panelOpacity
         }
     }
@@ -564,7 +573,7 @@ Item {
             tintColor: root.tintColor
             glowIntensity: root.glowIntensity
             reducedMotion: root.reducedMotion
-            sceneConcealed: root.sceneConcealed
+            sceneConcealed: root.sceneConcealed || root.sceneResting
             panelOpacity: root.panelOpacity
             motionTracks: root.motionTracks
         }

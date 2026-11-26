@@ -17,6 +17,37 @@ TestCase {
         IconScene {}
     }
 
+    Component {
+        id: pointedItemComponent
+
+        Item {
+            property alias pointer: pointer
+            HologramPointer { id: pointer }
+        }
+    }
+
+    // Holograms move fifteen steps a second while the pointer is away from
+    // every panel and opening, thirty while it is over one; a panel or an
+    // opening that goes while the pointer is over it lets go as well.
+    function test_hologramClockCalmerWhileThePointerIsAway() {
+        compare(HologramClock.pointedAt, 0)
+        compare(HologramClock.ticker.interval, 66, "calmer while the pointer is away")
+        HologramClock.pointerEntered()
+        compare(HologramClock.ticker.interval, 33, "full rate while it is over a panel")
+        HologramClock.pointerLeft()
+        HologramClock.pointerLeft()
+        compare(HologramClock.pointedAt, 0, "never below nought")
+
+        const item = createTemporaryObject(pointedItemComponent, testCase)
+        item.pointer.tell(true)
+        compare(HologramClock.pointedAt, 1)
+        item.pointer.tell(true)
+        compare(HologramClock.pointedAt, 1, "told once")
+        item.destroy()
+        tryCompare(HologramClock, "pointedAt", 0)
+        compare(HologramClock.ticker.interval, 66)
+    }
+
     // An icon in a window not shown yet, as a dock moving into its window
     // over an edge panel is, with 3D icons on a flat panel.
     Component {
@@ -128,6 +159,26 @@ TestCase {
         scene.tileSettings = ({})
         wait(0)
         verify(!body.visible, "a plain icon again")
+    }
+
+    // A hologram rests while its panel cannot be seen - hidden, or covered
+    // by windows, as its host tells - and lets go of the shared clock, which
+    // stops once nothing holds it.
+    function test_hologramRestsWhileItsPanelIsNotSeen() {
+        const held = HologramClock.holders
+        const scene = createScene({ tileSettings: ({ hologramIcons: true }), reducedMotion: false })
+        verify(scene.hologramMoving, "moving while its panel is seen")
+        compare(HologramClock.holders, held + 1)
+        verify(HologramClock.ticker.running)
+        scene.shown = false
+        verify(!scene.hologramMoving, "resting while it is not")
+        compare(scene.hologramTime, 0)
+        compare(HologramClock.holders, held)
+        if (held === 0)
+            verify(!HologramClock.ticker.running, "the clock stops with nothing holding it")
+        scene.shown = true
+        verify(scene.hologramMoving, "moving again once it is seen")
+        compare(HologramClock.holders, held + 1)
     }
 
     function test_standsTurnAwayFromTheScreenEdge() {

@@ -6,6 +6,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QFileSystemWatcher>
 #include <QHash>
 #include <QIcon>
@@ -42,6 +43,36 @@ QString objectFile(const QString &name)
 QString pictureFile(const QString &name)
 {
     return objectsFolder() + QLatin1Char('/') + name + QStringLiteral(".png");
+}
+
+// Left by the helper when a picture gives no object (not when the helper
+// itself failed), so that no program asks for it again: the name carries
+// the way objects are made, so a helper that makes them another way tries
+// afresh.
+QString failedFile(const QString &name)
+{
+    return objectsFolder() + QLatin1Char('/') + name + QStringLiteral(".failed");
+}
+
+// How the helper is started: in a scope of its own under the user's
+// background slice when the user's service manager runs (systemd-run --user
+// --scope, the way KDE keeps Baloo in background.slice). Its memory limit is
+// then the kernel's own for it alone: running out of memory ends the helper,
+// never the program that started it (Plasma, whose service the kernel's
+// out-of-memory killer would otherwise stop), and it gets the processor only
+// when nothing else wants it. Elsewhere, and for a helper chosen by
+// ARCHDOCK_ICON_OBJECT_HELPER, it is started directly and limits itself.
+QStringList helperScope()
+{
+    if (!qEnvironmentVariableIsEmpty("ARCHDOCK_ICON_OBJECT_HELPER")) return {};
+    const QString runner = QStandardPaths::findExecutable(QStringLiteral("systemd-run"));
+    const QString runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
+    if (runner.isEmpty() || runtime.isEmpty() || !QFileInfo::exists(runtime + QStringLiteral("/systemd/private")))
+        return {};
+    return {runner, QStringLiteral("--user"), QStringLiteral("--scope"), QStringLiteral("--quiet"),
+            QStringLiteral("--collect"), QStringLiteral("--slice=background.slice"),
+            QStringLiteral("--property=CPUWeight=idle"), QStringLiteral("--property=MemoryMax=5G"),
+            QStringLiteral("--property=MemorySwapMax=0"), QStringLiteral("--")};
 }
 
 QString helperProgram()
@@ -87,8 +118,9 @@ QImage readPicture(const QString &path)
     return reader.read();
 }
 
-// The objects read last, by name: the same icon shown again (on another
-// panel, after a panel is made anew) is not read again.
+// The objects read last, by name, each as it is shown (forDisplay: a few
+// thousand triangles), shared by every icon showing it: the same icon shown
+// again (on another panel, after a panel is made anew) is not read again.
 class Read
 {
 public:
@@ -142,7 +174,7 @@ public:
 
     void want(const QString &name, IconModel *model)
     {
-        if (m_failed.contains(name))
+        if (m_failed.contains(name) || QFileInfo::exists(failedFile(name)))
         {
             model->objectFailed(name);
             return;
@@ -186,11 +218,13 @@ private:
         }
         m_running = m_queue;
         m_queue.clear();
-        QStringList arguments;
+        // Its own pictures, which it writes again when they cannot be read.
+        QStringList arguments{QStringLiteral("--remove-unreadable")};
         for (const QString &name : std::as_const(m_running)) arguments << pictureFile(name) << objectFile(name);
         m_helper = new QProcess;
-        m_helper->setProgram(program);
-        m_helper->setArguments(arguments);
+        const QStringList scope = helperScope();
+        m_helper->setProgram(scope.isEmpty() ? program : scope.first());
+        m_helper->setArguments(scope.isEmpty() ? arguments : scope.mid(1) + QStringList{program} + arguments);
         m_helper->setStandardOutputFile(QProcess::nullDevice());
         m_helper->setProcessChannelMode(QProcess::ForwardedErrorChannel);
         QObject::connect(m_helper, &QProcess::finished, m_helper, [this]() { finished(); });
@@ -355,14 +389,21 @@ void IconModel::restart()
             {
                 if (auto loaded = ArchDock::loadIconObject(objectFile(name)))
                 {
-                    object = std::make_shared<const ArchDock::IconObjectMesh>(std::move(*loaded));
+                    object = std::make_shared<const ArchDock::IconObjectMesh>(ArchDock::forDisplay(*loaded));
                     readObjects().keep(name, object);
                 }
             }
             if (!object)
             {
                 QDir().mkpath(objectsFolder());
-                waiting = QFileInfo::exists(pictureFile(name)) || square.save(pictureFile(name));
+                // Written whole or not at all: the helper (of this program or
+                // another) never reads a picture cut short.
+                waiting = QFileInfo::exists(pictureFile(name));
+                if (!waiting)
+                {
+                    QSaveFile file(pictureFile(name));
+                    waiting = file.open(QIODevice::WriteOnly) && square.save(&file, "PNG") && file.commit();
+                }
             }
         }
         QMetaObject::invokeMethod(
@@ -403,7 +444,7 @@ void IconModel::load(const QString &name, int generation)
         if (!object)
             if (auto loaded = ArchDock::loadIconObject(objectFile(name)))
             {
-                object = std::make_shared<const ArchDock::IconObjectMesh>(std::move(*loaded));
+                object = std::make_shared<const ArchDock::IconObjectMesh>(ArchDock::forDisplay(*loaded));
                 readObjects().keep(name, object);
             }
         QMetaObject::invokeMethod(

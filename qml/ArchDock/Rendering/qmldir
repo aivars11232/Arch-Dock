@@ -3,6 +3,7 @@ singleton RendererBuildConfig 1.0 RendererBuildConfig.qml
 RendererCapabilityProbe 1.0 RendererCapabilityProbe.qml
 singleton RenderingModuleProbe 1.0 RenderingModuleProbe.qml
 singleton HologramClock 1.0 HologramClock.qml
+HologramPointer 1.0 HologramPointer.qml
 LayoutEngine 1.0 LayoutEngine.js
 IconStyleResolver 1.0 IconStyleResolver.js
 AnimationProfileRuntime 1.0 AnimationProfileRuntime.js

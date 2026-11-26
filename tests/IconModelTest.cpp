@@ -75,6 +75,7 @@ private slots:
         QVERIFY(script.open(QIODevice::WriteOnly));
         script.write(QStringLiteral("#!/bin/sh\necho \"$@\" >> '%1'\n"
                                     "[ -e '%2' ] && exit 4\n"
+                                    "[ \"$1\" = --remove-unreadable ] && shift\n"
                                     "while [ $# -ge 2 ]; do cp '%3' \"$2\"; shift 2; done\n")
                          .arg(m_log, m_root.filePath(QStringLiteral("fail")), prepared)
                          .toLocal8Bit());

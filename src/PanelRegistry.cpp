@@ -10,6 +10,7 @@
 #include "model/PanelSettingsSchema.h"
 #include "model/SettingsMigration.h"
 #include "panel/IconOverrideTransaction.h"
+#include "panel/ProfileApplyTransaction.h"
 #include "presets/PresetCapabilityResolver.h"
 #include "themes/LookPalette.h"
 #include "themes/ThemeAssetProcessor.h"
@@ -3740,6 +3741,19 @@ void PanelRegistry::load()
     const QByteArray storedPanels = settings.value(panelRecordsKey).toByteArray();
     bool initializeBuiltIns = !hasStoredPanels;
     bool compatibilityRewriteRequired = false;
+    // Once: 0.1.1-53 made every 3D icon the AI-made "Modelled" object (and
+    // turned saved "auto" into it), and 3D panels drew supersampled
+    // ("high"); both cost a laptop's processor and graphics chip dearly.
+    // Saved panels go back to the instant relief and to "medium", which their
+    // owner can set again; panels made later keep what they get. Not while an
+    // interrupted profile apply waits to be put right: that needs the panels
+    // exactly as it left them.
+    bool lightDefaultsDue = !settings.value(QStringLiteral("migrations/lightDefaults3D"), false).toBool()
+        && !QFileInfo::exists(ArchDock::ProfileApplyTransaction::defaultJournalPath());
+    // Decided once in this load: given, or given up when no backup could be
+    // taken for it. Never a reason to keep the panels from loading.
+    const bool lightDefaultsDecided = lightDefaultsDue;
+    bool lightRewrite = false;
 
     if (hasStoredPanels && storedPanels.isEmpty())
     {
@@ -3768,9 +3782,15 @@ void PanelRegistry::load()
         m_legacyRewritePending = migration.rewriteRequired;
         const QJsonArray sourceRecords = QJsonDocument::fromJson(storedPanels).array();
         bool needsBackup = m_legacyRewritePending;
+        // The light 3D defaults (lightDefaultsDue). The flat look a 3D panel
+        // remembers was taken with every setting filled in, so it goes back
+        // too, or turning the panel flat again would bring both back.
+        bool lightNeedsBackup = false;
         for (qsizetype index = 0; index < migration.definitions.size(); ++index)
         {
             auto probe = migration.definitions.at(index).toLegacyMap();
+            lightNeedsBackup = (lightDefaultsDue && ArchDock::SettingsMigration::lightenLegacy3DDefaults(&probe))
+                || lightNeedsBackup;
             const auto source = sourceRecords.at(index).toObject();
             needsBackup = normalizeFreeHostRecord(&probe) || needsBackup;
             needsBackup = migrateLegacyThemePackage(&probe) || needsBackup;
@@ -3782,14 +3802,23 @@ void PanelRegistry::load()
                 ArchDock::namedPolygonCorners(source.value(QStringLiteral("layout")).toString()) > 0 ||
                 needsBackup;
         }
-        if (needsBackup)
+        if (needsBackup || lightNeedsBackup)
         {
             ArchDock::ConfigurationBackup backup;
             QString error;
-            if (backup.capture(QStringLiteral("panel-migration"), &error).isEmpty())
+            const bool captured = !backup.capture(QStringLiteral("panel-migration"), &error).isEmpty();
+            const bool pruned = captured
+                && backup.prune(settings.value(QStringLiteral("backup/retentionCount"), 5).toInt(), &error);
+            if (needsBackup && !pruned)
             { m_persistenceBlocked = true; setMigrationDiagnostic(error); return; }
-            if (!backup.prune(settings.value(QStringLiteral("backup/retentionCount"), 5).toInt(), &error))
-            { m_persistenceBlocked = true; setMigrationDiagnostic(error); return; }
+            if (!captured)
+            {
+                // Only the light 3D defaults asked for it: the panels load as
+                // they were saved, with their old 3D settings.
+                qWarning().noquote() << "Saved panels keep their old 3D settings (Modelled icons, high quality):"
+                                     << "no backup could be taken:" << error;
+                lightDefaultsDue = false;
+            }
         }
         for (qsizetype index = 0; index < migration.definitions.size(); ++index)
         {
@@ -3824,6 +3853,12 @@ void PanelRegistry::load()
             }
             compatibilityRewriteRequired = normalizeFreeHostRecord(&panel) ||
                 compatibilityRewriteRequired;
+            if (lightDefaultsDue && ArchDock::SettingsMigration::lightenLegacy3DDefaults(&panel))
+            {
+                qInfo() << "Panel" << panel.value(QStringLiteral("id")).toString()
+                        << "goes back to the instant 3D icon relief and medium 3D quality.";
+                lightRewrite = true;
+            }
             QString migrationError;
             compatibilityRewriteRequired = migrateLegacyThemePackage(&panel, &migrationDirectories, &migrationError) ||
                 compatibilityRewriteRequired;
@@ -3919,7 +3954,83 @@ void PanelRegistry::load()
         migrationCommitted = saveChecked(true);
         if (!migrationCommitted) { m_panels.clear(); m_persistenceBlocked = true; }
     }
+    else if (lightRewrite)
+    {
+        // The light 3D defaults alone: a failed save keeps the panels as
+        // they are now, to be saved with the next change.
+        migrationCommitted = true;
+        if (!saveChecked(true))
+            qWarning() << "The panels' light 3D settings could not be saved yet; they are saved with the next change.";
+    }
     else migrationCommitted = true;
+    // The light defaults are decided once - given, or given up when no
+    // backup could be taken for them - so a "modelled" or "high" chosen
+    // later is never taken back. Not while an interrupted profile apply
+    // waits (lightDefaultsDecided is false then): applyDeferredLightDefaults
+    // gives them once it is put right.
+    if (migrationCommitted && lightDefaultsDecided)
+    {
+        settings.setValue(QStringLiteral("migrations/lightDefaults3D"), true);
+        settings.sync();
+    }
+}
+
+bool PanelRegistry::applyDeferredLightDefaults()
+{
+    QSettings settings;
+    const QString marker = QStringLiteral("migrations/lightDefaults3D");
+    if (settings.value(marker, false).toBool())
+    {
+        return true;
+    }
+    if (m_persistenceBlocked || QFileInfo::exists(ArchDock::ProfileApplyTransaction::defaultJournalPath()))
+    {
+        return false;
+    }
+    QHash<QString, QVariantMap> changes;
+    for (const QVariantMap &panel : std::as_const(m_panels))
+    {
+        QVariantMap record = panel;
+        if (!ArchDock::SettingsMigration::lightenLegacy3DDefaults(&record))
+        {
+            continue;
+        }
+        QVariantMap values;
+        for (const QString &key : {QStringLiteral("scene3DIconRelief"), QStringLiteral("scene3DQuality"),
+                                   QStringLiteral("previousFlatLook")})
+        {
+            if (record.value(key) != panel.value(key))
+            {
+                values.insert(key, record.value(key));
+            }
+        }
+        changes.insert(panel.value(QStringLiteral("id")).toString(), values);
+    }
+    bool written = true;
+    if (!changes.isEmpty())
+    {
+        ArchDock::ConfigurationBackup backup;
+        QString error;
+        if (backup.capture(QStringLiteral("panel-migration"), &error).isEmpty())
+        {
+            qWarning().noquote() << "Saved panels keep their old 3D settings (Modelled icons, high quality):"
+                                 << "no backup could be taken:" << error;
+            written = false;
+        }
+        else
+        {
+            (void)backup.prune(settings.value(QStringLiteral("backup/retentionCount"), 5).toInt(), &error);
+            for (auto it = changes.cbegin(); it != changes.cend(); ++it)
+            {
+                qInfo() << "Panel" << it.key() << "goes back to the instant 3D icon relief and medium 3D quality.";
+                written = setPanelValuesChecked(it.key(), it.value()) && written;
+            }
+        }
+    }
+    // Decided once, as at load.
+    settings.setValue(marker, true);
+    settings.sync();
+    return written;
 }
 
 void PanelRegistry::save()

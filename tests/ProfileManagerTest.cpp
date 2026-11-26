@@ -1,6 +1,9 @@
 #include "panel/ProfileManager.h"
+#include "persistence/ConfigurationBackup.h"
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -70,6 +73,78 @@ class ProfileManagerTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    // Saved profiles get the light 3D defaults once: not while an
+    // interrupted apply waits; then once, after one backup; and a
+    // "modelled" chosen after that is never taken back.
+    void savedProfilesLightenedOnce()
+    {
+        // The marks are kept in a folder of the test's own for the rest of
+        // the run, never in the user's settings.
+        static QTemporaryDir settingsFolder;
+        QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, settingsFolder.path());
+        const QString mark = QStringLiteral("migrations/lightDefaults3DProfiles");
+        { QSettings settings; settings.remove(mark); settings.sync(); }
+        const auto marked = [&mark]() { return QSettings().value(mark, false).toBool(); };
+
+        QTemporaryDir folder;
+        const QString root = folder.filePath("profiles"), journal = folder.filePath("journal.json");
+        ProfileStore store(root);
+        auto heavyPanel = PanelDefinition::fromLegacyMap({{"id", "ring"}, {"name", "Ring"}, {"edge", "free"},
+            {"type", "launcher"}, {"layout", "ring"}, {"scene3DIconRelief", "modelled"}, {"scene3DQuality", "high"}});
+        QVERIFY(heavyPanel.has_value());
+        QString error;
+        const auto heavy = store.create("Heavy", {*heavyPanel}, &error);
+        QVERIFY2(heavy.has_value(), qPrintable(error));
+        const auto relief = [&]() {
+            return store.load(heavy->id)->panels.first().toPersistedMap().value("scene3DIconRelief").toString();
+        };
+        ConfigurationBackup backup(QDir(root).filePath(".config-backups"), {{"profiles", {root, true}}});
+        Registry registry;
+
+        {
+            QFile file(journal);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("{}");
+        }
+        {
+            ProfileManager manager(registry.operations(), root, journal);
+            QVERIFY(manager.active());
+            QVERIFY(!manager.lightenSavedProfilesOnce());
+            QCOMPARE(relief(), QString("modelled"));
+            QVERIFY(!marked());
+            QVERIFY(backup.backups().isEmpty());
+        }
+
+        QVERIFY(QFile::remove(journal));
+        {
+            ProfileManager manager(registry.operations(), root, journal);
+            QSignalSpy changed(&manager, &ProfileManager::profilesChanged);
+            QVERIFY(manager.lightenSavedProfilesOnce());
+            QCOMPARE(relief(), QString("auto"));
+            QVERIFY(marked());
+            QCOMPARE(backup.backups().size(), 1);
+            QCOMPARE(changed.count(), 1);
+        }
+
+        // Modelled chosen again: the next start leaves it.
+        auto chosen = store.load(heavy->id);
+        QVERIFY(chosen.has_value());
+        auto again = PanelDefinition::fromLegacyMap([&] {
+            auto record = chosen->panels.first().toPersistedMap();
+            record.insert("scene3DIconRelief", "modelled");
+            return record;
+        }());
+        QVERIFY(again.has_value());
+        chosen->panels = {*again};
+        QVERIFY2(store.save(*chosen, &error).has_value(), qPrintable(error));
+        {
+            ProfileManager manager(registry.operations(), root, journal);
+            QVERIFY(manager.lightenSavedProfilesOnce());
+            QCOMPARE(relief(), QString("modelled"));
+            QCOMPARE(backup.backups().size(), 1);
+        }
+    }
+
     void backupFailureRefusesPublicApplyBeforeMutation()
     {
         QTemporaryDir directory; Registry registry;

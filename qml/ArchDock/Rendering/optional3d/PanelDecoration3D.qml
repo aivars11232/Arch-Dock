@@ -153,13 +153,46 @@ Node {
     // ---- The lights' animation, as on a flat panel ----------------------
     readonly property var lightAnimations: DecorationScene.lightAnimations(entry)
     readonly property bool playing: animated && running && ready && lightAnimations.length > 0
-    property real clock: 0
-    Timer {
-        interval: 33
-        repeat: true
-        running: root.playing
-        onTriggered: root.clock += interval / 1000 * Math.max(0.1, Math.min(3, root.motionSpeed))
+    property bool holdingClock: false
+    function holdClock(wanted) {
+        if (wanted === holdingClock)
+            return
+        holdingClock = wanted
+        if (wanted)
+            HologramClock.hold()
+        else
+            HologramClock.release()
     }
+    // The lights' own running clock, in seconds. It moves on the
+    // holograms' one clock (HologramClock), so a panel with holograms and a
+    // moving decoration redraws once for all of them: each step of that
+    // clock, times the decoration's speed. A new speed changes only the
+    // pace; the shared clock starting again (every half hour, after a pause,
+    // or when the computer's clock is set) is no step. Kept while paused.
+    property real clock: 0
+    property real sharedAt: 0
+    property bool sharedKnown: false
+    Connections {
+        target: HologramClock
+        enabled: root.playing
+        function onTimeChanged() {
+            const time = HologramClock.time
+            const step = root.sharedKnown ? time - root.sharedAt : 0
+            root.sharedAt = time
+            root.sharedKnown = true
+            if (step > 0 && step < 1)
+                root.clock += step * Math.max(0.1, Math.min(3, root.motionSpeed))
+        }
+    }
+    function follow(wanted) {
+        sharedKnown = false
+        holdClock(wanted)
+        sharedAt = HologramClock.time
+        sharedKnown = wanted
+    }
+    onPlayingChanged: follow(playing)
+    Component.onCompleted: follow(playing)
+    Component.onDestruction: holdClock(false)
     function level(group) {
         return root.playing ? DecorationScene.lightLevel(root.lightAnimations, group, root.clock) : 1
     }

@@ -51,6 +51,13 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     // journal never mutates a host; recovery remains an explicit action.
     m_profileManager = new ArchDock::ProfileManager(profileOperations(),
         ArchDock::ProfileStore::defaultRoot(), ArchDock::ProfileApplyTransaction::defaultJournalPath(), this);
+    // Saved profiles get the light 3D defaults once, as the panels did when
+    // the registry loaded (not while an interrupted apply waits: both are
+    // given once it is put right), and never while the saved panels could
+    // not be read: a configuration Arch Dock cannot read is left as it is.
+    if (!m_panelRegistry.persistenceBlocked())
+        m_profileManager->lightenSavedProfilesOnce();
+    m_lightDefaultsDeferred = profileBusy() && !m_panelRegistry.persistenceBlocked();
     for (const QString &panelId : profileBusy() ? QStringList{} : m_panelRegistry.panelIds())
     {
         if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() !=
@@ -130,11 +137,21 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     connect(m_presetAudition, &ArchDock::PresetPreviewSession::changed, this, [this] {
         notifyDockRevision();
         notifyDockEntriesRevision();
+        // An audition shown on the desktop may show the status.
+        updateContentDemand();
     });
     m_engine.rootContext()->setContextProperty(QStringLiteral("profileManager"), m_profileManager);
     connect(m_profileManager, &ArchDock::ProfileManager::changed, this, [this] {
+        if (m_lightDefaultsDeferred && !profileBusy())
+        {
+            m_lightDefaultsDeferred = false;
+            m_panelRegistry.applyDeferredLightDefaults();
+            m_profileManager->lightenSavedProfilesOnce();
+        }
         notifyDockRevision();
         notifyDockEntriesRevision();
+        // So may a profile being tried on the desktop.
+        updateContentDemand();
         if (m_screenChangePending && !profileBusy()) m_screenChangeTimer.start();
     });
     m_engine.rootContext()->setContextProperty(
@@ -206,10 +223,14 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_contentTimer.setInterval(100);
     connect(&m_contentTimer, &QTimer::timeout, this, &PanelWindow::notifyContentRevision);
     connect(&m_overlayModel, &ArchDock::OverlayModel::changed, this, [this] {
+        ++m_overlayRevision;
+        emit overlayRevisionChanged();
         if (m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
     });
     connect(&m_systemStatus, &SystemStatus::statusChanged, this, [this] {
-        if (m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
+        // A reading is news to the panels only when one of them shows the
+        // status; Panel Studio's views read theirs from systemStatus.
+        if (m_panelStatusShown && m_contentPublishing && !m_contentTimer.isActive()) m_contentTimer.start();
     });
     connect(&m_panelRegistry, &PanelRegistry::revisionChanged, this, &PanelWindow::updateContentDemand);
     connect(&m_windowWatcher, &WindowWatcher::nativePanelsChanged,
@@ -317,6 +338,25 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_freeHostRetryTimer.setInterval(15000);
     connect(&m_freeHostRetryTimer, &QTimer::timeout, this, &PanelWindow::synchronizeFreePanels);
     m_removalCheckTimer.setInterval(5000);
+    // Windows that come, go, move or change may cover a panel or uncover it.
+    m_coverTimer.setSingleShot(true);
+    m_coverTimer.setInterval(200);
+    connect(&m_coverTimer, &QTimer::timeout, this, &PanelWindow::checkCover);
+    connect(&m_windowModel, &QAbstractItemModel::dataChanged, this, &PanelWindow::scheduleCoverCheck);
+    connect(&m_windowModel, &QAbstractItemModel::rowsInserted, this, &PanelWindow::scheduleCoverCheck);
+    connect(&m_windowModel, &QAbstractItemModel::rowsRemoved, this, &PanelWindow::scheduleCoverCheck);
+    connect(&m_windowModel, &QAbstractItemModel::modelReset, this, &PanelWindow::scheduleCoverCheck);
+    connect(&m_windowWatcher, &WindowWatcher::nativePanelsChanged, this, &PanelWindow::scheduleCoverCheck);
+    QDBusConnection::sessionBus().connect(QStringLiteral("org.kde.KWin"), QStringLiteral("/KWin"),
+        QStringLiteral("org.kde.KWin"), QStringLiteral("showingDesktopChanged"),
+        this, SLOT(kwinShowingDesktopChanged(bool)));
+    askShowingDesktop();
+    // A KWin started again shows no desktop until told, and says nothing.
+    connect(&m_windowWatcher, &WindowWatcher::kwinOwnerChanged, this, [this](bool present) {
+        setShowingDesktop(false);
+        if (present)
+            askShowingDesktop();
+    });
     connect(&m_removalCheckTimer, &QTimer::timeout, this, &PanelWindow::checkRequestedRemovals);
     // Plasma shows Panel Studio's draft once its changes pause.
     m_studioDraftHostTimer.setSingleShot(true);
@@ -424,22 +464,34 @@ bool PanelWindow::panelContentVisible(const QString &panelId) const
 void PanelWindow::updateContentDemand()
 {
     bool visible = m_settingsWindow && m_settingsWindow->isVisible();
-    bool status = visible; // Studio needs current provider capabilities and preview data.
+    // The system's status is sampled (every 2 s) only while something shows
+    // it: a panel as the desktop draws it (a draft, an audition or a profile
+    // being tried included), or a Panel Studio view of the readings. Only a
+    // panel's need makes a sample news to the panels.
+    bool status = false;
     for (const auto &id : m_panelRegistry.panelIds())
     {
         if (!panelContentVisible(id)) continue;
         visible = true;
-        const auto definition = m_panelRegistry.panelDefinition(id);
+        const auto definition = runtimePanelDefinition(id);
         if (definition)
             for (const auto &segment : definition->segments)
                 status = status || segment.source == QStringLiteral("status");
     }
     const bool revealed = !m_contentPublishing && visible;
     m_contentPublishing = visible;
+    m_panelStatusShown = status;
     m_overlayModel.setPublishing(visible);
-    m_systemStatus.setEnabled(status);
+    m_systemStatus.setEnabled(status || m_studioStatusShown);
     if (!visible) m_contentTimer.stop();
     else if (revealed) m_contentTimer.start();
+}
+
+void PanelWindow::setStudioStatusShown(bool shown)
+{
+    if (m_studioStatusShown == shown) return;
+    m_studioStatusShown = shown;
+    updateContentDemand();
 }
 
 void PanelWindow::notifyContentRevision()
@@ -639,6 +691,8 @@ QWindow *PanelWindow::settingsWindow()
                         // Its draft goes with it, as Cancel takes it.
                         clearPanelSettingsPreview();
                     }
+                    // A closed Studio shows no readings.
+                    if (!visible) m_studioStatusShown = false;
                     updateContentDemand();
                 });
     }

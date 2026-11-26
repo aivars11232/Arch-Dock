@@ -8,8 +8,8 @@
 
 // The readings the status modules and status entries show: battery,
 // network, CPU, memory, disk and GPU use. They are sampled from /proc and
-// /sys on a worker thread while some panel shows them, and offered only when
-// this machine actually has the source.
+// /sys on a worker thread while some panel, or a Panel Studio view, shows
+// them, and offered only when this machine actually has the source.
 class SystemStatus final : public QObject
 {
     Q_OBJECT
@@ -22,6 +22,8 @@ class SystemStatus final : public QObject
     Q_PROPERTY(int memoryPercent READ memoryPercent NOTIFY statusChanged)
     Q_PROPERTY(int diskPercent READ diskPercent NOTIFY statusChanged)
     Q_PROPERTY(int gpuPercent READ gpuPercent NOTIFY statusChanged)
+    // The status entries with their readings, for Panel Studio's views.
+    Q_PROPERTY(QVariantList entries READ entries NOTIFY statusChanged)
 public:
     struct Sample {
         QVariantMap metrics;
@@ -61,5 +63,9 @@ private:
     Sample m_sample;
     bool m_enabled = false;
     bool m_inFlight = false;
+    // Sampling has just started again after its last reading went stale:
+    // until the first new sample lands, the sources found stay available and
+    // are listed by name alone.
+    bool m_awaitingSample = false;
     quint64 m_sampleCount = 0;
 };

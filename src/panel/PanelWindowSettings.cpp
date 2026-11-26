@@ -784,6 +784,16 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                     if (!candidate.content.showBadges) entry[QStringLiteral("badgeText")] = QString{};
                     if (!candidate.content.showProgress) entry[QStringLiteral("progress")] = -1.0;
                     if (!candidate.content.showTemporaryStatus) entry[QStringLiteral("temporaryStatus")] = QString{};
+                } else {
+                    // A status source by its name alone (as "CPU"), not its
+                    // reading: Panel Studio's settings stay the same from one
+                    // sample to the next, so they are never read again for a
+                    // reading and what is being typed is not written over.
+                    // The Studio's views that show readings take them from
+                    // systemStatus while they show them.
+                    entry[QStringLiteral("displayName")] = entry.value(QStringLiteral("displayName")).toString()
+                        .section(QStringLiteral(": "), 0, 0);
+                    entry[QStringLiteral("statusText")] = QString{};
                 }
                 value = entry;
             }
@@ -1718,6 +1728,11 @@ QVariantList PanelWindow::panelSettingsEditorFields(
                 {QStringLiteral("panelRotationTrigger"),
                  {{QStringLiteral("idle"), QT_TR_NOOP("Always")},
                   {QStringLiteral("hover"), QT_TR_NOOP("While the pointer is over the panel")}}},
+                // Modelled makes each icon with the AI helper, tens of seconds
+                // of the processor per icon the first time: the name says so.
+                {QStringLiteral("scene3DIconRelief"),
+                 {{QStringLiteral("auto"), QT_TR_NOOP("Auto (instant)")},
+                  {QStringLiteral("modelled"), QT_TR_NOOP("Modelled (AI, made in the background)")}}},
                 {QStringLiteral("panelMotionTarget"),
                  {{QStringLiteral("items"), QT_TR_NOOP("Items along the path")},
                   {QStringLiteral("panel"), QT_TR_NOOP("Whole panel")},
@@ -2373,6 +2388,8 @@ QVariantMap PanelWindow::previewPanelSettingsEditorDraft(
             m_studioDraft = std::move(shown);
             notifyDockRevision();
             notifyDockEntriesRevision();
+            // A drafted status segment is sampled as a saved one is.
+            updateContentDemand();
             // Plasma follows a moment later, outside this call: its scripts
             // wait for the panel to settle.
             m_studioDraftHostTimer.start();
@@ -2399,6 +2416,7 @@ void PanelWindow::clearPanelSettingsPreview()
     {
         notifyDockRevision();
         notifyDockEntriesRevision();
+        updateContentDemand();
     }
 }
 

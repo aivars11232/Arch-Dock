@@ -306,8 +306,11 @@ private slots:
     void editorSnapshotsExposeOnlyProjectedEditableState();
     void segmentsUseRevisionedTransactionsAndHostAuthority();
     void contentProvidersUseTransactionsAndVisibility();
+    void studioStatusSamplesWithoutWakingPanels();
     void nativePanelObservationsRequireUniqueFrame();
     void windowsOffTheTaskListStillCoverBars();
+    void windowsCoverPanels();
+    void showDesktopUncoversPanels();
     void managedVersionTwoCapabilitiesDriveFallbackAndEditorVisibility();
     void rendererProjectionPreservesConsumedValuesWithoutProtectedState();
     void editorDraftResolutionIsReadOnlyAndCannotAuthorizeHiddenState();
@@ -4994,6 +4997,126 @@ void PanelWindowCapabilityTest::windowsOffTheTaskListStillCoverBars()
     QVERIFY(watcher.untrackedWindows().isEmpty());
 }
 
+void PanelWindowCapabilityTest::windowsCoverPanels()
+{
+    WindowModel model;
+    WindowWatcher watcher(model);
+    const auto state = [](const QRect &frame, const QVariantMap &extra = {}) {
+        QVariantMap value{{"x", frame.x()}, {"y", frame.y()}, {"width", frame.width()},
+                          {"height", frame.height()}, {"onCurrentDesktop", true}};
+        for (auto it = extra.cbegin(); it != extra.cend(); ++it)
+            value.insert(it.key(), it.value());
+        return QString::fromUtf8(QJsonDocument::fromVariant(value).toJson(QJsonDocument::Compact));
+    };
+    const auto update = [&](const QString &id, const QRect &frame, const QVariantMap &extra = {},
+                            bool minimized = false, const QString &caption = QStringLiteral("Shell")) {
+        watcher.windowUpdated(id, "org.kde.konsole", "org.kde.konsole", "konsole", caption, false, minimized,
+                              state(frame, extra));
+    };
+    // A free panel drawn across parts of pixels.
+    const QRectF panel(400.5, 300.25, 300, 200);
+    QVERIFY(!windowsCoverArea(model.windows(), panel, true));
+
+    // A window holding all of a free panel hides it; a panel drawn above
+    // windows (an edge panel, a bar) only a full-screen one hides.
+    const QRect maximised(0, 0, 1920, 1040);
+    watcher.windowAdded("big", "org.kde.konsole", "org.kde.konsole", "konsole", "Shell", true, false,
+                        state(maximised, {{"maximized", true}}));
+    QVERIFY(windowsCoverArea(model.windows(), panel, true));
+    QVERIFY(!windowsCoverArea(model.windows(), panel, false));
+    const size_t covering = windowCoverSignature(model.windows());
+
+    // Its caption changing, or its being active, covers nothing more.
+    update("big", maximised, {{"maximized", true}}, false, QStringLiteral("Shell - busy"));
+    QCOMPARE(windowCoverSignature(model.windows()), covering);
+
+    // Minimised, hidden, on another virtual desktop, or drawn see-through
+    // by KWin, it hides nothing.
+    const QList<QPair<bool, QVariantMap>> outOfSight{
+        {true, {}}, {false, {{"hidden", true}}},
+        {false, {{"onCurrentDesktop", false}}}, {false, {{"opacity", 0.8}}}};
+    for (const auto &[minimized, extra] : outOfSight)
+    {
+        update("big", maximised, extra, minimized);
+        QVERIFY2(!windowsCoverArea(model.windows(), panel, true),
+                 QJsonDocument::fromVariant(extra).toJson(QJsonDocument::Compact).constData());
+        QVERIFY(windowCoverSignature(model.windows()) != covering);
+    }
+
+    // Partly over it a window hides nothing; two side by side hide it
+    // together.
+    update("big", QRect(0, 0, 550, 1040));
+    QVERIFY(!windowsCoverArea(model.windows(), panel, true));
+    watcher.windowAdded("right", "org.kde.dolphin", "org.kde.dolphin", "dolphin", "Files", false, false,
+                        state(QRect(550, 0, 1370, 1040)));
+    QVERIFY(windowsCoverArea(model.windows(), panel, true));
+
+    // A free panel reaching under Plasma's own taskbar: the windows end at
+    // the taskbar, which hides the rest of it from above the desktop.
+    const QRectF nearTaskbar(400, 1000, 300, 60);
+    QVERIFY(!windowsCoverArea(model.windows(), nearTaskbar, true));
+    QVERIFY(windowsCoverArea(model.windows(), nearTaskbar, true, {QRect(0, 1040, 1920, 40)}));
+    // Above windows, an edge panel is not hidden by Plasma's panels.
+    QVERIFY(!windowsCoverArea(model.windows(), nearTaskbar, false, {QRect(0, 1040, 1920, 40)}));
+
+    // Full screen and active, a window hides an edge panel too: KWin draws
+    // it above the panels.
+    const QRectF bottomPanel(0, 1032, 1920, 48);
+    QVERIFY(!windowsCoverArea(model.windows(), bottomPanel, false));
+    const auto fullScreen = [&](bool active) {
+        watcher.windowUpdated("right", "org.kde.dolphin", "org.kde.dolphin", "dolphin", "Files", active, false,
+                              state(QRect(0, 0, 1920, 1080), {{"fullScreen", true}}));
+    };
+    fullScreen(true);
+    QVERIFY(windowsCoverArea(model.windows(), bottomPanel, false));
+    const size_t lifted = windowCoverSignature(model.windows());
+    // Another window on its screen made active: KWin lets the full-screen
+    // one drop below the panels, which show again.
+    fullScreen(false);
+    watcher.windowUpdated("big", "org.kde.konsole", "org.kde.konsole", "konsole", "Shell", true, false,
+                          state(QRect(0, 0, 550, 1040)));
+    QVERIFY(!windowsCoverArea(model.windows(), bottomPanel, false));
+    QVERIFY(windowCoverSignature(model.windows()) != lifted);
+    // The active window on another screen: the full-screen one stays above.
+    watcher.windowUpdated("big", "org.kde.konsole", "org.kde.konsole", "konsole", "Shell", true, false,
+                          state(QRect(1920, 0, 800, 600)));
+    QVERIFY(windowsCoverArea(model.windows(), bottomPanel, false));
+
+    // Less than a whole pixel is never taken for covered.
+    QVERIFY(!windowsCoverArea(model.windows(), QRectF(10.5, 10.5, 1.2, 1.2), true));
+    QVERIFY(!windowsCoverArea(model.windows(), QRectF(), true));
+}
+
+// Show Desktop, which KWin tells over D-Bus (its scripts do not see it),
+// puts every window out of sight: no panel is covered while it is on, and
+// panels are told to ask again when it comes and goes.
+void PanelWindowCapabilityTest::showDesktopUncoversPanels()
+{
+    // A live KWin would answer the backend's own question about Show Desktop.
+    if (!qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+        QSKIP("KWin must not answer here");
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *model = window.findChild<WindowModel *>();
+    QVERIFY(model);
+    WindowItem big;
+    big.internalId = QStringLiteral("big");
+    big.frameGeometry = QRect(0, 0, 1920, 1080);
+    model->addWindow(big);
+    const QVariantMap area{{"x", 0}, {"y", 0}, {"width", 100}, {"height", 100}};
+    QVERIFY(window.panelAreaCovered(area, true));
+    // The window's own first check.
+    QTRY_VERIFY(window.coverRevision() > 0);
+    const auto before = window.coverRevision();
+    QVERIFY(QMetaObject::invokeMethod(&window, "kwinShowingDesktopChanged", Q_ARG(bool, true)));
+    QVERIFY(!window.panelAreaCovered(area, true));
+    QTRY_VERIFY(window.coverRevision() > before);
+    const auto shown = window.coverRevision();
+    QVERIFY(QMetaObject::invokeMethod(&window, "kwinShowingDesktopChanged", Q_ARG(bool, false)));
+    QVERIFY(window.panelAreaCovered(area, true));
+    QTRY_VERIFY(window.coverRevision() > shown);
+}
+
 void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()
 {
     QQmlApplicationEngine engine;
@@ -5048,6 +5171,49 @@ void PanelWindowCapabilityTest::contentProvidersUseTransactionsAndVisibility()
     QVERIFY(window.reportPanelPresentationState(panelId,
         {{"surfaceState", "open"}, {"hostPhase", "revealed"}}));
     QTRY_VERIFY(status->sampleCount() > concealed);
+}
+
+// Panel Studio showing status readings has them sampled, without making
+// every panel read its entries again: only a panel showing the status makes
+// a reading news to the panels.
+void PanelWindowCapabilityTest::studioStatusSamplesWithoutWakingPanels()
+{
+    QQmlApplicationEngine engine;
+    PanelWindow window(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("panelRegistry")).value<QObject *>());
+    auto *status = qobject_cast<SystemStatus *>(engine.rootContext()
+        ->contextProperty(QStringLiteral("systemStatus")).value<QObject *>());
+    QVERIFY(registry && status);
+    for (const auto &id : registry->panelIds())
+        registry->updatePanel(id, {{"visible", false}});
+    // A panel shown that does not show the status: nothing is sampled.
+    const auto panelId = registry->addFreePanel();
+    registry->updatePanel(panelId, {{"visible", true}});
+    QVERIFY(window.reportPanelPresentationState(panelId,
+        {{"surfaceState", "open"}, {"hostPhase", "revealed"}}));
+    QTRY_VERIFY(status->sampleCount() >= 2);
+    QTest::qWait(300);
+    const auto idle = status->sampleCount();
+    QTest::qWait(2150);
+    QCOMPARE(status->sampleCount(), idle);
+
+    // The Studio shows readings: sampled, the panels not woken.
+    const auto overlays = window.overlayRevision();
+    window.setStudioStatusShown(true);
+    QTRY_VERIFY(status->sampleCount() > idle);
+    const auto revision = window.contentRevision();
+    const auto sampled = status->sampleCount();
+    QTRY_VERIFY_WITH_TIMEOUT(status->sampleCount() > sampled, 3000);
+    QCOMPARE(window.contentRevision(), revision);
+    QCOMPARE(window.overlayRevision(), overlays);
+
+    // Shown no more: sampling stops.
+    window.setStudioStatusShown(false);
+    QTest::qWait(150);
+    const auto stopped = status->sampleCount();
+    QTest::qWait(2150);
+    QCOMPARE(status->sampleCount(), stopped);
 }
 
 void PanelWindowCapabilityTest::segmentsUseRevisionedTransactionsAndHostAuthority()

@@ -222,3 +222,121 @@ the step's tests one at a time: 6 of 6 passed in 581 s
 `removalReportsAndRefusals`, `session-startup-runtime-test`). All 993
 committed files are the same in the clone and the workspace. Logs:
 `evidence/BREAKAGE-FIX-S1/recheck/`.
+
+## Step 2: light again
+
+### Report 1
+
+**What changed.**
+
+- AI-made "Modelled" 3D icons are a choice again, off by default. 3D icons
+  are made at once from their picture (Auto), as before 0.1.1-53;
+  Modelled is offered per panel as "Modelled (AI, made in the
+  background)". Panels saved by 0.1.1-53 or -54 go back to Auto and to
+  Medium quality once: the panel, both saved copies of the flat look it
+  remembers, and saved profiles (after a backup). If a backup cannot be
+  taken, the panels load as saved instead of not at all; if an interrupted
+  profile apply waits at the first start, this happens once it is put
+  right. Chosen again later, Modelled or High stays.
+- The AI maker runs apart from Plasma, in a place of its own under the
+  user's background group, at the lowest priority and within a memory
+  limit the system itself keeps, so running out of memory ends the maker
+  and never Plasma. It waits for another time when less than 4.5 GB is
+  free, stops at its first failure of its own instead of trying every
+  icon, and removes a picture it cannot read only when it is the dock's
+  own copy.
+- Holograms and panel decorations move on one shared clock: 15 steps a
+  second while the pointer is away from every panel, 30 while it is over
+  one (the owner's choice, "Calmer when idle"; it was 30 always). Each decoration
+  keeps its own running clock on it, so a new speed changes only its pace.
+- Holograms rest while their panel cannot be seen: covered by windows (a
+  free panel by solid windows on the desktop in use that hold all of it,
+  windows side by side and Plasma's own panels included; an edge panel or
+  a bar only by a full-screen window in front), auto-hidden, or in a bar
+  of Arch Dock's own that has hidden itself. A see-through or minimised
+  window, one on another desktop, and Show Desktop cover nothing. Only the
+  motion rests: the panel stays drawn and answers at once, and folders
+  and previews stay as they are. After KWin restarts, its windows are read
+  anew.
+- A 3D panel works out where its icons are drawn only when something
+  moved (and once a second to be safe), not after every frame. Opening or
+  closing a window builds only that window's icon; the flat and 3D icons
+  share one list.
+- Panel Studio reads the status readings only while a page or the preview
+  shows them, never reloads its settings for a reading, and no longer
+  writes over what is being typed; its own readings never make the docks
+  refresh, and its preview still follows applications started, closed or
+  pinned.
+- 3D icons on flat panels use two samples a pixel instead of four.
+
+**Why.** The audit's findings on the lag since 0.1.1-53: every 3D icon an
+AI object made with all cores, holograms and decorations redrawing 30
+times a second even when hidden or covered, every icon rebuilt on any
+window change, 3D panels supersampled by default, and Panel Studio waking
+Arch Dock every 2 seconds.
+
+**Measured** (private test desktop, the owner's 29 October ring with three
+icons, the pointer away; same day, same steps; one core = 100 %):
+
+| | before Step 2 | Step 2 |
+|---|---|---|
+| Plasma idle | 13.8 %, 757 MB | **6.5 %**, 773 MB |
+| Panel Studio open | Plasma 14.7 % + Arch Dock 12.3 % | **6.5 % + 0.0 %** |
+| Five windows opened and closed | 5.0 s of processor time | **2.38 s** |
+| Arch Dock with Studio open | 661 MB | 645 MB |
+| Ring covered by a maximised window | (as idle) | **1.6 %** |
+| Under Show Desktop / covered again / uncovered | | 6.4 % / 1.5 % / 6.4 % |
+| Ring without holograms (earlier today) | | 1.2 % |
+
+(Yesterday evening's "before" read 20.6 % and 692 MB on the same steps:
+the computer was in another state then, so only same-day pairs are
+compared.)
+
+**Pictures.** `evidence/BREAKAGE-FIX-S2/calmer-rate-clips/
+calmer-rate-before-after.webm` (holograms, 30 against 15 steps a second,
+TEST VIEW) and `sheets/quality-before-after.png` (the owner's ring as saved, high
+against medium quality, enlarged: the same look; fine lines inside the
+surface a touch less smooth). Covered and Show Desktop: `cover-pause-final/`.
+
+**Checks.**
+
+- An independent review (six readers by area, each finding checked by a
+  sceptic told to refute it): 20 findings, 18 confirmed, all fixed but one
+  older one (below); `evidence/BREAKAGE-FIX-S2/review/review-outcome.md`.
+- Focused tests, new and changed: window covering (focus, side by side,
+  Plasma's panels, Show Desktop), holograms resting, moved and doubled
+  entries keeping their delegates and 3D nodes, the light defaults (panels,
+  both flat-look copies, profiles, once only, waiting for recovery), the
+  AI maker's pictures and memory floor, Studio status sampling, status
+  readings over the preview.
+- The complete suite, serially (2911 s): 136 of 138 passed.
+  `path-travel-smoke` failed as it has since October (the Star layout's
+  travel check: an entry leaves the outline between slots, 11.9 against
+  the 2.5 allowed; Step 1 reported the same). `configuration-upgrade-test`
+  failed: the saved profiles' once-only step wrote its mark into a
+  configuration Arch Dock could not read (a newer version's), which must
+  stay byte for byte as it was. Fixed (that step does not run while the
+  saved panels cannot be read); it, `profile-manager-test`,
+  `panel-registry-test`, `panel-window-capability-test` and the start-up
+  tests passed again (`suite-1.log`, `suite-1-rerun.log`).
+
+**Not done in Step 2, and why.**
+
+- With holograms showing, Plasma idles at 6.5 %, above the 5 % aim. The
+  rest is drawing the 3D ring 15 times a second for them (about 0.5 ms of
+  script a step; the rest is the drawing). Two ways under it: 10 steps a
+  second while the pointer is away (a look change, the owner's call), or cheaper
+  drawing per frame in the memory and graphics task the owner gave on 26
+  November.
+- One drawing per 3D icon on flat panels: measured on the owner's panel drawn
+  flat, each 3D icon's own view costs about 14 MB and 0.2 % of a core
+  (675 against 633 MB for three icons). It is mostly memory, so it moves
+  to the memory and graphics task.
+- A shared display copy of AI-made icons for the graphics card: matters
+  only when Modelled is chosen; also in that task.
+- Older, not part of this plan: moving a hologram Speed slider makes the
+  holograms jump to another phase while it moves.
+- Known limits: a window a program makes see-through itself (KWin does not
+  tell) counts as solid; the owner's own saved panel presets and profiles
+  exported earlier keep High until saved again; Modelled needs about
+  4.5 GB free to start.

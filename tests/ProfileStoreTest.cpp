@@ -4,6 +4,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QScopeGuard>
 #include <QTemporaryDir>
@@ -210,6 +211,56 @@ private slots:
         QVERIFY(writeBytes(directory.filePath(".config-backups"), "blocked"));
         QVERIFY(!store.save(*loaded, &error)); QCOMPARE(error, QString("backup-root-unwritable"));
         QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes);
+    }
+    // 0.1.1-53 and -54 saved 3D panels with the AI-made "Modelled" icons
+    // and "high" quality, in the flat look they remember too: such saved
+    // profiles go back to "auto" and "medium" after one backup; others, and
+    // files that cannot be read, are left as they are.
+    void lightensOld3DDefaultsWithOneBackup()
+    {
+        QTemporaryDir directory;
+        QString error;
+        ProfileStore missing(directory.filePath("none"));
+        QVERIFY2(missing.lightenLegacy3DDefaults(nullptr, &error), qPrintable(error));
+        QVERIFY2(!QFileInfo::exists(directory.filePath("none")), "no folder is made for nothing");
+
+        ProfileStore store(directory.path());
+        const QVariantMap flatLook{{"scene3DIconRelief", "modelled"}, {"scene3DQuality", "high"}};
+        const auto heavyPanel = PanelDefinition::fromLegacyMap({{"id", "ring"}, {"name", "Ring"},
+            {"edge", "free"}, {"type", "launcher"}, {"layout", "ring"}, {"scene3DIconRelief", "modelled"},
+            {"scene3DQuality", "high"}, {"previousFlatLook", flatLook}});
+        QVERIFY(heavyPanel.has_value());
+        const auto heavy = store.create("Heavy", {*heavyPanel}, &error);
+        QVERIFY2(heavy.has_value(), qPrintable(error));
+        const auto light = store.save(example(), &error);
+        QVERIFY2(light.has_value(), qPrintable(error));
+        QVERIFY(writeBytes(directory.filePath("broken.json"), "{"));
+
+        QStringList lightened;
+        QVERIFY2(store.lightenLegacy3DDefaults(&lightened, &error), qPrintable(error));
+        QCOMPARE(lightened, QStringList{heavy->id});
+        const auto after = store.load(heavy->id, &error);
+        QVERIFY2(after.has_value(), qPrintable(error));
+        QCOMPARE(after->revision, heavy->revision + 1);
+        const auto record = after->panels.first().toPersistedMap();
+        QCOMPARE(record.value("scene3DIconRelief").toString(), QString("auto"));
+        QCOMPARE(record.value("scene3DQuality").toString(), QString("medium"));
+        QCOMPARE(record.value("previousFlatLook").toMap().value("scene3DIconRelief").toString(), QString("auto"));
+        QCOMPARE(record.value("surface2D").toMap().value("previousFlatLook").toMap()
+                     .value("scene3DQuality").toString(), QString("medium"));
+        QCOMPARE(store.load(light->id)->revision, light->revision);
+        QFile broken(directory.filePath("broken.json"));
+        QVERIFY(broken.open(QIODevice::ReadOnly));
+        QCOMPARE(broken.readAll(), QByteArray("{"));
+        ConfigurationBackup backup(directory.filePath(".config-backups"),
+            {{"profiles", {directory.path(), true}}});
+        QCOMPARE(backup.backups().size(), 1);
+
+        // Nothing more to do a second time.
+        lightened.clear();
+        QVERIFY2(store.lightenLegacy3DDefaults(&lightened, &error), qPrintable(error));
+        QVERIFY(lightened.isEmpty());
+        QCOMPARE(backup.backups().size(), 1);
     }
     void corruptFilesRemainAndDoNotHideValidProfiles()
     {

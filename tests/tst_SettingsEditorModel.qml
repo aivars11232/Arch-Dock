@@ -761,6 +761,32 @@ TestCase {
     // A preset record from the backend carries native lists, which are not
     // JavaScript arrays. The shared preview copies only real arrays as lists,
     // so the model must hand it arrays or a list becomes a keyed object.
+    // Panel Studio lays live status readings over its preview's status
+    // pills: only status entries change, and what it is given is not.
+    function test_statusReadingsLieOverStatusEntriesOnly() {
+        const readings = EditorModel.statusReadings([
+            { appId: "status:cpu", isStatus: true, statusText: "12%", statusAvailable: true,
+              displayName: "CPU: 12%" },
+            { appId: "org.kde.dolphin.desktop", displayName: "Dolphin" }
+        ])
+        compare(Object.keys(readings), ["status:cpu"])
+        compare(readings["status:cpu"].displayName, "CPU: 12%")
+        const entries = [
+            { appId: "status:cpu", isStatus: true, statusText: "", statusAvailable: true, displayName: "CPU" },
+            { appId: "status:gpu", isStatus: true, statusText: "", statusAvailable: false, displayName: "GPU" },
+            { appId: "org.kde.dolphin.desktop", displayName: "Dolphin" }
+        ]
+        const before = JSON.stringify(entries)
+        const shown = EditorModel.withStatusReadings(entries, readings)
+        compare(shown[0].statusText, "12%")
+        compare(shown[0].statusAvailable, true)
+        compare(shown[0].displayName, "CPU", "the name stays the entry's")
+        verify(shown[1] === entries[1], "a status entry without a reading as it was")
+        verify(shown[2] === entries[2], "other entries as they were")
+        compare(JSON.stringify(entries), before, "what it was given is not changed")
+        compare(EditorModel.withStatusReadings(undefined, readings).length, 0)
+    }
+
     function test_presetRecordsReachTheRendererAsPlainArrays() {
         verify(!Array.isArray(nativeSequences.tiers));
         const card = presetCard({ available: true }, {

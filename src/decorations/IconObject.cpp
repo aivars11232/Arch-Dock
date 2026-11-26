@@ -433,6 +433,37 @@ ColouredMesh simplified(const ColouredMesh &mesh, std::size_t triangles, float e
     return compacted(mesh.points, mesh.colours, std::vector<quint32>(kept.begin(), kept.end()));
 }
 
+IconObjectMesh forDisplay(const IconObjectMesh &mesh, std::size_t triangles)
+{
+    constexpr int stride = IconObjectMesh::stride;
+    const std::size_t points = mesh.vertices.size() / stride;
+    if (mesh.indices.size() / 3 <= triangles || points == 0) return mesh;
+    // Normal, picture place and colour (red, green, blue) follow the place
+    // in each point: the simplifier keeps edges where any of them turns.
+    const float weights[8] = {0.5f, 0.5f, 0.5f, 1, 1, 1, 1, 1};
+    std::vector<unsigned int> kept(mesh.indices.size());
+    const std::size_t count = meshopt_simplifyWithAttributes(
+        kept.data(), mesh.indices.data(), mesh.indices.size(), mesh.vertices.data(), points,
+        stride * sizeof(float), mesh.vertices.data() + 3, stride * sizeof(float), weights, 8, nullptr,
+        triangles * 3, 1.0f, 0, nullptr);
+    kept.resize(count);
+    IconObjectMesh shown = mesh;
+    shown.vertices.clear();
+    shown.indices.clear();
+    std::vector<quint32> remap(points, std::numeric_limits<quint32>::max());
+    for (const unsigned int index : kept)
+    {
+        if (remap[index] == std::numeric_limits<quint32>::max())
+        {
+            remap[index] = quint32(shown.vertices.size() / stride);
+            shown.vertices.insert(shown.vertices.end(), &mesh.vertices[std::size_t(index) * stride],
+                                  &mesh.vertices[std::size_t(index) * stride] + stride);
+        }
+        shown.indices.push_back(remap[index]);
+    }
+    return shown;
+}
+
 ColouredMesh twoFronts(const ColouredMesh &whole, float cut)
 {
     // A triangle lying in the cut itself (made lighter, the front may join

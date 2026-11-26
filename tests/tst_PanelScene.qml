@@ -834,6 +834,48 @@ TestCase {
         verify(Math.abs(slot.rotation) > 1)
     }
 
+    // An entry's icon rests its holograms while the panel cannot be seen -
+    // hidden, or covered by windows - whatever its own place on the track:
+    // one fading off a travelling track is still drawn, and still moves.
+    function test_entriesHearWhenThePanelIsNotSeen() {
+        const window = createTemporaryObject(motionWindowComponent, testCase)
+        verify(waitForRendering(window.contentItem))
+        const scene = createScene({})
+        scene.parent = window.contentItem
+        const slot = scene.entryItemAt(0)
+        verify(slot !== null && slot.delegateItem !== null)
+        const loader = slot.delegateItem.parent
+        verify(loader.scenePanelShown)
+        verify(slot.delegateItem.shown)
+        scene.sceneConcealed = true
+        verify(!loader.scenePanelShown, "hidden or covered")
+        verify(!slot.delegateItem.shown)
+        scene.sceneConcealed = false
+        verify(slot.delegateItem.shown, "seen again")
+    }
+
+    // Entries moved (a drag in the dock) keep their own delegates, each in
+    // its new place, with its own key; two entries with one id get two keys.
+    function test_movedEntriesKeepTheirDelegates() {
+        const scene = createScene({ entryDelegate: hostEntryComponent })
+        const items = entries()
+        const byKey = ({})
+        for (let i = 0; i < 3; ++i)
+            byKey[scene.entryItemAt(i).entryKey] = scene.entryItemAt(i)
+        for (const order of [[2, 0, 1], [1, 2, 0]]) {
+            scene.orderedEntries = order.map(function(i) { return items[i] })
+            const keys = scene.entryKeysOf(scene.orderedEntries)
+            compare(scene.entryRowModel.count, 3)
+            for (let i = 0; i < 3; ++i) {
+                compare(scene.entryItemAt(i).entryKey, keys[i])
+                verify(scene.entryItemAt(i) === byKey[keys[i]], "the same delegate, moved: " + keys[i])
+                compare(scene.entryItemAt(i).sceneEntry.id, scene.orderedEntries[i].id)
+            }
+        }
+        compare(scene.entryKeysOf([items[0], items[0]]),
+                ["org.example.one", "org.example.one\u00012"])
+    }
+
     function test_windowStateRefreshPreservesInteractionOwner() {
         const scene = createTemporaryObject(sceneComponent, testCase, {
             panelDefinition: definition(), orderedEntries: entries(),

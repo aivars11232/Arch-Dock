@@ -52,6 +52,12 @@ public:
     // The names of the profile's other panels.
     [[nodiscard]] QStringList profilePanelNames(const QString &id, const QString &exceptPanelId) const;
     QVariantMap replaceProfilePanel(const QString &id, int expectedRevision, const PanelDefinition &panel);
+    // Once after the update from 0.1.1-53 or -54, at start: saved profiles
+    // get the light 3D defaults, as the panels do when the registry loads.
+    // Not while an interrupted apply waits to be put right; tried once
+    // otherwise, so a failing save cannot take a backup at every start.
+    // True once done.
+    bool lightenSavedProfilesOnce();
 public slots:
     // The panels a profile holds, for the Profiles page.
     QVariantList profilePanels(const QString &id) const;

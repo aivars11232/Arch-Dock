@@ -45,6 +45,17 @@ QString iconObjectModels();
 bool saveIconObject(const IconObjectMesh &mesh, const QString &path);
 std::optional<IconObjectMesh> loadIconObject(const QString &path);
 
+// How many triangles an object is shown with at icon size: an icon is 50
+// to 100 pixels across, where the made object's tens of thousands of
+// triangles add nothing to see and only cost the graphics chip.
+constexpr std::size_t displayTriangles = 3000;
+
+// The object with at most `triangles` triangles for showing (the
+// simplifier `simplified` uses, its normals, picture places and colours
+// weighed too), its points not used any more left out; the object as it is
+// when it has no more.
+IconObjectMesh forDisplay(const IconObjectMesh &mesh, std::size_t triangles = displayTriangles);
+
 // The steps the object is made by, each on its own, so tests can try them
 // on fields of their own.
 

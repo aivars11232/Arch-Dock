@@ -13,6 +13,8 @@ import "PlatformGeometry.js" as PlatformGeometry
 // backend revalidates every selected ID.
 Item {
     id: root
+    // Its holograms move at their full rate while the pointer is over it.
+    HologramPointer {}
     property var snapshot: ({ status: "unavailable", entries: [] })
     property string folderTitle: ""
     // "track" (Along the dock), "fan", "arc", "ring" or "mobius".

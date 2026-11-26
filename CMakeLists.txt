@@ -78,6 +78,7 @@ set(ARCHDOCK_RENDERING_MODULE_FILES
     RendererCapabilityProbe.qml
     RenderingModuleProbe.qml
     HologramClock.qml
+    HologramPointer.qml
     LayoutEngine.js
     GizmoMath.js
     PlatformGeometry.js
@@ -2419,6 +2420,16 @@ if(ARCHDOCK_ONNXRUNTIME_INCLUDE AND ARCHDOCK_ONNXRUNTIME_LIBRARY)
   endif()
   install(TARGETS arch-dock-icon-object RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   message(STATUS "Arch Dock: the icon helper is built (ONNX Runtime at ${ARCHDOCK_ONNXRUNTIME_LIBRARY})")
+  if(BUILD_TESTING)
+    add_test(NAME icon-helper-pictures-test
+      COMMAND ${CMAKE_COMMAND}
+        -DHELPER=$<TARGET_FILE:arch-dock-icon-object>
+        -DWORK=${CMAKE_CURRENT_BINARY_DIR}/test-data/icon-helper-pictures
+        -DPICTURE=${CMAKE_CURRENT_SOURCE_DIR}/data/icons/hicolor/128x128.png
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/icon-helper-pictures.cmake)
+    set_tests_properties(icon-helper-pictures-test PROPERTIES
+      ENVIRONMENT "ARCHDOCK_ICON_OBJECT_MODELS=/nonexistent;QT_QPA_PLATFORM=offscreen")
+  endif()
 else()
   message(STATUS "Arch Dock: no ONNX Runtime, so no icon helper; 3D icons keep their pictures' reliefs")
 endif()

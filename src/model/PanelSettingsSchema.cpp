@@ -744,8 +744,10 @@ const QVector<Descriptor> &schemaFields()
         // stays valid whatever size the panel is drawn at. Pitch, yaw and
         // roll turn all the way round, and the scale has no practical limit,
         // all ways at once or sideways and up and down on its own.
+        // Medium by default: high supersamples every frame at four times the
+        // pixels, which a laptop's graphics chip pays for at every redraw.
         panel("scene3DQuality", Access::Editor, Type::String, Normalization::ChoiceLower,
-              QStringLiteral("high"), "surface.parameters3D.quality", {}, {},
+              QStringLiteral("medium"), "surface.parameters3D.quality", {}, {},
               {"low", "medium", "high"}, true, true,
               editor("panels-3d", "Render quality", "combo", {"studio"}, "scene3d-quality")),
         panel("scene3DCameraPitch", Access::Editor, Type::Real, Normalization::RealRange,
@@ -818,15 +820,16 @@ const QVector<Descriptor> &schemaFields()
               15.0, "surface.parameters3D.iconTurn", -60.0, 60.0, {}, true, true,
               editor("icons-3d", "Icon turn", "slider", {"studio"}, "icon-solid",
                      {}, {{QStringLiteral("step"), 1.0}, {QStringLiteral("decimals"), 0}})),
-        // Modelled: the icon made into an object by the icon helper (its
-        // front seen from either side; till it is made, the picture's own
-        // kind of relief); rounded: the picture's parts inflated into
-        // rounded volumes; block: the picture cut out as a block with walls.
-        // A saved "auto" (block or rounded by the picture's kind) reads as
-        // the default.
+        // Auto, the default: made at once from the picture, a plate-shaped
+        // picture a block, any other its parts rounded; rounded: the
+        // picture's parts inflated into rounded volumes; block: the picture
+        // cut out as a block with walls; modelled: the icon made into an
+        // object by the icon helper (its front seen from either side; till
+        // it is made, Auto). Modelled costs the processor tens of seconds per
+        // icon the first time, so it is only ever the user's own choice.
         panel("scene3DIconRelief", Access::Editor, Type::String, Normalization::ChoiceLower,
-              QStringLiteral("modelled"), "surface.parameters3D.iconRelief", {}, {},
-              {"modelled", "rounded", "block"}, true, true,
+              QStringLiteral("auto"), "surface.parameters3D.iconRelief", {}, {},
+              {"auto", "rounded", "block", "modelled"}, true, true,
               editor("icons-3d", "Icon relief", "combo", {"studio"}, "icon-solid")),
         // How much the light models the icon's volume: 0 keeps the picture's
         // own brightness, 1 lets the light alone shape it.

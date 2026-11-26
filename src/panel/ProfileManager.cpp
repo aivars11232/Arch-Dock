@@ -1,8 +1,10 @@
 // ProfileManager: profile storage, application and shortcuts.
 #include "ProfileManager.h"
 #include <algorithm>
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QSettings>
 #include <QUrl>
 
 namespace ArchDock
@@ -24,6 +26,32 @@ ProfileManager::~ProfileManager()
 {
     disconnect(m_shortcuts, nullptr, this, nullptr);
     delete m_shortcuts;
+}
+bool ProfileManager::lightenSavedProfilesOnce()
+{
+    const QString mark = QStringLiteral("migrations/lightDefaults3DProfiles");
+    QSettings settings;
+    if (settings.value(mark, false).toBool()) return true;
+    if (active()) return false;
+    QStringList lightened;
+    QString code;
+    const bool done = m_store.lightenLegacy3DDefaults(&lightened, &code);
+    if (!done)
+        qWarning().noquote() << "Saved profiles keep their old 3D settings (Modelled icons, high quality):" << code;
+    else if (!lightened.isEmpty())
+        qInfo().noquote() << "Saved profiles go back to the instant 3D icon relief and medium 3D quality:"
+                          << lightened.join(QStringLiteral(", "));
+    // Rewritten profiles have new revisions: what holds the old ones (the
+    // Profiles page, the shortcuts) reads them again.
+    if (!lightened.isEmpty())
+    {
+        ++m_revision;
+        emit changed();
+        emit profilesChanged();
+    }
+    settings.setValue(mark, true);
+    settings.sync();
+    return done;
 }
 int ProfileManager::revision() const { return m_revision; }
 bool ProfileManager::active() const { return m_transaction.active(); }

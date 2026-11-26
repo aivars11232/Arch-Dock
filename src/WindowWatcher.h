@@ -1,8 +1,10 @@
 #pragma once
 
+#include <QDBusServiceWatcher>
 #include <QObject>
 #include <QString>
 #include <QHash>
+#include <QTimer>
 #include <QVariantMap>
 #include <QRectF>
 
@@ -68,13 +70,21 @@ signals:
     void availableChanged();
     void nativePanelsChanged();
     void untrackedWindowsChanged();
+    // KWin went, or came back after a restart: the windows the old one
+    // reported are forgotten, and the script is loaded into the new one.
+    void kwinOwnerChanged(bool present);
 
 private:
     bool loadKWinScript();
+    void kwinChanged(const QString &oldOwner, const QString &newOwner);
+    void reloadKWinScript();
     void observeNativePanel(const QString &internalId, const QJsonObject &state);
 
     WindowModel &m_windowModel;
     bool m_available = false;
     QHash<QString, QVariantMap> m_nativePanels;
     QHash<QString, WindowItem> m_untrackedWindows;
+    QDBusServiceWatcher m_kwinWatcher;
+    QTimer m_reloadTimer;
+    int m_reloadAttempts = 0;
 };

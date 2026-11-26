@@ -288,6 +288,18 @@ TestCase {
         compare(item.iconVisualState, "edit")
     }
 
+    // The panel's being seen reaches the icon, whose holograms rest while
+    // it is not; the entry's own motion follows sceneVisible as before.
+    function test_panelShownIsForwardedToTheIcon() {
+        const item = createEntry({})
+        verify(item.meshVisualItem.shown)
+        item.panelShown = false
+        verify(!item.meshVisualItem.shown, "hidden or covered")
+        verify(item.sceneVisible, "the entry's own motion is told apart")
+        item.panelShown = true
+        verify(item.meshVisualItem.shown)
+    }
+
     function test_iconStyleProjectionIsForwardedToSharedScene() {
         const item = createEntry({
             iconStyleDefinition: iconStyleDefinition()

@@ -1,5 +1,73 @@
 # Arch Dock current state
 
+## Light again: idle motion, covered panels, Studio readings — 2026-11-26
+
+- 3D icon relief defaults to "auto" (made at once from the picture);
+  "modelled" (TripoSR through `arch-dock-icon-object`) only when chosen.
+  3D quality defaults to "medium" (MSAA) instead of "high" (SSAA).
+  `SettingsMigration::lightenLegacy3DDefaults` turns a saved record's
+  "modelled"/"high" (top level and both `previousFlatLook` copies) back
+  once: `PanelRegistry::load` under `migrations/lightDefaults3D`, worked
+  out before the stored-panels branch and skipped while
+  `profile-apply-journal.json` exists (then given in the same run once the
+  apply is put right: `PanelRegistry::applyDeferredLightDefaults`); its own
+  backup failing gives it up instead of blocking the load, and the mark is
+  set once decided. Saved profiles through
+  `ProfileManager::lightenSavedProfilesOnce` (`migrations/
+  lightDefaults3DProfiles`, one `backUpProfiles` capture, tried once).
+- The icon helper: started by `IconModel` through `systemd-run --user
+  --scope` in `background.slice` (`CPUWeight=idle`, `MemoryMax=5G`,
+  `MemorySwapMax=0`) when the user manager runs, directly otherwise (and for
+  `ARCHDOCK_ICON_OBJECT_HELPER`); `RLIMIT_DATA` 5 GiB, no core files, idle
+  class and lowest priority; exits 5 with less than 4.5 GiB `MemAvailable`
+  (`ARCHDOCK_ICON_OBJECT_MEMORY_MIN_MB`). ONNX Runtime without its CPU
+  arena, memory pattern or pre-packing. With `--remove-unreadable` (the
+  dock's own pictures) an unreadable picture is removed before the network
+  loads; otherwise it is refused (exit 4). Any failure of the helper's own
+  (memory, the network, the disk) ends the batch and writes no `.failed`
+  marker. `IconModel` writes pictures with `QSaveFile`.
+- `HologramClock` (singleton): one 33 ms or 66 ms timer, 66 ms while
+  `pointedAt` is 0 (`HologramPointer`, a `HoverHandler` in `PanelScene`,
+  `FolderTrack` and `FolderExpansion`); runs only while held. Panel
+  decorations (2D and 3D) step their own running clock by its steps times
+  their speed (a step under a second; its restarts are no step).
+  `IconScene.shown` (panel-level: `PanelScene.entriesAnimatable` through
+  `entryLoader.scenePanelShown` and `DockEntry.panelShown`, never the
+  entry's own `onTrack`) gates `hologramMoving`.
+- Covering: `windowsCoverArea(windows, area, underWindows, panels)` and
+  `windowCoverSignature` (WindowModel.h): solid (KWin opacity >= 0.99),
+  shown, not minimised, current-desktop windows; rect subtraction over
+  whole pixels, so windows side by side count; Plasma's shown panels hide
+  what lies under them on the desktop; above-window panels only under a
+  full-screen window KWin lifts above docks (active, or the active window
+  off its screen, as `Window::isActiveFullScreen`).
+  `PanelWindow::panelAreaCovered(area, underWindows)` adds Show Desktop,
+  heard from KWin's `org.kde.KWin /KWin showingDesktopChanged` (KWin's
+  scripts have no `workspace.showingDesktop`); `coverRevision` is published
+  at most every 200 ms and only when the signature (windows, Show Desktop,
+  Plasma's panels) changes. `WindowWatcher` watches `org.kde.KWin`: a KWin
+  gone or back clears the window list and loads the script again. The widget
+  asks from its authoritative representation with `panelScene.drawnBounds`
+  mapped to global and clipped to its drawing window, and sets
+  `PanelScene.sceneResting` (motion only: the 3D view stays drawn and takes
+  input, `PanelScene3D.inputAllowed`). A bar reads `BarWindow.concealed` as
+  `Window.window.concealed`.
+- `PanelScene3D` recomputes its projection when `projectionStale` (camera,
+  content and anchor transforms, entry count, node size/stand/position)
+  and once a second, not every frame. Flat and 3D icons share
+  `PanelScene.entryRowModel` (keys from `entryKeysOf`, unique); 3D nodes
+  read `entryItemsByKey` / `entryGeometryByKey`, so an insert or removal
+  builds only its own node.
+- Status: `SystemStatus` samples while a panel shows a status segment
+  (`runtimePanelDefinition`, drafts and auditions included) or Panel
+  Studio shows readings (`setStudioStatusShown`); only a panel's need
+  raises `contentRevision`. `overlayRevision` reloads the Studio's
+  Notifications page; nothing reloads it for a reading; `dockEntriesRevision`
+  lays fresh entries over the session (`withLiveEntries`, at most every
+  300 ms, only when `drawnEntriesKey` changed). After a stale reading,
+  `m_awaitingSample` keeps the found sources until the first new sample,
+  which measures a fresh 250 ms CPU interval.
+
 ## Panels are not lost; removed panels are kept; no silent "off" — 2026-11-26
 
 - Removal reports: the dock widget calls
@@ -668,7 +736,7 @@ height, diameter, rings})`: the outline risen as a dome toward the viewer
 and the same dome away, a closed shell a quarter round in cross-section
 each way (ten rings from the widest at the middle to one point at each
 end), normals from the surface's slopes, uv its shadow.
-`PanelScene3D.bubbleMeshes` builds one per entry when the tile settings'
+`PanelScene3D.bubbleMeshFor` builds one for each entry's node when the tile settings'
 `iconTileForm` is "bubble" (`bubbleWanted`), as wide and as high as
 `bubbleFit` says: the width the larger of the tile's own (0.92 × the
 style's diameter) and 1.08 × `PlatformGeometry.containingScale(shape,

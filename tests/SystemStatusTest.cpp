@@ -67,6 +67,30 @@ private slots:
         QTest::qWait(2100);
         QCOMPARE(status.sampleCount(), stopped);
     }
+    // Sampling started again after its last reading went stale: until the
+    // first new sample lands, the sources found stay available (a Panel
+    // Studio edit choosing Status checks them in that same moment) and are
+    // listed by name alone, with no old value.
+    void awaitingSampleKeepsFoundSources()
+    {
+        SystemStatus status;
+        QTRY_VERIFY(status.sampleCount() >= 2);
+        const QStringList found = status.availableSources();
+        QVERIFY(found.contains(QStringLiteral("status:memory")));
+        QTest::qWait(6200);
+        status.setEnabled(true);
+        QCOMPARE(status.availableSources(), found);
+        const auto memory = [&status]() {
+            for (const QVariant &value : status.entries())
+                if (value.toMap().value(QStringLiteral("appId")).toString() == QStringLiteral("status:memory"))
+                    return value.toMap();
+            return QVariantMap{};
+        };
+        QVERIFY(memory().value(QStringLiteral("statusAvailable")).toBool());
+        QCOMPARE(memory().value(QStringLiteral("statusText")).toString(), QString());
+        QTRY_VERIFY(memory().value(QStringLiteral("statusText")).toString().endsWith(QLatin1Char('%')));
+        status.setEnabled(false);
+    }
 };
 QTEST_GUILESS_MAIN(SystemStatusTest)
 #include "SystemStatusTest.moc"

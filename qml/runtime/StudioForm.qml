@@ -313,7 +313,12 @@ ScrollView {
 
                             Label {
                                 Layout.fillWidth: true
-                                text: rowDelegate.modelData.label || ""
+                                // A status source's switch names its live
+                                // reading while Panel Studio shows it.
+                                text: rowDelegate.modelData.statusEntryId !== undefined && root.studio
+                                    && typeof root.studio.statusReadingLabel === "function"
+                                    ? root.studio.statusReadingLabel(rowDelegate.modelData)
+                                    : rowDelegate.modelData.label || ""
                                 color: root.theme.text
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap
@@ -372,9 +377,16 @@ ScrollView {
                             from: rowDelegate.modelData.from === undefined ? 0 : rowDelegate.modelData.from
                             to: rowDelegate.modelData.to === undefined ? 100 : rowDelegate.modelData.to
                             stepSize: rowDelegate.modelData.step === undefined ? 1 : rowDelegate.modelData.step
+                            id: spinBox
                             editable: true
                             validator: null
-                            value: Number(root.studio.fieldValue(rowDelegate.modelData))
+                            // The saved value, except while a number is typed in
+                            // the box: settings read anew must not write over it.
+                            Binding on value {
+                                when: !spinBox.activeFocus
+                                value: Number(root.studio.fieldValue(rowDelegate.modelData))
+                                restoreMode: Binding.RestoreNone
+                            }
                             textFromValue: function(value, locale) {
                                 return root.studio.formatFieldValue(rowDelegate.modelData, value)
                             }
@@ -435,7 +447,14 @@ ScrollView {
                             visible: rowDelegate.kind === "text"
                             Layout.preferredWidth: 270
                             placeholderText: rowDelegate.modelData.placeholder || ""
-                            text: String(root.studio.fieldValue(rowDelegate.modelData))
+                            id: textBox
+                            // The saved value, except while the user types in the
+                            // box: settings read anew must not write over it.
+                            Binding on text {
+                                when: !textBox.activeFocus
+                                value: String(root.studio.fieldValue(rowDelegate.modelData))
+                                restoreMode: Binding.RestoreNone
+                            }
                             onEditingFinished: root.studio.setFieldValue(rowDelegate.modelData, text)
                         }
 

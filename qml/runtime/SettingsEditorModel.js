@@ -615,3 +615,64 @@ function withContentFeedback(session, snapshot) {
     result.panelPresentedKeys = fieldKeys(result.panelFields);
     return result;
 }
+
+// The session with the segments field's entries (the applications it lists
+// and the preview draws) taken from a newer snapshot; the settings and the
+// changes being made stay as they were.
+function withLiveEntries(session, snapshot) {
+    if (!session || !session.loaded || !snapshot || snapshot.success !== true)
+        return session;
+    const live = (snapshot.panelFields || []).find(function(field) { return field.key === "segments"; });
+    if (!live)
+        return session;
+    const result = copySession(session);
+    const target = result.panelFields.find(function(field) { return field.key === "segments"; });
+    if (!target)
+        return session;
+    target.availableEntries = copyValue(live.availableEntries || []);
+    target.segmentEntries = copyValue(live.segmentEntries || []);
+    return result;
+}
+
+// What of those entries is drawn (which applications, pinned or running,
+// their icons and names), not which window is active or its title.
+function drawnEntriesKey(session) {
+    const field = ((session && session.panelFields) || []).find(function(field) {
+        return field.key === "segments";
+    }) || {};
+    const shown = function(entry) {
+        return [entry.appId, entry.segmentId || "", entry.iconName, entry.displayName,
+                entry.pinned === true, entry.running === true];
+    };
+    return JSON.stringify([(field.availableEntries || []).map(shown), (field.segmentEntries || []).map(shown)]);
+}
+
+// The status readings among the system status's entries, by entry id: each
+// with its text, whether it is available, and the name it shows with its
+// reading. Other entries are left out.
+function statusReadings(entries) {
+    const result = {};
+    for (const entry of entries || []) {
+        if (!entry || entry.isStatus !== true) continue;
+        result[String(entry.appId)] = {
+            statusText: String(entry.statusText || ""),
+            statusAvailable: entry.statusAvailable === true,
+            displayName: String(entry.displayName || "")
+        };
+    }
+    return result;
+}
+
+// Entries with the status readings laid over their status entries; other
+// entries, and status entries without a reading, as they were. The entries
+// given are not changed.
+function withStatusReadings(entries, readings) {
+    return (entries || []).map(function(entry) {
+        const reading = entry && entry.isStatus === true ? (readings || {})[String(entry.appId)] : undefined;
+        if (!reading) return entry;
+        const next = copyValue(entry);
+        next.statusText = reading.statusText;
+        next.statusAvailable = reading.statusAvailable;
+        return next;
+    });
+}

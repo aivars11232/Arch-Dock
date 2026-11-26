@@ -71,7 +71,7 @@ BarWindow::BarWindow(Plasma::Corona *corona, Plasma::Containment *containment, c
     m_concealTimer.setInterval(ConcealDelayMs);
     connect(&m_concealTimer, &QTimer::timeout, this, [this]
     {
-        m_concealed = true;
+        setConcealed(true);
         qCDebug(archdockBars) << "bar hidden" << geometry() << "through its edge" << bool(m_autoHide);
         if (m_autoHide)
             m_autoHide->hide();
@@ -203,7 +203,7 @@ void BarWindow::setHides(bool hides, ScreenEdgeManager *edges)
     {
         // Letting the edge go shows the bar.
         m_concealTimer.stop();
-        m_concealed = false;
+        setConcealed(false);
         m_autoHide.reset();
         return;
     }
@@ -230,6 +230,14 @@ void BarWindow::attachEdge()
         m_autoHide->hide();
 }
 
+void BarWindow::setConcealed(bool concealed)
+{
+    if (concealed == m_concealed)
+        return;
+    m_concealed = concealed;
+    Q_EMIT concealedChanged();
+}
+
 void BarWindow::setConcealWanted(bool conceal)
 {
     if (!conceal)
@@ -237,7 +245,7 @@ void BarWindow::setConcealWanted(bool conceal)
         m_concealTimer.stop();
         if (m_concealed)
         {
-            m_concealed = false;
+            setConcealed(false);
             if (m_autoHide)
                 m_autoHide->show();
         }
