@@ -2799,98 +2799,106 @@ run_session() {
     require_unrelated_panel_unchanged \
         "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen reassignment'
 
-    local enabled_outputs
-    enabled_outputs="$(enabled_output_names)"
-    local secondary_output
-    secondary_output="$(printf '%s\n' "$enabled_outputs" | sed -n '2p')"
-    [[ -n "$secondary_output" ]] || {
-        printf 'Could not identify the secondary virtual output.\n' >&2
-        exit 1
-    }
+    # ARCHDOCK_LIFECYCLE_SKIP_OUTPUT_CHANGE=1 leaves out switching the second
+    # virtual output off and on: there the private plasmashell 6.8.3 crashes in
+    # its script engine (25 November 2026, with the code before the breakage
+    # fixes too), so the later phases could not be reached. The log says so.
+    if [[ "${ARCHDOCK_LIFECYCLE_SKIP_OUTPUT_CHANGE:-0}" == 1 ]]; then
+        log_session_phase 'skipped switching the secondary virtual output off and on (ARCHDOCK_LIFECYCLE_SKIP_OUTPUT_CHANGE=1)'
+    else
+        local enabled_outputs
+        enabled_outputs="$(enabled_output_names)"
+        local secondary_output
+        secondary_output="$(printf '%s\n' "$enabled_outputs" | sed -n '2p')"
+        [[ -n "$secondary_output" ]] || {
+            printf 'Could not identify the secondary virtual output.\n' >&2
+            exit 1
+        }
 
-    local free_count_before_screen_change
-    free_count_before_screen_change="$(free_panel_count)"
-    start_signal_monitor nativePanelRecoveryFinished
-    log_session_phase 'disabling secondary virtual output'
-    kscreen-doctor "output.$secondary_output.disable" >/dev/null
-    wait_for_screen_count 1
-    screen_count="$(available_screen_count)"
-    [[ "$screen_count" == '1' ]] || {
-        printf 'Disabling the secondary virtual output did not remove it.\n' >&2
-        exit 1
-    }
-    wait_for_native_panel_screen "$first_containment_id" 0
-    wait_for_signal_monitor nativePanelRecoveryFinished
-    require_native_panel_placement \
-        "$first_containment_id" "$panel_id" left left 'managed screen fallback'
-    [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
-        "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
-        printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
-        exit 1
-    }
-    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
-    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
-    require_current_free_panel_host \
-        "$studio_panel_id" "$studio_token" 'output-loss Studio' true
-    require_current_free_panel_host \
-        "$template_panel_id" "$template_token" 'screen-fallback template'
-    [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
-        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
-        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
-        printf 'Free-host screen fallback duplicated, detached, or changed a sentinel applet.\n' >&2
-        exit 1
-    }
-    require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen fallback'
-    start_signal_monitor nativePanelRecoveryFinished
-    log_session_phase 'restoring secondary virtual output'
-    kscreen-doctor "output.$secondary_output.enable" >/dev/null
-    wait_for_screen_count 2
-    screen_count="$(available_screen_count)"
-    [[ "$screen_count" == '2' ]] || {
-        printf 'Re-enabling the secondary virtual output did not restore it.\n' >&2
-        exit 1
-    }
-    local restored_expected_screen
-    restored_expected_screen="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
-    [[ "$restored_expected_screen" =~ ^[0-9]+$ ]] || {
-        printf 'Could not resolve the restored stable virtual output: %s\n' \
-            "$restored_expected_screen" >&2
-        exit 1
-    }
-    if ! wait_for_native_panel_screen "$first_containment_id" "$restored_expected_screen"; then
-        local restored_screen
-        restored_screen="$(plasma_script "var panel = panelById($first_containment_id); print(panel ? panel.screen : -1);" | gvariant_string)"
-        printf 'Native panel did not return to its stable virtual output: expected=%s actual=%s\n' \
-            "$restored_expected_screen" "$restored_screen" >&2
-        printf 'Arch Dock screens after restore: %s\n' "$(panel_call availableScreens)" >&2
-        printf 'KScreen outputs after restore: %s\n' "$(enabled_output_names | paste -sd ',' -)" >&2
-        exit 1
+        local free_count_before_screen_change
+        free_count_before_screen_change="$(free_panel_count)"
+        start_signal_monitor nativePanelRecoveryFinished
+        log_session_phase 'disabling secondary virtual output'
+        kscreen-doctor "output.$secondary_output.disable" >/dev/null
+        wait_for_screen_count 1
+        screen_count="$(available_screen_count)"
+        [[ "$screen_count" == '1' ]] || {
+            printf 'Disabling the secondary virtual output did not remove it.\n' >&2
+            exit 1
+        }
+        wait_for_native_panel_screen "$first_containment_id" 0
+        wait_for_signal_monitor nativePanelRecoveryFinished
+        require_native_panel_placement \
+            "$first_containment_id" "$panel_id" left left 'managed screen fallback'
+        [[ "$(panel_registry_value "$panel_id" screen)" == '0' &&
+            "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
+            printf 'Screen fallback did not record index 0 while retaining the stable output identity.\n' >&2
+            exit 1
+        }
+        wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+        wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+        require_current_free_panel_host \
+            "$studio_panel_id" "$studio_token" 'output-loss Studio' true
+        require_current_free_panel_host \
+            "$template_panel_id" "$template_token" 'screen-fallback template'
+        [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
+            "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
+            "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+            "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+            printf 'Free-host screen fallback duplicated, detached, or changed a sentinel applet.\n' >&2
+            exit 1
+        }
+        require_unrelated_panel_unchanged \
+            "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen fallback'
+        start_signal_monitor nativePanelRecoveryFinished
+        log_session_phase 'restoring secondary virtual output'
+        kscreen-doctor "output.$secondary_output.enable" >/dev/null
+        wait_for_screen_count 2
+        screen_count="$(available_screen_count)"
+        [[ "$screen_count" == '2' ]] || {
+            printf 'Re-enabling the secondary virtual output did not restore it.\n' >&2
+            exit 1
+        }
+        local restored_expected_screen
+        restored_expected_screen="$(panel_call screenIndexForPanel "$panel_id" | gvariant_integer)"
+        [[ "$restored_expected_screen" =~ ^[0-9]+$ ]] || {
+            printf 'Could not resolve the restored stable virtual output: %s\n' \
+                "$restored_expected_screen" >&2
+            exit 1
+        }
+        if ! wait_for_native_panel_screen "$first_containment_id" "$restored_expected_screen"; then
+            local restored_screen
+            restored_screen="$(plasma_script "var panel = panelById($first_containment_id); print(panel ? panel.screen : -1);" | gvariant_string)"
+            printf 'Native panel did not return to its stable virtual output: expected=%s actual=%s\n' \
+                "$restored_expected_screen" "$restored_screen" >&2
+            printf 'Arch Dock screens after restore: %s\n' "$(panel_call availableScreens)" >&2
+            printf 'KScreen outputs after restore: %s\n' "$(enabled_output_names | paste -sd ',' -)" >&2
+            exit 1
+        fi
+        wait_for_signal_monitor nativePanelRecoveryFinished
+        require_native_panel_placement \
+            "$first_containment_id" "$panel_id" left left 'managed screen restoration'
+        [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
+            printf 'Restoring the output replaced the requested stable output identity.\n' >&2
+            exit 1
+        }
+        wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
+        wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
+        require_current_free_panel_host \
+            "$studio_panel_id" "$studio_token" 'screen-restored Studio'
+        require_current_free_panel_host \
+            "$template_panel_id" "$template_token" 'screen-restored template'
+        [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
+            "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
+            "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
+            "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
+            printf 'Free-host screen restoration duplicated, detached, or changed a sentinel applet.\n' >&2
+            exit 1
+        }
+        require_unrelated_panel_unchanged \
+            "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen restoration'
+        log_session_phase 'preserved unique free hosts through output fallback and restoration'
     fi
-    wait_for_signal_monitor nativePanelRecoveryFinished
-    require_native_panel_placement \
-        "$first_containment_id" "$panel_id" left left 'managed screen restoration'
-    [[ "$(panel_registry_value "$panel_id" screenId)" == "$requested_screen_id" ]] || {
-        printf 'Restoring the output replaced the requested stable output identity.\n' >&2
-        exit 1
-    }
-    wait_for_panel_registry_value "$studio_panel_id" freeHostState hosted-owned
-    wait_for_panel_registry_value "$template_panel_id" freeHostState hosted-owned
-    require_current_free_panel_host \
-        "$studio_panel_id" "$studio_token" 'screen-restored Studio'
-    require_current_free_panel_host \
-        "$template_panel_id" "$template_token" 'screen-restored template'
-    [[ "$(free_panel_count)" == "$free_count_before_screen_change" &&
-        "$(free_host_match_count "$studio_panel_id" "$studio_token")" == '1' &&
-        "$(free_host_match_count "$template_panel_id" "$template_token")" == '1' &&
-        "$(free_host_snapshot "$sentinel_desktop_id" "$sentinel_applet_id")" == "$sentinel_snapshot" ]] || {
-        printf 'Free-host screen restoration duplicated, detached, or changed a sentinel applet.\n' >&2
-        exit 1
-    }
-    require_unrelated_panel_unchanged \
-        "$unrelated_containment_id" "$unrelated_snapshot" 'managed screen restoration'
-    log_session_phase 'preserved unique free hosts through output fallback and restoration'
 
     local externally_removed
     externally_removed="$(plasma_script "var panel = panelById($first_containment_id); if (panel === null) { print(0); } else { panel.currentConfigGroup = ['ArchDock']; var owned = panel.readConfig('panelId', '') === '$panel_id' && panel.readConfig('ownerToken', '') === '$first_token'; if (owned) { panel.remove(); print(1); } else { print(0); } }" | gvariant_string)"
@@ -3491,6 +3499,7 @@ run_outer() {
         QT_NO_XDG_DESKTOP_PORTAL=1 \
         QML_XHR_ALLOW_FILE_READ=1 \
         ARCHDOCK_LIFECYCLE_STOP_AFTER="${ARCHDOCK_LIFECYCLE_STOP_AFTER:-}" \
+        ARCHDOCK_LIFECYCLE_SKIP_OUTPUT_CHANGE="${ARCHDOCK_LIFECYCLE_SKIP_OUTPUT_CHANGE:-0}" \
         ARCHDOCK_PRESET_MATRIX_GROUP="${ARCHDOCK_PRESET_MATRIX_GROUP:-}" \
         ARCHDOCK_PRESET_MATRIX_SCRIPT="$preset_script" \
         ARCHDOCK_PROFILE_MATRIX_GROUP="${ARCHDOCK_PROFILE_MATRIX_GROUP:-}" \

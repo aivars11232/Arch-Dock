@@ -6,6 +6,7 @@
 #include "model/PanelSettingsSchema.h"
 #include "PanelRegistry.h"
 #include "panel/PanelWindow.h"
+#include "persistence/RemovedPanelStore.h"
 #include "presets/PresetPreviewSession.h"
 #include "themes/ThemePackage.h"
 #include "ScreenIdentity.h"
@@ -31,6 +32,7 @@
 #include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QScreen>
 #include <QScopeGuard>
@@ -377,6 +379,7 @@ private slots:
     void studioArtworkPersistenceFailure();
     void studioEditsOnePanelAtATime();
     void barsFollowTheirRecords();
+    void removalReportsAndRefusals();
     void studioAddsBars();
     void presetTrialsOnANewPanelAreBars();
     void barWidgetsFollowTheirOperations();
@@ -2896,6 +2899,95 @@ void PanelWindowCapabilityTest::barsFollowTheirRecords()
     QVERIFY(!unknown.value("message").toString().isEmpty());
     QVERIFY(backend.removePanelOfWidget(again, QString{}).value("success").toBool());
     QVERIFY(!registry->panelIds().contains(again));
+}
+
+// Removal reports and Remove Panel's refusals, with no Plasma to ask: a
+// report from a second copy of a panel's widget speaks only for that copy; a
+// report in the first 90 s after a start is not acted on; nothing is removed
+// when its settings cannot be kept first, or by a widget that is not the
+// panel's own; and a removal Plasma does not answer leaves the kept panels
+// as they were.
+void PanelWindowCapabilityTest::removalReportsAndRefusals()
+{
+    if (!qEnvironmentVariableIsEmpty("ARCHDOCK_PRIVATE_INTERACTION_TEST"))
+        QSKIP("Plasma must not answer here");
+    QQmlApplicationEngine engine;
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString freeId = registry->addFreePanel();
+    QVERIFY(!freeId.isEmpty());
+    QVERIFY(registry->commitVerifiedFreeHostAssociation(
+        freeId, 42, 73, QStringLiteral("token-a"), 0, QStringLiteral("output:test"), QStringLiteral("desktop")));
+
+    // A second copy (widget 99) going away is not the panel (widget 73) going.
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(
+        QStringLiteral("A second copy of panel %1 \\(widget 99\\) was removed from Plasma").arg(freeId)));
+    backend.panelRemovalReported(freeId, true, 99);
+    // The panel's own widget right after Arch Dock started: not acted on.
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(
+        QStringLiteral("%1.*was reported removed while Plasma or Arch Dock was starting").arg(freeId)));
+    backend.panelRemovalReported(freeId, true, 73);
+    QVERIFY(registry->panelIds().contains(freeId));
+
+    // A widget with another token is a leftover: refused, the panel stays.
+    const QVariantMap leftover = backend.removePanelOfWidget(freeId, QStringLiteral("token-b"));
+    QVERIFY(!leftover.value("success").toBool());
+    QCOMPARE(leftover.value("errorCode").toString(), QStringLiteral("not-this-panels-widget"));
+    QVERIFY(registry->panelIds().contains(freeId));
+
+    // Its own widget, but Plasma does not answer: the panel stays, says why,
+    // and the kept panels are the ones there were.
+    ArchDock::RemovedPanelStore store;
+    const auto keysOf = [](const QList<ArchDock::RemovedPanelStore::Entry> &entries)
+    {
+        QStringList keys;
+        for (const auto &entry : entries) keys.append(entry.key);
+        return keys;
+    };
+    const QStringList keptBefore = keysOf(store.entries());
+    const QVariantMap unanswered = backend.removePanelOfWidget(freeId, QStringLiteral("token-a"));
+    QVERIFY(!unanswered.value("success").toBool());
+    QVERIFY(!unanswered.value("message").toString().isEmpty());
+    QVERIFY(registry->panelIds().contains(freeId));
+    QCOMPARE(keysOf(store.entries()), keptBefore);
+
+    // The start-up report above still waits (no Plasma here to confirm
+    // anything): once its time is up it is dropped, and the panel stays.
+    qputenv("ARCHDOCK_REMOVAL_REPORT_LIFETIME_MS", "1000");
+    auto restoreLifetime = qScopeGuard([] { qunsetenv("ARCHDOCK_REMOVAL_REPORT_LIFETIME_MS"); });
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(
+        QStringLiteral("%1.*stays: its widget was not removed after all").arg(freeId)));
+    QTest::qWait(6500);
+    QVERIFY(registry->panelIds().contains(freeId));
+
+    // Settings that cannot be kept (a folder where the list belongs, in a
+    // throw-away data folder): a bar, which needs no Plasma to go, stays,
+    // and the refusal says why.
+    const QString bar = backend.createBar(QStringLiteral("top"), QStringLiteral("launcher"));
+    QVERIFY(!bar.isEmpty());
+    QTemporaryDir throwAway;
+    QVERIFY(throwAway.isValid());
+    const QByteArray dataHome = qgetenv("XDG_DATA_HOME");
+    const bool hadDataHome = qEnvironmentVariableIsSet("XDG_DATA_HOME");
+    qputenv("XDG_DATA_HOME", throwAway.path().toLocal8Bit());
+    auto restoreDataHome = qScopeGuard([&] {
+        if (hadDataHome) qputenv("XDG_DATA_HOME", dataHome);
+        else qunsetenv("XDG_DATA_HOME");
+    });
+    const QString listPath = ArchDock::RemovedPanelStore::defaultPath();
+    QVERIFY(listPath.startsWith(throwAway.path()));
+    QVERIFY(QDir().mkpath(listPath));
+    const QVariantMap notKept = backend.removePanel(bar);
+    QVERIFY(!notKept.value("success").toBool());
+    QCOMPARE(notKept.value("errorCode").toString(), QStringLiteral("settings-not-kept"));
+    QVERIFY(!notKept.value("message").toString().isEmpty());
+    QVERIFY(registry->panelIds().contains(bar));
+    // With room for the list, the same Remove Panel works.
+    QVERIFY(QDir(listPath).removeRecursively());
+    QVERIFY(backend.removePanel(bar).value("success").toBool());
+    QVERIFY(!registry->panelIds().contains(bar));
 }
 
 void PanelWindowCapabilityTest::studioAddsBars()

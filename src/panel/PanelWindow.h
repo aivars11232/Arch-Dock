@@ -740,6 +740,12 @@ private:
     {
         // The widget that reported, or -1 from an older widget.
         int appletId = -1;
+        // The panel's ownership token when the report came: the report never
+        // passes to a newer panel that took the same id.
+        QString ownerToken;
+        // Reported while Plasma or Arch Dock was starting: a widget then
+        // confirmed gone is put back, not taken for its owner's removal.
+        bool putBack = false;
         QElapsedTimer received;
         // Since when Plasma has not had the widget; invalid while it has.
         QElapsedTimer missingSince;
@@ -758,6 +764,12 @@ private:
     // Plasma has its desktops (its layout is loaded): a widget it does not
     // have then is really gone.
     bool plasmaDesktopsLoaded() const;
+    // The token tying a panel's record to its widget or Plasma panel; empty
+    // when it has none (yet, or any more).
+    QString panelOwnershipToken(const QString &panelId) const;
+    // Whether a Plasma panel still holds the panel's own Arch Dock widget;
+    // empty when Plasma did not answer.
+    std::optional<bool> nativeDockAppletPresent(const QString &panelId, int containmentId, int appletId) const;
     int m_visibilityRevision = 0;
     QHash<QString, ArchDock::PanelVisibilityLocks> m_panelInteractionGuards;
     // Free panels as drawn on the screen, with the room each one's folder

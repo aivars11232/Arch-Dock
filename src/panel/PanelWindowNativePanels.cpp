@@ -609,6 +609,30 @@ bool PanelWindow::nativeDockAppletIsOwned(const QString &panelId,
             .arg(plasmaScriptStringLiteral(panelId))) == 1;
 }
 
+std::optional<bool> PanelWindow::nativeDockAppletPresent(const QString &panelId,
+                                                         int containmentId,
+                                                         int appletId) const
+{
+    if (containmentId < 0 || appletId < 0)
+        return false;
+    const std::optional<int> present = evaluatePlasmaScriptResultOptional(
+        QStringLiteral(
+            "var panel = panelById(%1);"
+            "var dock = panel ? panel.widgetById(%2) : null;"
+            "var owned = false;"
+            "if (dock && dock.type === 'org.archdock.dock') {"
+            "dock.currentConfigGroup = ['General'];"
+            "owned = dock.readConfig('panelId', '') === %3;"
+            "}"
+            "print('ARCHDOCK_RESULT:' + (owned ? 1 : 0));")
+            .arg(containmentId)
+            .arg(appletId)
+            .arg(plasmaScriptStringLiteral(panelId)));
+    if (!present.has_value() || (*present != 0 && *present != 1))
+        return std::nullopt;
+    return *present == 1;
+}
+
 bool PanelWindow::adoptNativePanelOwnership(const QString &panelId, int containmentId)
 {
     if (profileBusy()) return false;

@@ -6,12 +6,14 @@
   panel's widget removed, Arch Dock deleted the panel and its settings
   within seconds, with nothing kept (so a free panel went on 31 October).
   A removal now counts only when Plasma has loaded its desktops and the
-  panel is still missing at two looks at least 30 seconds apart; nothing
-  counts in the first 90 seconds after Arch Dock or Plasma starts (a
-  widget that is really gone then is put back), a report from a second
-  copy of a panel's widget speaks only for that copy, and a report not
-  confirmed and carried out within 10 minutes is dropped. The built-in
-  Bottom, Top and Side panels are hidden, never deleted.
+  panel is still missing at two looks at least 30 seconds apart. Right
+  after Plasma starts (at login, or after an update), a removal is not
+  taken for the owner's: a widget that is really gone is put back. A report
+  from a second copy of a panel's widget speaks only for that copy, a
+  report not confirmed and carried out within 10 minutes is dropped, and
+  when only Arch Dock's widget is taken off an edge panel, the widget is
+  put back. The built-in Bottom, Top and Side panels are hidden, never
+  deleted.
 - **Removed panels can be brought back.** Before a panel is deleted by
   Remove Panel, after Plasma removed its widget, or as a leftover of an
   older version, its settings are kept (the newest ten). Panel Studio's
@@ -36,8 +38,10 @@
   icons said nothing. Now a free panel says "Arch Dock is stopped" with a
   Start button (over its icons after 3 seconds), and so does an edge panel
   with nothing on it (its sign, the words on hover, a click starts it).
-  Start ends a Quit and starts Arch Dock. Arch Dock's own bars go while it
-  is stopped, as before.
+  Start ends a Quit and starts Arch Dock. While it is stopped, every
+  panel's menu also offers Start Arch Dock (an edge panel with icons shows
+  no notice over them). Arch Dock's own bars go while it is stopped, as
+  before.
 
 ## 0.1.1-54 — 2026-10-30
 

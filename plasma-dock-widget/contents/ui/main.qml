@@ -985,6 +985,16 @@ PlasmoidItem {
         onTriggered: root.openPanelStudio()
     }
 
+    // While Arch Dock is stopped every panel can start it from its menu: an
+    // edge panel whose icons stay in place shows no notice over them.
+    PlasmaCore.Action {
+        id: startArchDockAction
+        text: qsTr("Start Arch Dock")
+        icon.name: "media-playback-start"
+        visible: !dockService.registered
+        onTriggered: resumeCommand.connectSource("arch-dock --resume")
+    }
+
     // An edge panel Plasma holds for Arch Dock becomes a bar of Arch Dock's
     // own, its Plasma widgets and their settings with it: Arch Dock's looks
     // then reach the whole panel.
@@ -1716,9 +1726,11 @@ PlasmoidItem {
                             ? (root.requestFailed ? "data-error" : emptyHint.unbound ? "dialog-information" : "list-add")
                             : "network-disconnect"
                         // Light on the dark notice over icons, as on any
-                        // dark notice of KDE's.
+                        // dark notice of KDE's; elsewhere the panel's own
+                        // colours, also where no item above sets any.
                         Kirigami.Theme.inherit: root.entries.length === 0
-                        Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
+                        Kirigami.Theme.colorSet: root.entries.length > 0
+                            ? Kirigami.Theme.Complementary : Kirigami.Theme.Window
                         HoverHandler {
                             id: emptyHintHover
                             enabled: emptyHint.compact
@@ -2085,7 +2097,7 @@ PlasmoidItem {
 
     // New panels come from Panel Studio's own page for them, not from a
     // panel that is already there.
-    Plasmoid.contextualActions: [moveIntoBarAction, removePanelAction]
+    Plasmoid.contextualActions: [startArchDockAction, moveIntoBarAction, removePanelAction]
 
     Component.onCompleted: {
         Plasmoid.setInternalAction("configure", configurePanelStudioAction);
