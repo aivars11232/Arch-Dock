@@ -212,3 +212,13 @@ login, and on Remove Panel doing nothing when a panel had two copies.
 - On the test desktop only, Panel Studio showed "Panel settings could not
   be loaded (panel-not-found)" after the last panel was removed: that
   desktop's panel list has no built-in panels, which the owner's has.
+
+### Report 2
+
+Fresh clone of `origin/main` at `9b7e55f`, built with one job (1794 s),
+the step's tests one at a time: 6 of 6 passed in 581 s
+(`removed-panel-store-test`, `intentional-stop-test`, `panel-registry-test`,
+`configuration-backup-test`, `panel-window-capability-test` with the new
+`removalReportsAndRefusals`, `session-startup-runtime-test`). All 993
+committed files are the same in the clone and the workspace. Logs:
+`evidence/BREAKAGE-FIX-S1/recheck/`.

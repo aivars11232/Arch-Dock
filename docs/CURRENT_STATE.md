@@ -90,7 +90,7 @@
   log line. Its "unsupported floating refusal" geometry check fails often
   (8 of 14 runs that reached it on 25-26 November, the code before this
   step included).
-- Step 1 of `docs/repairs/BREAKAGE-FIX-2026-11.md`.
+- Step 1 of `docs/repairs/BREAKAGE-FIX-2026-11.md` (closed: Reports 1 and 2).
 
 ## `main` is the published 0.1.1-54 again; unfinished widget work on a branch — 2026-11-25
 
