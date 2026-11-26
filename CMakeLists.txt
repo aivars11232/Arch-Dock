@@ -459,6 +459,7 @@ qt_add_executable(
   src/PanelPlacement.h
   src/PanelPlacement.cpp
   src/integration/PlasmaPanelAdapter.h
+  src/integration/PlasmaPanelScreenGuard.h
   src/integration/PlasmaPanelAdapter.cpp
   src/PanelVisibility.h
   src/PanelVisibility.cpp
@@ -1475,6 +1476,7 @@ if(BUILD_TESTING)
     src/PanelPlacement.h
     src/PanelPlacement.cpp
     src/integration/PlasmaPanelAdapter.h
+    src/integration/PlasmaPanelScreenGuard.h
     src/integration/PlasmaPanelAdapter.cpp
     src/PanelVisibility.h
     src/PanelVisibility.cpp
@@ -1626,10 +1628,15 @@ if(BUILD_TESTING)
     plasma-panel-adapter-test
     tests/PlasmaPanelAdapterTest.cpp
     src/integration/PlasmaPanelAdapter.h
+    src/integration/PlasmaPanelScreenGuard.h
     src/integration/PlasmaPanelAdapter.cpp)
   target_include_directories(
     plasma-panel-adapter-test
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  # The test reads Arch Dock's other Plasma scripts in the sources.
+  target_compile_definitions(
+    plasma-panel-adapter-test
+    PRIVATE ARCHDOCK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(
     plasma-panel-adapter-test
     PRIVATE Qt6::Core
@@ -2008,9 +2015,10 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(
     rendering-import-smoke
-    # The private session is limited to 210 s (the real-RHI generated
-    # platform rows take about 15 s of it, the 3D preview switch with freed
-    # memory overwritten about 8 s, the pictures in relief about 10 s).
+    # The private session is limited to 240 s; it takes about 190 (the
+    # real-RHI generated platform rows about 15 s of it, the 3D preview
+    # switch with freed memory overwritten about 8 s, the pictures in relief
+    # about 10 s).
     PROPERTIES DEPENDS rendering-module-import-test TIMEOUT 270)
 
   add_test(
@@ -2067,7 +2075,8 @@ if(BUILD_TESTING)
             ARCHDOCK_RENDERING_MECHANISMS=1
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(presentation-mechanism-smoke
-    PROPERTIES DEPENDS window-interaction-smoke RUN_SERIAL TRUE TIMEOUT 240)
+    # Above its private session's own limit (240 s) and the set-up before it.
+    PROPERTIES DEPENDS window-interaction-smoke RUN_SERIAL TRUE TIMEOUT 300)
 
   # Panel decorations on 3D panels, drawn by a private compositor's real
   # graphics backend: their shaders build and each stands as a solid.
@@ -2080,6 +2089,18 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
   set_tests_properties(decoration-3d-smoke
     PROPERTIES DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 270)
+
+  # 3D views made anew when their window changes (never carried into another
+  # window) and let go in two steps, with real graphics.
+  add_test(NAME window-move-3d-smoke
+    COMMAND ${CMAKE_COMMAND} -E env
+            ARCHDOCK_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            ARCHDOCK_QML_INSTALL_DIR=${ARCHDOCK_QML_INSTALL_DIR}
+            ARCHDOCK_QMLTESTRUNNER=$<TARGET_FILE:Qt6::qmltestrunner>
+            ARCHDOCK_RENDERING_WINDOW_MOVES=1
+            bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-rendering-import-smoke.sh)
+  set_tests_properties(window-move-3d-smoke
+    PROPERTIES DEPENDS rendering-import-smoke RUN_SERIAL TRUE TIMEOUT 480)
 
   # The Studio truth matrix drawn with a private compositor's
   # real graphics backend, where shader-drawn effects and true 3D appear.

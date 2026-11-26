@@ -11,6 +11,7 @@
 #include "../PanelVisibility.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../integration/PlasmaPanelScreenGuard.h"
 #include "../model/PanelSettingsSchema.h"
 
 #include <QDBusConnection>
@@ -383,10 +384,13 @@ std::optional<bool> PanelWindow::nativePanelTemporarilyHidden(
         return std::nullopt;
     }
 
+    // Its hiding is one of the panel's stored settings: not read while its
+    // screen is gone (PlasmaPanelScreenGuard.h).
     const int state = evaluatePlasmaScriptResult(
         QStringLiteral(
             "var panel = panelById(%1);"
             "if (!panel) { print('ARCHDOCK_RESULT:-1'); }"
+            "else if %2 { print('ARCHDOCK_RESULT:%3'); }"
             "else {"
             "panel.currentConfigGroup = ['ArchDock'];"
             "var temporaryHidden = String(panel.readConfig('temporaryHidden', '0')) === '1';"
@@ -394,10 +398,16 @@ std::optional<bool> PanelWindow::nativePanelTemporarilyHidden(
             "if (temporaryHidden && hiding !== 'autohide') { print('ARCHDOCK_RESULT:-2'); }"
             "else { print('ARCHDOCK_RESULT:' + String(temporaryHidden ? 1 : 0)); }"
             "}")
-            .arg(containmentId));
+            .arg(containmentId)
+            .arg(ArchDock::plasmaPanelScreenGone())
+            .arg(ArchDock::kPlasmaPanelScreenUnavailable));
     if (state == 0 || state == 1)
     {
         return state == 1;
+    }
+    if (state == ArchDock::kPlasmaPanelScreenUnavailable)
+    {
+        return std::nullopt;
     }
 
     qWarning() << "Could not read a consistent temporary presentation for native panel"

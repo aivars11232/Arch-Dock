@@ -19,6 +19,16 @@ require_command() {
     }
 }
 
+# A failed run's whole log, kept where ARCHDOCK_RENDERING_KEEP_DIR says: the
+# backtrace of a crash is printed above its memory map, which the tail shown
+# on failure cuts off.
+keep_full_log() {
+    if [[ -n "${ARCHDOCK_RENDERING_KEEP_DIR:-}" ]]; then
+        mkdir -p -- "$ARCHDOCK_RENDERING_KEEP_DIR"
+        cp -- "$1" "$ARCHDOCK_RENDERING_KEEP_DIR/" || true
+    fi
+}
+
 stop_process() {
     local process_id="${1:-}"
     local initial_signal="${2:-TERM}"
@@ -545,6 +555,36 @@ run_private_session() {
         return 0
     fi
 
+    if [[ "${ARCHDOCK_RENDERING_WINDOW_MOVES:-}" == '1' ]]; then
+        # 3D views are never carried into another window but made anew
+        # there, and 3D switched off in place lets go in two steps; with
+        # freed memory overwritten, a texture reading a freed layer crashes.
+        printf 'Checking that 3D views are made anew in a new window and let go in two steps under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_WINDOW_MOVES=1 MALLOC_PERTURB_=165 GLIBC_TUNABLES=glibc.malloc.tcache_count=0 \
+        ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" threeDViewsNeverEnterANewWindow threeDPanelLetsGoInTwoSteps \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/window-moves.log" 2>&1 || {
+                    keep_full_log "$ARCHDOCK_RENDERING_LOG_DIR/window-moves.log"
+                    tail -n 160 "$ARCHDOCK_RENDERING_LOG_DIR/window-moves.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/window-moves.log"
+        # Plasma's crash when a screen came back: a 3D scene carried from a
+        # busy window into a new one, tried at every count of the new
+        # window's numbering up to the limit.
+        printf 'Checking a 3D scene moved into a new window at every count under private KWin.\n'
+        ARCHDOCK_TEST_RHI=1 ARCHDOCK_TEST_CARRIED_VIEWS="${ARCHDOCK_RENDERING_CARRIED_COUNTS:-24}" \
+        ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
+            "$ARCHDOCK_RENDERING_CAPABILITY_TEST" newWindowNeverReadsAnotherWindowsNodes \
+                >"$ARCHDOCK_RENDERING_LOG_DIR/carried-views.log" 2>&1 || {
+                    keep_full_log "$ARCHDOCK_RENDERING_LOG_DIR/carried-views.log"
+                    tail -n 160 "$ARCHDOCK_RENDERING_LOG_DIR/carried-views.log" >&2
+                    return 1
+                }
+        sed -n '/^Totals:/p' "$ARCHDOCK_RENDERING_LOG_DIR/carried-views.log"
+        return 0
+    fi
+
     if [[ "${ARCHDOCK_RENDERING_TILES:-}" == '1' ]]; then
         printf 'Running ADREP-TASK-005 tile pixels, solid depth and upright orbit under private KWin.\n'
         ARCHDOCK_TEST_RHI=1 ARCHDOCK_RENDERING_IMPORT_ROOT="$QML_IMPORT_PATH" \
@@ -588,6 +628,7 @@ run_private_session() {
             "$ARCHDOCK_RENDERING_ICON_PROPERTIES_INTERACTION_TEST" \
                 studioTruthMatrixHarnessIsTheApplet studioTruthMatrix \
                 >"$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log" 2>&1; then
+            keep_full_log "$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log"
             tail -n 160 "$ARCHDOCK_RENDERING_LOG_DIR/truth-matrix.log" >&2
             return 1
         fi
@@ -1598,9 +1639,12 @@ run_outer() {
     # The private session's own limit; the Studio truth matrix draws every
     # field of 21 panels and the travel matrix twelve
     # layouts step by step, so they need longer.
-    local session_seconds=210
+    local session_seconds=240
     if [[ "${ARCHDOCK_RENDERING_TRUTH_MATRIX:-}" == '1' ]]; then
         session_seconds=900
+    elif [[ "${ARCHDOCK_RENDERING_WINDOW_MOVES:-}" == '1' ]]; then
+        # A 3D scene made anew at every count of a new window's numbering.
+        session_seconds=420
     elif [[ "${ARCHDOCK_RENDERING_TRAVEL:-}" == '1' ]]; then
         session_seconds=420
     elif [[ "${ARCHDOCK_RENDERING_FOLDER_ANCHORS:-}" == '1' ]]; then

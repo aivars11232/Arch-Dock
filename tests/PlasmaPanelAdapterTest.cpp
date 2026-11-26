@@ -1,10 +1,14 @@
 #include "integration/PlasmaPanelAdapter.h"
+#include "integration/PlasmaPanelScreenGuard.h"
 
+#include <QDirIterator>
+#include <QFile>
 #include <QMap>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTest>
 
+#include <algorithm>
 #include <optional>
 
 namespace
@@ -33,6 +37,10 @@ public:
     QString failRollbackProperty;
     QMap<QString, int> mutationCounts;
     QStringList scripts;
+    // How many screens Plasma has: a panel on a screen beyond them (its own
+    // switched off) is answered, by a script that asks first
+    // (PlasmaPanelScreenGuard.h), as Plasma answers it.
+    int screenCount = 8;
 
     std::optional<int> execute(const QString &script)
     {
@@ -40,6 +48,19 @@ public:
         if (!forcedReplies.isEmpty())
         {
             return forcedReplies.takeFirst();
+        }
+        if (script.contains(ArchDock::plasmaPanelScreenGone()) &&
+            !(screenCount > std::max(values.value(QStringLiteral("screen")), 0)))
+        {
+            return ArchDock::kPlasmaPanelScreenUnavailable;
+        }
+        // A move asks whether the screen it goes to is there.
+        static const QRegularExpression target(
+            QStringLiteral("screenCount > Math\\.max\\(Number\\((-?\\d+)\\), 0\\)"));
+        const QRegularExpressionMatch moveTo = target.match(script);
+        if (moveTo.hasMatch() && !(screenCount > std::max(moveTo.captured(1).toInt(), 0)))
+        {
+            return ArchDock::kPlasmaPanelScreenUnavailable;
         }
 
         if (script.contains(QStringLiteral("var actualHiding")) &&
@@ -156,6 +177,16 @@ private:
 
     static QString propertyForScript(const QString &script)
     {
+        // Each field's script asks first whether its property exists; the
+        // screen check before it names panel.screen in every script.
+        static const QRegularExpression asked(
+            QStringLiteral("typeof panel\\.([A-Za-z]+) === 'undefined'"));
+        const QRegularExpressionMatch match = asked.match(script);
+        if (match.hasMatch())
+        {
+            return match.captured(1) == QLatin1String("location") ? QStringLiteral("edge")
+                                                                 : match.captured(1);
+        }
         if (script.contains(QStringLiteral("var actual = Number(panel.length);")))
         {
             return QStringLiteral("length");
@@ -296,6 +327,12 @@ private slots:
     void stopsVisibilityMutationWhenOwnershipIsDenied();
     void rejectsInvalidVisibilityRequestsWithoutExecuting();
     void escapesVisibilityOwnershipValuesInEveryScript();
+    void movesAPanelOffItsGoneScreenFirst();
+    void leavesAPanelAloneWhileNoScreenIsThere();
+    void neverMovesAPanelToAScreenPlasmaLacks();
+    void leavesVisibilityAloneWhileTheScreenIsGone();
+    void asksForTheScreenBeforeStoredSettings();
+    void everyPlasmaScriptAsksForTheScreen();
 };
 
 void PlasmaPanelAdapterTest::edgeScriptsUseSupportedProperties_data()
@@ -874,6 +911,197 @@ void PlasmaPanelAdapterTest::escapesVisibilityOwnershipValuesInEveryScript()
         QVERIFY(!script.contains(panelId));
         QVERIFY(!script.contains(token));
     }
+}
+
+// While its screen is switched off Plasma keeps a panel without a window and
+// reads its stored settings through that screen, which crashes it. The panel
+// is first moved to the screen it falls back to, with nothing stored read,
+// and placed there as asked.
+void PlasmaPanelAdapterTest::movesAPanelOffItsGoneScreenFirst()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+    placement.screen.fallbackIndex = 0;
+    placement.alignment = NativePanelAlignment::End;
+    placement.offset = 37;
+
+    FakePlasmaHost host;
+    host.values[QStringLiteral("screen")] = 1;
+    host.screenCount = 1;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+
+    QVERIFY(result.success());
+    QCOMPARE(host.values.value(QStringLiteral("screen")), 0);
+    QCOMPARE(host.values.value(QStringLiteral("offset")), 37);
+    // Its edge and screen read, then its alignment, which stopped; then the
+    // move, before anything else changed.
+    QVERIFY(host.scripts.size() > 4);
+    QVERIFY(host.scripts.at(3).contains(QStringLiteral("panel.screen = 0;")));
+    for (qsizetype index = 0; index < 3; ++index)
+        QVERIFY(!host.scripts.at(index).contains(QStringLiteral(" = '")));
+}
+
+// With no screen to go to, nothing is read or changed - not even its screen
+// - and the placement waits for the screen to come back.
+void PlasmaPanelAdapterTest::leavesAPanelAloneWhileNoScreenIsThere()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+    placement.screen.fallbackIndex = 1;
+    placement.alignment = NativePanelAlignment::End;
+    placement.offset = 37;
+
+    FakePlasmaHost host;
+    host.values[QStringLiteral("screen")] = 2;
+    host.screenCount = 1;
+    QMap<QString, int> before = host.values;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+
+    QVERIFY(!result.success());
+    QCOMPARE(result.errorCode, QStringLiteral("screen-unavailable"));
+    QCOMPARE(result.fields.size(), 9);
+    for (const PlasmaPanelFieldResult &field : result.fields)
+    {
+        QCOMPARE(field.status, PlasmaPanelApplyStatus::Failed);
+        QCOMPARE(field.failure, PlasmaPanelApplyFailure::ScreenUnavailable);
+    }
+    // The move was asked for, to a screen that is not there either, and
+    // refused.
+    QVERIFY(host.mutationCounts.isEmpty());
+    QCOMPARE(host.values, before);
+
+    // Back on its screen, the same placement goes through.
+    host.screenCount = 2;
+    QVERIFY(adapter.applyPlacement(42, QStringLiteral("panel-1"), QStringLiteral("owner-1"),
+                                   placement).success());
+}
+
+// A placement asking for a screen Plasma does not have (yet) leaves the
+// panel where it stands: moved there, it would lose its window.
+void PlasmaPanelAdapterTest::neverMovesAPanelToAScreenPlasmaLacks()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+    placement.screen.fallbackIndex = 3;
+    placement.alignment = NativePanelAlignment::End;
+    FakePlasmaHost host;
+    host.screenCount = 2;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelPlacementApplyResult result = adapter.applyPlacement(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"), placement);
+    QVERIFY(!result.success());
+    QCOMPARE(result.fields.at(1).status, PlasmaPanelApplyStatus::Failed);
+    // Asked for, refused, and the panel still on its own screen (put back
+    // there with the rest when the placement failed).
+    QVERIFY(std::any_of(host.scripts.cbegin(), host.scripts.cend(), [](const QString &script) {
+        return script.contains(QStringLiteral("panel.screen = 3;"));
+    }));
+    QCOMPARE(host.values.value(QStringLiteral("screen")), 0);
+}
+
+void PlasmaPanelAdapterTest::leavesVisibilityAloneWhileTheScreenIsGone()
+{
+    using namespace ArchDock;
+    FakePlasmaHost host;
+    host.values[QStringLiteral("screen")] = 1;
+    host.screenCount = 1;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    const PlasmaPanelVisibilityApplyResult result = adapter.applyVisibility(
+        42, QStringLiteral("panel-1"), QStringLiteral("owner-1"),
+        PlasmaPanelHidingMode::DodgeWindows, true);
+
+    QVERIFY(!result.success());
+    QVERIFY(host.mutationCounts.isEmpty());
+    QCOMPARE(host.values.value(QStringLiteral("hiding")), 0);
+    QCOMPARE(host.scripts.size(), 1);
+}
+
+// Every script that reads or sets a stored setting asks for the panel's
+// screen before it, the way Plasma looks it up; the edge and the screen,
+// read without them, do not.
+void PlasmaPanelAdapterTest::asksForTheScreenBeforeStoredSettings()
+{
+    using namespace ArchDock;
+    NativePanelPlacement placement;
+    placement.edge = NativePanelEdge::Top;
+    placement.screen.fallbackIndex = 2;
+    placement.alignment = NativePanelAlignment::End;
+    placement.offset = 37;
+    FakePlasmaHost host;
+    const PlasmaPanelAdapter adapter = fixtureAdapter(&host);
+    QVERIFY(adapter.applyPlacement(42, QStringLiteral("panel-1"), QStringLiteral("owner-1"),
+                                   placement).success());
+    QVERIFY(adapter.applyVisibility(42, QStringLiteral("panel-1"), QStringLiteral("owner-1"),
+                                    PlasmaPanelHidingMode::AutoHide, false).success());
+    QCOMPARE(plasmaPanelScreenGone(),
+             QStringLiteral("(!(screenCount > Math.max(Number(panel.screen), 0)))"));
+    static const QRegularExpression stored(QStringLiteral(
+        "panel\\.(alignment|offset|height|length|minimumLength|maximumLength|lengthMode|hiding"
+        "|floating|floatingApplets|opacity)\\b"));
+    int guarded = 0;
+    for (const QString &script : std::as_const(host.scripts))
+    {
+        const QRegularExpressionMatch first = stored.match(script);
+        const qsizetype check = script.indexOf(plasmaPanelScreenGone());
+        if (!first.hasMatch())
+        {
+            QVERIFY2(check < 0, qPrintable(script));
+            continue;
+        }
+        QVERIFY2(check >= 0 && check < first.capturedStart(), qPrintable(script));
+        ++guarded;
+    }
+    QVERIFY(guarded >= 14);
+}
+
+// The same rule for every other Plasma script in Arch Dock's sources: a line
+// of script that reads or sets a panel's stored setting has the screen check
+// built into the same script nearby (the adapter's own scripts are checked
+// above, as they run).
+void PlasmaPanelAdapterTest::everyPlasmaScriptAsksForTheScreen()
+{
+    static const QRegularExpression stored(QStringLiteral(
+        "\\b(panel|p)(\\.(alignment|offset|height|minimumLength|maximumLength|lengthMode|hiding"
+        "|floating|floatingApplets|opacity)\\b|\\[keys\\[i\\]\\])"));
+    static const QRegularExpression scriptText(QStringLiteral("\"|'"));
+    QDirIterator files(QStringLiteral(ARCHDOCK_SOURCE_DIR "/src"), {QStringLiteral("*.cpp")},
+                       QDir::Files, QDirIterator::Subdirectories);
+    int sites = 0;
+    while (files.hasNext())
+    {
+        const QString path = files.next();
+        if (path.endsWith(QLatin1String("/integration/PlasmaPanelAdapter.cpp")))
+            continue;
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+        bool rawScript = false;
+        for (qsizetype index = 0; index < lines.size(); ++index)
+        {
+            const QString &line = lines.at(index);
+            if (line.contains(QLatin1String("R\"JS(")))
+                rawScript = true;
+            const bool inScript = rawScript || line.contains(scriptText);
+            if (line.contains(QLatin1String(")JS\"")))
+                rawScript = false;
+            if (!inScript || !line.contains(stored) || line.trimmed().startsWith(QLatin1String("//")))
+                continue;
+            bool guarded = false;
+            for (qsizetype near = qMax<qsizetype>(0, index - 40);
+                 near < qMin<qsizetype>(lines.size(), index + 40) && !guarded; ++near)
+                guarded = lines.at(near).contains(QLatin1String("plasmaPanelScreenGone"));
+            QVERIFY2(guarded, qPrintable(QStringLiteral("%1:%2: %3").arg(path).arg(index + 1).arg(line.trimmed())));
+            ++sites;
+        }
+    }
+    QVERIFY(sites >= 5);
 }
 
 QTEST_APPLESS_MAIN(PlasmaPanelAdapterTest)

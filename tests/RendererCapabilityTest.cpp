@@ -1893,6 +1893,28 @@ private slots:
     // the light reaches into their near part. The panel leans either way.
     void edgeHologramsFloatAwayFromTheEdge_data();
     void edgeHologramsFloatAwayFromTheEdge();
+    // A flat 3D icon's view loads, and every node in it stands directly in
+    // its scene: the hologram's glow beside the solid, not inside it.
+    void flatIconSolidViewKeepsEveryNodeInItsScene();
+    // Every Qt Quick 3D texture drawn from a live item asks that the item be
+    // in the scene's own window: without it, a texture refreshes a layer in
+    // another window, or a freed one, after every frame.
+    void liveTexturesAskForTheirWindow();
+    // A 3D panel and a flat panel's 3D icons moved into another window (as
+    // Plasma does when a screen comes back, and an edge panel's dock into
+    // its window over the panel): no 3D view goes along; each is made anew
+    // in the new window.
+    void threeDViewsNeverEnterANewWindow();
+    // 3D switched off in place lets its live pictures go first, shows the
+    // flat look, and drops the scene a few frames later; switched on again
+    // at once it keeps its scene.
+    void threeDPanelLetsGoInTwoSteps();
+    // Plasma's crash when a screen came back: Qt Quick 3D numbers a scene's
+    // nodes for each window and keeps a node's number when it already
+    // carries the window's current count, so a scene carried from a busy
+    // window into a new one, at the right count, read past the end of the
+    // new window's list. Tried at every count up to a limit.
+    void newWindowNeverReadsAnotherWindowsNodes();
 
     void generatedPlatformsFollowTheLayoutAndLook_data()
     {
@@ -4737,6 +4759,397 @@ void RendererCapabilityTest::edgeHologramsFloatAwayFromTheEdge()
     }
     scene->setProperty("panelDefinition", definition(-80));
     QTRY_COMPARE(renderer->property("edgeTilt").toDouble(), -60.0);
+}
+
+void RendererCapabilityTest::flatIconSolidViewKeepsEveryNodeInItsScene()
+{
+    if (qEnvironmentVariableIsSet("ARCHDOCK_TEST_MISSING_3D") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // Without Qt Quick 3D there is no such view.
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        importRoot() + QStringLiteral("/ArchDock/Rendering/optional3d/IconSolidView.qml")));
+    // A file that does not load leaves every flat 3D icon out with no other
+    // sign (an extra brace did so for five days).
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> view(component.create());
+    QVERIFY2(view != nullptr, qPrintable(component.errorString()));
+    QObject *scene = objectValue(view->property("scene"));
+    QVERIFY(scene);
+    QList<QObject *> nodes;
+    for (QObject *object : view->findChildren<QObject *>())
+        if (object->inherits("QQuick3DNode") && object != scene) nodes << object;
+    QVERIFY2(nodes.size() >= 5, qPrintable(QString::number(nodes.size())));
+    QStringList names;
+    for (QObject *node : std::as_const(nodes))
+    {
+        names << node->objectName();
+        QVERIFY2(objectValue(node->property("parent")) == scene,
+                 qPrintable(QStringLiteral("%1 stands inside %2").arg(node->objectName(),
+                     objectValue(node->property("parent")) ? objectValue(node->property("parent"))->objectName()
+                                                          : QStringLiteral("nothing"))));
+    }
+    QVERIFY(names.contains(QStringLiteral("flat-icon-solid")));
+    QVERIFY(names.contains(QStringLiteral("flat-icon-solid-glow")));
+}
+
+void RendererCapabilityTest::liveTexturesAskForTheirWindow()
+{
+    if (!ARCHDOCK_SCENE3D_BUILT)
+        return; // Without Qt Quick 3D the 3D files are not there.
+    const QDir folder(importRoot() + QStringLiteral("/ArchDock/Rendering/optional3d"));
+    int bindings = 0;
+    for (const QString &name : folder.entryList({QStringLiteral("*.qml")}, QDir::Files))
+    {
+        QFile file(folder.filePath(name));
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+        QString opener;
+        for (qsizetype index = 0; index < lines.size(); ++index)
+        {
+            const QString line = lines.at(index).trimmed();
+            if (line.endsWith(QLatin1Char('{')) && !line.startsWith(QLatin1String("//")))
+                opener = line;
+            if (!line.startsWith(QLatin1String("sourceItem:")) || !opener.startsWith(QLatin1String("Texture")))
+                continue;
+            // The binding, over its lines.
+            QString binding = line;
+            for (qsizetype next = index + 1; next < lines.size() && next < index + 6; ++next)
+            {
+                const QString more = lines.at(next).trimmed();
+                if (more.contains(QLatin1Char(':')) && !more.startsWith(QLatin1Char('?'))
+                    && !more.startsWith(QLatin1Char(':')) && !more.startsWith(QLatin1String("&&"))
+                    && !more.startsWith(QLatin1String("||")))
+                    break;
+                binding += QLatin1Char(' ') + more;
+            }
+            ++bindings;
+            QVERIFY2(binding.contains(QLatin1String("Window.window")),
+                     qPrintable(QStringLiteral("%1:%2: %3").arg(name).arg(index + 1).arg(binding)));
+        }
+    }
+    QVERIFY(bindings >= 8);
+}
+
+namespace
+{
+// Two panels for the window tests: a 3D ring and a flat row with 3D icons.
+const char *windowMovePanels = R"(
+    import QtQuick
+    import ArchDock.Rendering 1.0
+    Item {
+        required property var glyphs
+        required property var theme
+        readonly property Item threeD: threeD
+        readonly property Item flat: flat
+        width: 300
+        height: 380
+        readonly property var rows: [0, 1, 2].map(function(index) {
+            return {id: "entry-" + index, displayName: "Entry " + index, iconName: glyphs[index]}
+        })
+        PanelScene {
+            id: threeD
+            panelDefinition: ({rendererTier: "true3d", layout: "ring", layoutRadius: 100,
+                               scene3DQuality: "low", iconSize: 40, layoutPadding: 10})
+            themeDefinition: theme
+            entryDelegateContext: ({hostKind: "free"})
+            orderedEntries: rows
+        }
+        PanelScene {
+            id: flat
+            y: 270
+            panelDefinition: ({rendererTier: "procedural2d", layout: "horizontal", iconSize: 44,
+                               layoutPadding: 10, scene3DIconSolid: true, scene3DIconDepth: 0.6})
+            entryDelegateContext: ({hostKind: "free"})
+            orderedEntries: rows
+        }
+    }
+)";
+
+QStringList windowMoveGlyphs()
+{
+    QStringList glyphs;
+    for (const char *name : {"data/truth-glyph-terminal.svg", "data/truth-glyph-files.svg", "data/truth-glyph-logo.svg"})
+        glyphs << QUrl::fromLocalFile(QFINDTESTDATA(name)).toString();
+    return glyphs;
+}
+
+QVariantMap windowMoveTheme()
+{
+    const QString themeRoot = qEnvironmentVariable("ARCHDOCK_RENDERING_STAGED_THEME_ROOT",
+        QStringLiteral(ARCHDOCK_SOURCE_THEME_PACKAGE_ROOT));
+    const auto package = ArchDock::ThemePackage::load(themeRoot
+        + QStringLiteral("/mesh-platform-cyan/archdock-theme.json"));
+    return package.isValid() ? package.package->runtimeProjection() : QVariantMap{};
+}
+
+// Every 3D view (View3D) drawn in an item's tree, in a window: a view let
+// go leaves the tree and every window at once, though deleted a moment
+// later. The tree of items, not of objects: a repeater's items are not its
+// objects' children.
+QList<QQuickItem *> placedThreeDViews(QQuickItem *root)
+{
+    QList<QQuickItem *> views;
+    const std::function<void(QQuickItem *)> walk = [&](QQuickItem *item) {
+        if (item->inherits("QQuick3DViewport") && item->window()) views << item;
+        for (QQuickItem *child : item->childItems()) walk(child);
+    };
+    walk(root);
+    return views;
+}
+
+// A window drawn now, twice, with the scene synchronized each time.
+void drawNow(QQuickWindow &window)
+{
+    for (int round = 0; round < 2; ++round)
+        (void)window.grabWindow();
+}
+}
+
+void RendererCapabilityTest::threeDViewsNeverEnterANewWindow()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // The private RHI invocation is the real scene gate.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_WINDOW_MOVES"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_WINDOW_MOVES).");
+    QTest::failOnWarning(QRegularExpression(QStringLiteral(
+        "Cannot use same item on different windows|doomed|created in another window|TypeError")));
+    const QVariantMap theme = windowMoveTheme();
+    QVERIFY(!theme.isEmpty());
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    component.setData(windowMovePanels, QUrl::fromLocalFile(importRoot() + QStringLiteral("/WindowMoveConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("glyphs"), windowMoveGlyphs()}, {QStringLiteral("theme"), theme}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *host = qobject_cast<QQuickItem *>(object.get());
+    QObject *threeD = objectValue(host->property("threeD"));
+    QObject *flat = objectValue(host->property("flat"));
+    QVERIFY(host && threeD && flat);
+    QQuickWindow first;
+    QQuickWindow second;
+    for (QQuickWindow *window : {&first, &second})
+    {
+        window->resize(320, 400);
+        window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+    }
+    host->setParentItem(first.contentItem());
+    // The 3D ring's view and one view for each flat 3D icon.
+    QTRY_COMPARE_WITH_TIMEOUT(threeD->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(placedThreeDViews(host).size(), 4, 5000);
+    drawNow(first);
+    QList<QPointer<QQuickItem>> before;
+    for (QQuickItem *view : placedThreeDViews(host))
+    {
+        QCOMPARE(view->window(), &first);
+        before << view;
+    }
+
+    for (int round = 0; round < 3; ++round)
+    {
+        QQuickWindow &from = round % 2 == 0 ? first : second;
+        QQuickWindow &to = round % 2 == 0 ? second : first;
+        host->setParentItem(to.contentItem());
+        // At once, before the new window draws: no view went along, and the
+        // ring shows its flat look meanwhile.
+        for (const QPointer<QQuickItem> &view : std::as_const(before))
+            QVERIFY(!view || view->window() != &to);
+        QVERIFY(placedThreeDViews(host).isEmpty());
+        QVERIFY(threeD->property("effectiveRendererTier").toString() != QStringLiteral("true3d"));
+        drawNow(to);
+        drawNow(from);
+        // Made anew in the new window.
+        QTRY_COMPARE_WITH_TIMEOUT(threeD->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(placedThreeDViews(host).size(), 4, 5000);
+        for (const QPointer<QQuickItem> &view : std::as_const(before))
+            QVERIFY(!view || !view->window());
+        before.clear();
+        for (QQuickItem *view : placedThreeDViews(host))
+        {
+            QCOMPARE(view->window(), &to);
+            before << view;
+        }
+        drawNow(to);
+    }
+
+    // Hidden and shown again, a window keeps its views.
+    QQuickWindow &last = *before.constFirst()->window();
+    last.hide();
+    QTest::qWait(50);
+    last.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&last));
+    drawNow(last);
+    for (const QPointer<QQuickItem> &view : std::as_const(before))
+        QVERIFY(!view.isNull() && view->window() == &last);
+}
+
+void RendererCapabilityTest::threeDPanelLetsGoInTwoSteps()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // The private RHI invocation is the real scene gate.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_WINDOW_MOVES"))
+        QSKIP("Runs in its own private session (ARCHDOCK_RENDERING_WINDOW_MOVES).");
+    QTest::failOnWarning(QRegularExpression(QStringLiteral("doomed|TypeError|ReferenceError")));
+    const QVariantMap theme = windowMoveTheme();
+    QVERIFY(!theme.isEmpty());
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent component(&engine);
+    // The lightning look draws the panel through a live layer of its own.
+    component.setData(R"(
+        import QtQuick
+        import ArchDock.Rendering 1.0
+        PanelScene {
+            property string testTier: "true3d"
+            property string testQuality: "low"
+            panelDefinition: ({rendererTier: testTier, layout: "ring", layoutRadius: 100, scene3DQuality: testQuality,
+                               iconSize: 40, layoutPadding: 10, scene3DTransitions: false,
+                               scene3DMaterial: "lightning"})
+            entryDelegateContext: ({hostKind: "free"})
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/LetGoConsumer.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const QStringList glyphs = windowMoveGlyphs();
+    QVariantList rows;
+    for (int index = 0; index < 3; ++index)
+        rows << QVariantMap{{"id", QStringLiteral("entry-%1").arg(index)}, {"displayName", QStringLiteral("Entry")},
+                            {"iconName", glyphs.at(index)}};
+    std::unique_ptr<QObject> object(component.createWithInitialProperties({
+        {QStringLiteral("themeDefinition"), theme}, {QStringLiteral("orderedEntries"), rows}}));
+    QVERIFY2(object != nullptr, qPrintable(component.errorString()));
+    auto *scene = qobject_cast<QQuickItem *>(object.get());
+    QQuickWindow window;
+    scene->setParentItem(window.contentItem());
+    window.resize(qCeil(scene->width()), qCeil(scene->height()));
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    QPointer<QQuickItem> renderer = qobject_cast<QQuickItem *>(objectValue(scene->property("activeSurfaceRenderer")));
+    QVERIFY(renderer);
+    drawNow(window);
+
+    scene->setProperty("testTier", QStringLiteral("procedural2d"));
+    // At once: the scene is still there but has let go of every live
+    // picture, its view is hidden, and the flat look is in use.
+    QVERIFY(renderer);
+    QVERIFY(renderer->property("releasing").toBool());
+    QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("procedural2d"));
+    int textures = 0;
+    for (QObject *texture : renderer->findChildren<QObject *>())
+    {
+        if (!texture->inherits("QQuick3DTexture")) continue;
+        ++textures;
+        QVERIFY2(!objectValue(texture->property("sourceItem")), qPrintable(texture->objectName()));
+    }
+    QVERIFY(textures >= 5);
+    for (QQuickItem *view : placedThreeDViews(renderer))
+        QVERIFY(!view->isVisible());
+    // A few frames later the scene itself goes.
+    QTRY_VERIFY_WITH_TIMEOUT(renderer.isNull() || !renderer->parentItem(), 1000);
+
+    // On again: a new scene, still following the panel's settings.
+    scene->setProperty("testTier", QStringLiteral("true3d"));
+    QTRY_COMPARE_WITH_TIMEOUT(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+    renderer = qobject_cast<QQuickItem *>(objectValue(scene->property("activeSurfaceRenderer")));
+    QVERIFY(renderer);
+    QCOMPARE(renderer->property("quality").toString(), QStringLiteral("low"));
+    scene->setProperty("testQuality", QStringLiteral("medium"));
+    QTRY_COMPARE(renderer->property("quality").toString(), QStringLiteral("medium"));
+
+    // Off and on again in one go: the same scene stays, whole.
+    scene->setProperty("testTier", QStringLiteral("procedural2d"));
+    scene->setProperty("testTier", QStringLiteral("true3d"));
+    QVERIFY(!renderer->property("releasing").toBool());
+    drawNow(window);
+    QTest::qWait(300);
+    QCOMPARE(objectValue(scene->property("activeSurfaceRenderer")), renderer.data());
+    QCOMPARE(scene->property("effectiveRendererTier").toString(), QStringLiteral("true3d"));
+}
+
+void RendererCapabilityTest::newWindowNeverReadsAnotherWindowsNodes()
+{
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_RHI") || !ARCHDOCK_SCENE3D_BUILT)
+        return; // The private RHI invocation is the real scene gate.
+    if (!qEnvironmentVariableIsSet("ARCHDOCK_TEST_CARRIED_VIEWS"))
+        QSKIP("Runs in its own invocation (ARCHDOCK_TEST_CARRIED_VIEWS).");
+    const int counts = qEnvironmentVariableIntValue("ARCHDOCK_TEST_CARRIED_VIEWS");
+    const QVariantMap theme = windowMoveTheme();
+    QVERIFY(!theme.isEmpty());
+    QQmlEngine engine;
+    engine.addImportPath(importRoot());
+    QQmlComponent panels(&engine);
+    panels.setData(windowMovePanels, QUrl::fromLocalFile(importRoot() + QStringLiteral("/CarriedConsumer.qml")));
+    QVERIFY2(panels.isReady(), qPrintable(panels.errorString()));
+    // A busy window's own 3D view, numbered first, and a new window's small
+    // one whose count is stepped on by making and dropping one node.
+    QQmlComponent views(&engine);
+    views.setData(R"(
+        import QtQuick
+        import QtQuick3D
+        View3D {
+            property int nodes: 1
+            property int extra: 0
+            width: 40
+            height: 40
+            PerspectiveCamera { z: 300 }
+            Repeater3D {
+                model: nodes
+                Model { source: "#Cube"; scale: Qt.vector3d(0.05, 0.05, 0.05); x: index % 40; y: index / 40 }
+            }
+            Repeater3D {
+                model: extra
+                Model { source: "#Sphere"; scale: Qt.vector3d(0.05, 0.05, 0.05) }
+            }
+        }
+    )", QUrl::fromLocalFile(importRoot() + QStringLiteral("/CarriedViews.qml")));
+    QVERIFY2(views.isReady(), qPrintable(views.errorString()));
+    for (int count = 0; count <= counts; ++count)
+    {
+        QQuickWindow busy;
+        busy.resize(320, 400);
+        busy.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&busy));
+        std::unique_ptr<QObject> crowd(views.createWithInitialProperties({{QStringLiteral("nodes"), 300}}));
+        qobject_cast<QQuickItem *>(crowd.get())->setParentItem(busy.contentItem());
+        drawNow(busy);
+        std::unique_ptr<QObject> object(panels.createWithInitialProperties({
+            {QStringLiteral("glyphs"), windowMoveGlyphs()}, {QStringLiteral("theme"), theme}}));
+        auto *host = qobject_cast<QQuickItem *>(object.get());
+        host->setParentItem(busy.contentItem());
+        QObject *threeD = objectValue(host->property("threeD"));
+        QTRY_COMPARE_WITH_TIMEOUT(threeD->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(placedThreeDViews(host).size(), 4, 5000);
+        drawNow(busy);
+        QTest::qWait(200);
+        drawNow(busy);
+
+        QQuickWindow fresh;
+        fresh.resize(320, 400);
+        fresh.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&fresh));
+        std::unique_ptr<QObject> small(views.create());
+        auto *smallView = qobject_cast<QQuickItem *>(small.get());
+        smallView->setParentItem(fresh.contentItem());
+        (void)fresh.grabWindow();
+        for (int step = 0; step < count; ++step)
+        {
+            small->setProperty("extra", step % 2 == 0 ? 1 : 0);
+            (void)fresh.grabWindow();
+        }
+        qInfo("carried into a new window at count %d", count);
+        host->setParentItem(fresh.contentItem());
+        drawNow(fresh);
+        QTRY_COMPARE_WITH_TIMEOUT(threeD->property("effectiveRendererTier").toString(), QStringLiteral("true3d"), 5000);
+        drawNow(fresh);
+        host->setParentItem(nullptr);
+        object.reset();
+        small.reset();
+        crowd.reset();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
 }
 
 QTEST_MAIN(RendererCapabilityTest)

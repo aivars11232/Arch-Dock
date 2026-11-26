@@ -1165,7 +1165,7 @@ owned_dock_type() {
 native_panel_presentation() {
     local containment_id="$1"
     plasma_script \
-        "var panel = panelById($containment_id); if (!panel) { print('missing|-1'); } else { panel.currentConfigGroup = ['ArchDock']; print(panel.hiding + '|' + String(panel.readConfig('temporaryHidden', '0'))); }" |
+        "var panel = panelById($containment_id); if (!panel) { print('missing|-1'); } else if (!(screenCount > Math.max(Number(panel.screen), 0))) { print('screen-unavailable'); } else { panel.currentConfigGroup = ['ArchDock']; print(panel.hiding + '|' + String(panel.readConfig('temporaryHidden', '0'))); }" |
         gvariant_string
 }
 
@@ -1395,14 +1395,14 @@ command_visibility_window() {
 native_panel_placement_snapshot() {
     local containment_id="$1"
     plasma_script \
-        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { print([String(panel.location).toLowerCase(), String(panel.screen), String(panel.alignment).toLowerCase(), String(panel.offset)].join('|')); }" |
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else if (!(screenCount > Math.max(Number(panel.screen), 0))) { print('screen-unavailable'); } else { print([String(panel.location).toLowerCase(), String(panel.screen), String(panel.alignment).toLowerCase(), String(panel.offset)].join('|')); }" |
         gvariant_string
 }
 
 native_panel_geometry_snapshot() {
     local containment_id="$1"
     plasma_script \
-        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { print([String(panel.height), String(panel.lengthMode).toLowerCase(), String(panel.minimumLength), String(panel.maximumLength), String(panel.length)].join('|')); }" |
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else if (!(screenCount > Math.max(Number(panel.screen), 0))) { print('screen-unavailable'); } else { print([String(panel.height), String(panel.lengthMode).toLowerCase(), String(panel.minimumLength), String(panel.maximumLength), String(panel.length)].join('|')); }" |
         gvariant_string
 }
 
@@ -1446,6 +1446,28 @@ require_native_panel_geometry() {
             "$expected_maximum" "$expected_length" "${actual_snapshot:-unavailable}" >&2
         exit 1
     }
+}
+
+# The backend's own placement for a panel has finished: its record says
+# applied, with the thickness asked for. A panel can show its new geometry
+# while the backend still reads it back, and stopping the backend then (with
+# Plasma frozen for the next fixture) left its rollback queued for Plasma,
+# which put the old geometry back once it ran again.
+wait_for_applied_native_placement() {
+    local panel_id="$1"
+    local expected_thickness="$2"
+    local phase="$3"
+    local attempt
+    local reply=''
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        reply="$(panel_call nativePanelPlacementStatus "$panel_id" 2>/dev/null || true)"
+        [[ "$(gvariant_map_string status <<<"$reply")" == 'applied' &&
+            "$reply" == *"'height': <'$expected_thickness'>"* ]] && return
+        sleep 0.1
+    done
+    printf 'Timed out waiting for the applied native placement during %s: %s\n' \
+        "$phase" "${reply:-unavailable}" >&2
+    exit 1
 }
 
 wait_for_native_panel_geometry() {
@@ -1571,7 +1593,7 @@ unrelated_panel_archdock_marker() {
 unrelated_panel_snapshot() {
     local containment_id="$1"
     plasma_script \
-        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else { var widgets = panel.widgets(); var inventory = []; for (var index = 0; index < widgets.length; ++index) { inventory.push(String(widgets[index].id) + ':' + String(widgets[index].type)); } inventory.sort(); panel.currentConfigGroup = ['ArchDock']; var ownerToken = String(panel.readConfig('ownerToken', '')); var panelId = String(panel.readConfig('panelId', '')); var temporaryHidden = String(panel.readConfig('temporaryHidden', '')); print([String(panel.id), String(panel.location), String(panel.hiding), String(panel.screen), inventory.join(','), ownerToken, panelId, temporaryHidden].join('|')); }" |
+        "var panel = panelById($containment_id); if (!panel) { print('missing'); } else if (!(screenCount > Math.max(Number(panel.screen), 0))) { print('screen-unavailable'); } else { var widgets = panel.widgets(); var inventory = []; for (var index = 0; index < widgets.length; ++index) { inventory.push(String(widgets[index].id) + ':' + String(widgets[index].type)); } inventory.sort(); panel.currentConfigGroup = ['ArchDock']; var ownerToken = String(panel.readConfig('ownerToken', '')); var panelId = String(panel.readConfig('panelId', '')); var temporaryHidden = String(panel.readConfig('temporaryHidden', '')); print([String(panel.id), String(panel.location), String(panel.hiding), String(panel.screen), inventory.join(','), ownerToken, panelId, temporaryHidden].join('|')); }" |
         gvariant_string
 }
 
@@ -2623,6 +2645,7 @@ run_session() {
         "$first_containment_id" "$panel_id" left right 'vertical-start recovery'
     wait_for_native_panel_geometry \
         "$first_containment_id" 92 custom 640 640 '*' 'vertical fixed geometry recovery'
+    wait_for_applied_native_placement "$panel_id" 92 'vertical fixed geometry recovery'
     [[ "$(owned_panel_record "$panel_id")" == "$first_record" &&
         "$(owned_dock_id "$first_containment_id" "$panel_id")" == "$first_dock_id" ]] || {
         printf 'Vertical-start recovery changed the owned native panel identity.\n' >&2

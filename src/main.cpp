@@ -19,6 +19,7 @@
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QQmlApplicationEngine>
+#include <QQuickWindow>
 #include <QUrl>
 #include <QDebug>
 #include <QFileInfo>
@@ -162,7 +163,25 @@ int main(int argc, char *argv[])
         // Choose custom icon) the KDE file window, with its places, devices
         // and network, only to one; anything else gets Qt's own plain dialog,
         // which shows no disks.
+        // Panel Studio and Icon Properties are drawn on the program's own
+        // thread (Qt's basic render loop) unless the user chose a loop: their
+        // live previews are made and dropped all the time as pages change,
+        // and with a separate drawing thread one was freed while it was being
+        // drawn, and Arch Dock crashed. Qt picks its loop once, for the first
+        // window made, from QSG_RENDER_LOOP: set before the application
+        // starts, fixed by a window made (not shown) at once, and taken away
+        // again so the programs Arch Dock starts keep their own choice.
+        const bool chooseRenderLoop = !qEnvironmentVariableIsSet("QSG_RENDER_LOOP");
+        if (chooseRenderLoop)
+            qputenv("QSG_RENDER_LOOP", "basic");
         auto gui = std::make_unique<QApplication>(argc, argv);
+        if (chooseRenderLoop)
+        {
+            {
+                QQuickWindow chooseLoop;
+            }
+            qunsetenv("QSG_RENDER_LOOP");
+        }
         gui->setQuitOnLastWindowClosed(false);
         // Panel Studio's windows carry the Arch Dock icon from the icon theme.
         // The application id stays "arch-dock": the window watcher and the

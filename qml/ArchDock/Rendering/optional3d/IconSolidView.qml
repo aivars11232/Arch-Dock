@@ -75,9 +75,8 @@ View3D {
     // Seen a little from above, as the near side of a 3D panel is, so the
     // solid's top and sides show (seen straight on, its depth hid behind its
     // own front), and turned about its upright axis: one rotation on the
-    // solid itself. A parent node holding the tilt made Qt Quick 3D look up
-    // the parent's place in its list while views were being made, past the
-    // list's end, and Plasma stopped.
+    // solid itself. Every node of this view stands directly in its scene,
+    // none inside another (RendererCapabilityTest checks it).
     readonly property real tilt: 24 * Math.PI / 180
     readonly property real turnAngle: (icon ? Number(icon.solidTurn) + Number(icon.glyphTurnAngle) : 0) * Math.PI / 180
     Model {
@@ -153,24 +152,27 @@ View3D {
         }
         materials: root.hologram ? [root.twoSided ? objectHologramMaterial : hologramMaterial]
             : root.twoSided ? [surfaceMaterial] : [litMaterial]
-        // The hologram's glow (Icons > Hologram > Glow), in its colour or
-        // in the picture's own as one colour, its mean: its solid a little
-        // larger round it.
-        Model {
-            id: halo
-            objectName: "flat-icon-solid-glow"
-            readonly property var glow: root.hologramColours.glow || ({})
-            readonly property real reach: root.icon ? Number(root.icon.hologram.glowReach) : 0.75
-            readonly property real spread: 1.12 + 0.25 * reach
-            visible: root.hologram && root.icon !== null && root.icon.hologram.glow > 0
-            scale: Qt.vector3d(spread, spread, spread)
-            geometry: solid.geometry
-            materials: HologramHalo {
-                glowColour: halo.glow.own && root.mesh && root.mesh.colour
-                    ? Qt.rgba(root.mesh.colour[0], root.mesh.colour[1], root.mesh.colour[2], 1)
-                    : root.hologramColour(halo.glow)
-                strength: 0.9 * (root.icon ? root.icon.hologram.glow : 0)
-            }
+    }
+    // The hologram's glow (Icons > Hologram > Glow), in its colour or in the
+    // picture's own as one colour, its mean: its solid a little larger round
+    // it. Beside the solid, in its place and turned as it is, rather than
+    // inside it: the same picture, with every node standing in the scene.
+    Model {
+        id: halo
+        objectName: "flat-icon-solid-glow"
+        readonly property var glow: root.hologramColours.glow || ({})
+        readonly property real reach: root.icon ? Number(root.icon.hologram.glowReach) : 0.75
+        readonly property real spread: 1.12 + 0.25 * reach
+        visible: solid.visible && root.hologram && root.icon !== null && root.icon.hologram.glow > 0
+        position: solid.position
+        rotation: solid.rotation
+        scale: Qt.vector3d(spread, spread, spread * solid.stretch)
+        geometry: solid.geometry
+        materials: HologramHalo {
+            glowColour: halo.glow.own && root.mesh && root.mesh.colour
+                ? Qt.rgba(root.mesh.colour[0], root.mesh.colour[1], root.mesh.colour[2], 1)
+                : root.hologramColour(halo.glow)
+            strength: 0.9 * (root.icon ? root.icon.hologram.glow : 0)
         }
     }
 }

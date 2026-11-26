@@ -9,6 +9,7 @@
 #include "../PanelVisibility.h"
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
+#include "../integration/PlasmaPanelScreenGuard.h"
 #include "../model/PanelIconCapacity.h"
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetApplication.h"
@@ -476,11 +477,15 @@ var result = (function() {
     var p = panelById(%1); if (!p) return -1;
     p.currentConfigGroup = ['ArchDock'];
     if (String(p.readConfig('panelId', '')) !== %2 || String(p.readConfig('ownerToken', '')) !== %3) return -1;
+    if %4 return -1;
     var mode = ['none', 'autohide', 'dodgewindows'].indexOf(String(p.hiding));
     if (mode < 0) return -1;
     return mode * 2 + (String(p.readConfig('temporaryHidden', '0')) === '1' ? 1 : 0);
 })(); print('ARCHDOCK_RESULT:' + String(result));
-)JS").arg(record.containmentId).arg(plasmaScriptStringLiteral(record.panelId)).arg(plasmaScriptStringLiteral(record.previewToken)));
+)JS").arg(record.containmentId).arg(plasmaScriptStringLiteral(record.panelId)).arg(plasmaScriptStringLiteral(record.previewToken))
+                .arg(ArchDock::plasmaPanelScreenGone(QStringLiteral("p"))));
+            // Its hiding is one of the panel's stored settings, not read
+            // while its screen is gone (PlasmaPanelScreenGuard.h).
             if (!visibility || *visibility < 0 || *visibility > 5)
             { if (error) *error = QStringLiteral("profile-visibility-snapshot-unavailable"); return false; }
             snapshot.hostState.insert(QStringLiteral("nativeVisibility"), *visibility);
@@ -1062,6 +1067,7 @@ var state = (function() {
     panel.currentConfigGroup = ['ArchDock'];
     if (String(panel.readConfig('panelId', '')) !== %2 ||
         String(panel.readConfig('ownerToken', '')) !== %3) return {};
+    if %5 return { screenUnavailable: true };
     var state = {};
     var keys = ['location', 'screen', 'alignment', 'offset', 'height',
         'minimumLength', 'maximumLength', 'length', 'lengthMode'];
@@ -1081,13 +1087,21 @@ var state = (function() {
 })();
 print('ARCHDOCK_PREVIEW_HOST:' + JSON.stringify(state));
 )JS").arg(record.containmentId).arg(plasmaScriptStringLiteral(record.panelId))
-        .arg(plasmaScriptStringLiteral(record.previewToken)).arg(record.appletId);
+        .arg(plasmaScriptStringLiteral(record.previewToken)).arg(record.appletId)
+        .arg(ArchDock::plasmaPanelScreenGone());
     const QDBusReply<QString> reply = shell.call(QStringLiteral("evaluateScript"), script);
     const QString prefix = QStringLiteral("ARCHDOCK_PREVIEW_HOST:");
     if (!reply.isValid() || reply.value().size() > 8192 || !reply.value().trimmed().startsWith(prefix)) return fail();
     const auto document = QJsonDocument::fromJson(reply.value().trimmed().mid(prefix.size()).toUtf8());
     if (!document.isObject()) return fail();
     const auto state = document.object().toVariantMap();
+    // The panel's settings are not read while its screen is gone
+    // (PlasmaPanelScreenGuard.h); asked again when it is back.
+    if (state.value(QStringLiteral("screenUnavailable")).toBool())
+    {
+        if (errorCode) *errorCode = QStringLiteral("screen-unavailable");
+        return false;
+    }
     if (state.size() != 10 || !QStringList{QStringLiteral("top"), QStringLiteral("bottom"),
         QStringLiteral("left"), QStringLiteral("right")}.contains(state.value(QStringLiteral("location")).toString()) ||
         !QStringList{QStringLiteral("left"), QStringLiteral("center"), QStringLiteral("right")}.contains(
@@ -1141,11 +1155,15 @@ var result = (function() {
         panel.currentConfigGroup = ['ArchDock'];
         if (String(panel.readConfig('panelId', '')) !== %2 ||
             String(panel.readConfig('ownerToken', '')) !== %3) return 0;
+        if %6 return -2;
         var state = JSON.parse(%4);
+        if %7 return -2;
         var keys = ['location', 'screen', 'alignment', 'offset', 'height',
             'maximumLength', 'minimumLength', 'length', 'lengthMode'];
-        for (var i = 0; i < keys.length; ++i)
+        for (var i = 0; i < keys.length; ++i) {
             if (panel[keys[i]] !== state[keys[i]]) panel[keys[i]] = state[keys[i]];
+            if (keys[i] === 'screen' && %6) return -2;
+        }
         if (%5 >= 0) {
             var dock = panel.widgetById(%5);
             if (!dock || dock.type !== 'org.archdock.dock') return 0;
@@ -1159,7 +1177,13 @@ var result = (function() {
     } catch (error) { return -1; }
 })(); print('ARCHDOCK_RESULT:' + String(result));
 )JS").arg(record.containmentId).arg(plasmaScriptStringLiteral(record.panelId))
-        .arg(plasmaScriptStringLiteral(record.previewToken)).arg(plasmaScriptStringLiteral(snapshotJson)).arg(record.appletId));
+        .arg(plasmaScriptStringLiteral(record.previewToken)).arg(plasmaScriptStringLiteral(snapshotJson)).arg(record.appletId)
+        .arg(ArchDock::plasmaPanelScreenGone())
+        .arg(ArchDock::plasmaScreenMissing(QStringLiteral("state.screen"))));
+    // The screen to go back to may be gone meanwhile: nothing is restored
+    // then, and the restore is asked for again once it is back.
+    if (restored == -2)
+        return fail(QStringLiteral("screen-unavailable"));
     if (restored != 1 || !capturePresetPreviewHost(current, errorCode) || current.hostState != record.hostState)
         return fail(QStringLiteral("preview-host-rollback-readback-failed"));
     return true;

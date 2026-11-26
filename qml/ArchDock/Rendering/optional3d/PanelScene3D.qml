@@ -34,6 +34,12 @@ Item {
     // The panel cannot be seen but stays drawn (covered, or its bar hidden):
     // every motion rests; the view stays as it is and takes input.
     property bool sceneResting: false
+    // Set by its loader just before it lets the scene go (PanelSurfaceLoader,
+    // when 3D is switched off in place): every texture drawn from a live
+    // item lets go of it first, and the view hides, a few frames before the
+    // scene itself goes, so Qt Quick 3D never refreshes a layer that is
+    // being freed.
+    property bool releasing: false
     property real layoutAngle: 0
     property real collapseProgress: 0
     property string mechanism: "open"
@@ -2252,10 +2258,23 @@ Item {
     Component.onDestruction: {
         holdHologramClock(false)
         frameUpdates.stop()
-        // Let go of the mirror sheet and the icons' pictures before they
-        // are deleted with the scene.
+        // Every texture drawn from a live item lets go of it before the
+        // scene leaves its window: Qt Quick 3D refreshes such a texture from
+        // the item's window after every frame until the texture itself is
+        // deleted, and a layer freed meanwhile crashed it. The mirror sheet,
+        // the panel's and stands' looks, and the layers they are drawn
+        // through; the icons' own let go with their entries.
         reflectionsAllowed = false
         reflectionTexture.sourceItem = null
+        selectedMaterialTexture.sourceItem = null
+        selectedPedestalTexture.sourceItem = null
+        selectedPedestalNormal.sourceItem = null
+        selectedMaterialNormal.sourceItem = null
+        surfaceTexture.sourceItem = null
+        panelLightningTexture.sourceItem = null
+        standLightningTexture.sourceItem = null
+        seamlessMaterial.sourceItem = null
+        seamlessNormal.sourceItem = null
     }
     Connections {
         target: root.Window.window
@@ -2340,7 +2359,7 @@ Item {
     }
     ShaderEffectSource {
         id: panelLightningTexture
-        sourceItem: panelLightning.active ? panelLightning : null
+        sourceItem: root.releasing ? null : panelLightning.active ? panelLightning : null
         hideSource: true
         live: true
         visible: false
@@ -2355,7 +2374,7 @@ Item {
     }
     ShaderEffectSource {
         id: standLightningTexture
-        sourceItem: standLightning.active ? standLightning : null
+        sourceItem: root.releasing ? null : standLightning.active ? standLightning : null
         hideSource: true
         live: true
         visible: false
@@ -2386,7 +2405,7 @@ Item {
     ShaderEffectSource {
         id: seamlessMaterial
         visible: false
-        sourceItem: seamlessMaterialEffect
+        sourceItem: root.releasing ? null : seamlessMaterialEffect
         hideSource: true
         width: seamlessMaterialEffect.width
         height: seamlessMaterialEffect.height
@@ -2402,7 +2421,7 @@ Item {
     ShaderEffectSource {
         id: seamlessNormal
         visible: false
-        sourceItem: seamlessNormalEffect
+        sourceItem: root.releasing ? null : seamlessNormalEffect
         hideSource: true
         width: seamlessNormalEffect.width
         height: seamlessNormalEffect.height
@@ -2615,7 +2634,7 @@ Item {
         y: -root.overflowY
         width: root.viewWidth
         height: root.viewHeight
-        visible: root.rendererReady && !root.sceneConcealed
+        visible: root.rendererReady && !root.sceneConcealed && !root.releasing
         opacity: root.panelOpacity
         explicitTextureWidth: root.targetWidth
         explicitTextureHeight: root.targetHeight
@@ -2694,7 +2713,7 @@ Item {
         }
         Texture {
             id: selectedMaterialTexture
-            sourceItem: !root.Window.window ? null
+            sourceItem: root.releasing || !root.Window.window ? null
                 : root.clearLooks.includes(root.textureMaterial)
                     ? (panelLightningTexture.Window.window === root.Window.window ? panelLightningTexture : null)
                 : materialImage.Window.window !== root.Window.window ? null
@@ -2714,7 +2733,7 @@ Item {
         }
         Texture {
             id: selectedPedestalTexture
-            sourceItem: !root.Window.window ? null
+            sourceItem: root.releasing || !root.Window.window ? null
                 : root.clearLooks.includes(root.pedestalTextureLook)
                     ? (standLightningTexture.Window.window === root.Window.window ? standLightningTexture : null)
                 : pedestalImage.Window.window === root.Window.window ? pedestalImage : null
@@ -2726,7 +2745,7 @@ Item {
         }
         Texture {
             id: selectedPedestalNormal
-            sourceItem: root.Window.window && pedestalNormalImage.Window.window === root.Window.window
+            sourceItem: !root.releasing && root.Window.window && pedestalNormalImage.Window.window === root.Window.window
                 ? pedestalNormalImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
@@ -2736,7 +2755,7 @@ Item {
         }
         Texture {
             id: selectedMaterialNormal
-            sourceItem: !root.Window.window || materialNormalImage.Window.window !== root.Window.window ? null
+            sourceItem: root.releasing || !root.Window.window || materialNormalImage.Window.window !== root.Window.window ? null
                 : root.generatedPlatform ? seamlessNormal : materialNormalImage
             generateMipmaps: true
             mipFilter: Texture.Linear
@@ -2747,7 +2766,7 @@ Item {
         }
         Texture {
             id: surfaceTexture
-            sourceItem: root.Window.window && textureImage.Window.window === root.Window.window
+            sourceItem: !root.releasing && root.Window.window && textureImage.Window.window === root.Window.window
                 ? textureImage : null
             generateMipmaps: true
             mipFilter: Texture.Linear
@@ -2831,7 +2850,7 @@ Item {
         }
         Texture {
             id: reflectionTexture
-            sourceItem: root.waterReflections && mirrorSheet.Window.window === root.Window.window
+            sourceItem: !root.releasing && root.waterReflections && mirrorSheet.Window.window === root.Window.window
                 ? mirrorSheet : null
         }
         FlowingSurface {
@@ -3298,18 +3317,21 @@ Item {
                     id: glyphTexture
                     readonly property Item candidateSource:
                         entryNode.visual ? entryNode.visual.glyphTextureItem : null
-                    // A detached source releases its layer before QObject destruction.
-                    sourceItem: candidateSource && root.Window.window
+                    // A detached source releases its layer before QObject
+                    // destruction, and an icon going away releases it first.
+                    sourceItem: !root.releasing && candidateSource && root.Window.window
                         && candidateSource.Window.window === root.Window.window
-                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                        && entryNode.visual.meshVisualActive && !entryNode.visual.goingAway
+                        ? candidateSource : null
                 }
                 Texture {
                     id: tileTexture
                     readonly property Item candidateSource:
                         entryNode.visual ? entryNode.visual.tileTextureItem : null
-                    sourceItem: candidateSource && root.Window.window
+                    sourceItem: !root.releasing && candidateSource && root.Window.window
                         && candidateSource.Window.window === root.Window.window
-                        && entryNode.visual.meshVisualActive ? candidateSource : null
+                        && entryNode.visual.meshVisualActive && !entryNode.visual.goingAway
+                        ? candidateSource : null
                 }
                 // Qt Quick 3D refreshes a texture taken from an icon's layer
                 // after every frame until the texture is deleted. The Loader

@@ -32,6 +32,8 @@ enum class PlasmaPanelApplyFailure
     PropertyUnsupported,
     ScriptFailure,
     ReadbackMismatch,
+    // The panel's screen is gone (switched off): nothing was read or changed.
+    ScreenUnavailable,
 };
 
 struct PlasmaPanelFieldResult

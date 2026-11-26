@@ -153,8 +153,87 @@ Item {
         && Boolean(themeDefinition.scene3D) && Boolean(themeDefinition.scene3DResources)
     readonly property bool true3DEnabled: true3DRequested && sceneResourcesUsable
         && Boolean(true3DCapability.rendererAvailable)
+    // The 3D scene never goes along into another window: Qt Quick 3D keeps
+    // its nodes numbered for the window they were drawn in, and a scene
+    // carried into a new window (Plasma makes new ones when a screen comes
+    // back, and an edge panel's dock moves into its window over the panel)
+    // read past the end of a list there, and Plasma stopped. Qt tells each
+    // item as it leaves its window, before the new window takes it: the
+    // scene goes then, and is made anew in the new window a moment later.
+    // Hidden and shown again, a window keeps its scene.
+    property bool windowHeld: false
+    Timer {
+        id: windowSettle
+        interval: 0
+        onTriggered: root.windowHeld = !root.Window.window
+    }
+    Window.onWindowChanged: {
+        windowHeld = true
+        windowSettle.restart()
+    }
+    readonly property bool true3DWanted: true3DEnabled && !windowHeld
+    // Whether the scene is made (its Loader on). Switched off in place, it
+    // goes in two steps: first every texture it draws from a live item lets
+    // go (its `releasing`) and the flat look shows; the scene itself goes
+    // two drawn frames later, so Qt Quick 3D never refreshes a layer that
+    // is being freed in the same frame. Leaving its window, it goes at once.
+    property bool true3DLoaded: false
+    property bool lettingGo: false
+    property int framesLetGo: 0
+    function letGoNow() {
+        letGoFallback.stop()
+        lettingGo = false
+        true3DLoaded = true3DWanted
+    }
+    onTrue3DWantedChanged: {
+        const item = true3DRenderer.item
+        if (true3DWanted) {
+            letGoFallback.stop()
+            lettingGo = false
+            if (item)
+                item.releasing = false
+            synchronizeScene()
+            true3DLoaded = true
+            return
+        }
+        const window = Window.window
+        if (!item || windowHeld || !window || !window.visible) {
+            letGoNow()
+            return
+        }
+        item.releasing = true
+        lettingGo = true
+        framesLetGo = 0
+        letGoFallback.restart()
+        window.update()
+    }
+    onWindowHeldChanged: if (windowHeld && lettingGo) letGoNow()
+    Connections {
+        target: root.lettingGo ? root.Window.window : null
+        function onFrameSwapped() { letGoFrame.restart() }
+    }
+    // Counted outside the drawing's own call.
+    Timer {
+        id: letGoFrame
+        interval: 0
+        onTriggered: {
+            const window = root.Window.window
+            if (!root.lettingGo)
+                return
+            if (++root.framesLetGo >= 2 || !window)
+                root.letGoNow()
+            else
+                window.update()
+        }
+    }
+    // A window that draws nothing more lets the scene go anyway.
+    Timer {
+        id: letGoFallback
+        interval: 250
+        onTriggered: if (root.lettingGo) root.letGoNow()
+    }
     readonly property var true3DItem: true3DRenderer.item
-    readonly property bool true3DReady: true3DEnabled && true3DItem
+    readonly property bool true3DReady: true3DWanted && true3DItem
         && Boolean(true3DItem.rendererReady)
     readonly property var themeTiers: {
         const source = themeDefinition && themeDefinition.capabilities
@@ -299,11 +378,12 @@ Item {
     width: Number(geometry.width || 0)
     height: Number(geometry.height || 0)
 
+    // The scene's source and its live settings are given once; the Loader
+    // keeps them while it is off and makes the scene from them again when
+    // it is on (its `active`, true3DLoaded).
     function synchronizeScene() {
-        if (!true3DEnabled) {
-            true3DRenderer.setSource("")
+        if (!true3DEnabled || String(true3DRenderer.source).length > 0)
             return
-        }
         true3DRenderer.setSource(Qt.resolvedUrl("optional3d/PanelScene3D.qml"), {
             sceneDefinition: Qt.binding(function() {
                 const scene = root.themeDefinition && root.themeDefinition.scene3D || ({})
@@ -414,9 +494,12 @@ Item {
             editMode: Qt.binding(function() { return root.sceneEditMode })
         })
     }
-    onTrue3DEnabledChanged: synchronizeScene()
     Component.onCompleted: {
-        synchronizeScene()
+        windowHeld = !Window.window
+        if (true3DWanted) {
+            synchronizeScene()
+            true3DLoaded = true
+        }
         holdHologramClock(panelHologramMoving)
     }
 
@@ -471,7 +554,7 @@ Item {
     Loader {
         id: true3DRenderer
         anchors.fill: parent
-        active: root.true3DEnabled
+        active: root.true3DLoaded
         visible: root.true3DReady
         onLoaded: item.transformEdited.connect(root.sceneTransformEdited)
     }

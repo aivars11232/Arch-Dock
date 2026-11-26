@@ -76,6 +76,35 @@
   never reloads its settings for a reading, and no longer writes over what
   you are typing; its preview still follows applications started, closed
   or pinned. 3D icons on flat panels use lighter smoothing.
+- **Plasma no longer stops when a screen comes back.** Coming back from
+  another account, or when a screen comes back, Plasma makes new windows
+  for its desktop and panels, and Arch Dock's 3D went along into them: Qt
+  Quick 3D then read past the end of a list and Plasma stopped (four times
+  on 23 and 28 October). A 3D panel's scene and a 3D icon's own view now go
+  the moment their window changes and are made anew in the new window a
+  moment later; meanwhile the panel shows its flat look, as while 3D first
+  loads. A window that is only hidden and shown again keeps them. The same
+  holds when an edge panel's dock moves into Arch Dock's window over the
+  panel (Stands, Holograms or Visibility changed in Panel Studio).
+- **Switching 3D off no longer crashes.** A 3D texture drawn from a live
+  picture went on refreshing it after the picture was freed (Panel Studio's
+  previews, and once on the desktop). Switched off in place, a 3D panel
+  first lets go of every live picture and shows its flat look; the scene
+  itself goes two frames later. As any 3D scene goes, every texture drawn
+  from a live picture lets go of it first. No picture is taken of an icon
+  that is not whole or is being taken apart, and a bar's tone is not
+  measured while its 3D lets go.
+- **Panel Studio draws on Arch Dock's own thread.** Its live previews are
+  made and dropped all the time as pages change; with a separate drawing
+  thread one was freed while it was being drawn, and Arch Dock stopped.
+- **A switched-off screen no longer stops Plasma.** Plasma 6.8 reads a
+  panel's stored settings through its screen and stops when that screen is
+  gone. Arch Dock now asks whether the panel's screen is there before it
+  reads or changes any of them: a panel whose screen went away is first
+  moved to the screen it falls back to, as before, and with no screen to go
+  to it waits for the screen to come back.
+- **A flat 3D hologram icon's glow stands beside its solid**, not inside it.
+  It looks the same.
 
 ## 0.1.1-54 — 2026-10-30
 

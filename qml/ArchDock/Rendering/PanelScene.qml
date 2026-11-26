@@ -1555,10 +1555,22 @@ Item {
         interval: 600
         onTriggered: root.measureSurfaceTone()
     }
+    // Set first thing when the scene is being destroyed: no picture of it is
+    // taken any more, and the answer to one asked for earlier is dropped (a
+    // grab hooks into the window's drawing, and one of an item being
+    // destroyed crashed the bars).
+    property bool sceneGoingAway: false
+    Component.onDestruction: sceneGoingAway = true
     function measureSurfaceTone() {
         const item = surfaceLoader
-        if (!inBar || !surfaceSpanned || item.width <= 0 || item.height <= 0)
+        if (!inBar || !surfaceSpanned || item.width <= 0 || item.height <= 0 || sceneGoingAway)
             return
+        // Not while the 3D scene lets go or waits for its new window: the
+        // flat look shown meanwhile is not the bar's; measured again after.
+        if (item.lettingGo || (item.windowHeld && item.Window.window)) {
+            surfaceToneTimer.restart()
+            return
+        }
         const room = barWidgetRoom
         const along = verticalLayout ? item.height : item.width
         const deep = verticalLayout ? item.width : item.height
@@ -1572,7 +1584,8 @@ Item {
         const area = verticalLayout
             ? Qt.rect(near * scale, from * scale, (far - near) * scale, (to - from) * scale)
             : Qt.rect(from * scale, near * scale, (to - from) * scale, (far - near) * scale)
-        item.grabToImage(function(result) { surfaceToneProbe.measure(result, area) },
+        const scene = root
+        item.grabToImage(function(result) { if (!scene.sceneGoingAway) surfaceToneProbe.measure(result, area) },
                          Qt.size(Math.max(1, Math.round(item.width * scale)),
                                  Math.max(1, Math.round(item.height * scale))))
     }

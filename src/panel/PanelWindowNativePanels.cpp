@@ -7,6 +7,7 @@
 #include "PanelWindowHelpers.h"
 
 #include "../NativeContainmentLifecycle.h"
+#include "../integration/PlasmaPanelScreenGuard.h"
 #include "../PanelPlacement.h"
 #include "../persistence/RemovedPanelStore.h"
 #include "../PlasmaScriptResult.h"
@@ -432,6 +433,10 @@ int PanelWindow::createNativePanelCandidate(const ArchDock::PanelDefinition &def
         "if (panel.readConfig('ownerToken', '') !== %1 || "
         "panel.readConfig('panelId', '') !== %2) "
         "{ panel.remove(); panel = null; return -3; }"
+        // Its hiding is one of the panel's stored settings: a panel made
+        // while its screen is gone is taken away again unchanged
+        // (PlasmaPanelScreenGuard.h).
+        "if %3 { panel.remove(); panel = null; return -7; }"
         "panel.writeConfig('temporaryHidden', '0');"
         "panel.hiding = 'none';"
         "panel.reloadConfig();"
@@ -441,7 +446,8 @@ int PanelWindow::createNativePanelCandidate(const ArchDock::PanelDefinition &def
         "panel.hiding !== 'none') "
         "{ panel.remove(); panel = null; return -6; }")
         .arg(plasmaScriptStringLiteral(ownershipToken))
-        .arg(plasmaScriptStringLiteral(panelId));
+        .arg(plasmaScriptStringLiteral(panelId))
+        .arg(ArchDock::plasmaPanelScreenGone());
     const QString rendererAttachment = needsRenderer
         ? QStringLiteral(
               "var dock = panel.addWidget('org.archdock.dock');"
@@ -490,6 +496,8 @@ int PanelWindow::createNativePanelCandidate(const ArchDock::PanelDefinition &def
         return fail(QStringLiteral("renderer-verification-failed"));
     case -6:
         return fail(QStringLiteral("host-configuration-failed"));
+    case -7:
+        return fail(QStringLiteral("screen-unavailable"));
     default:
         return fail(QStringLiteral("host-creation-failed"));
     }

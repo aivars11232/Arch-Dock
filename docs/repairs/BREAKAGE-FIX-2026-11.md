@@ -355,3 +355,140 @@ checks under a private KWin, `settings-editor-model-test`,
 clone and the workspace. The new check that 3D icons follow their rows
 (moved and doubled entries) was also run alone with the private KWin's
 graphics and passed (`rows-rhi/`). Logs: `evidence/BREAKAGE-FIX-S2/recheck/`.
+
+## Step 3: stop the crashes
+
+### Report 1
+
+**What was wrong, now proven.**
+
+- **Plasma's four stops on the owner's desktop** (23 and 28 October, each
+  on returning from the second account). When a screen comes back, Plasma
+  makes new windows for its desktop and panels, and Arch Dock's 3D views
+  went along into them. Qt Quick 3D numbers a scene's parts per window and
+  keeps a part's old number when it happens to match the new window's
+  count, then reads past the end of a list. A new test does exactly this on
+  purpose. On the old code it stops Plasma's way in five seconds, with the
+  same stack as the owner's four crash records, down to the same places in
+  Qt (`evidence/BREAKAGE-FIX-S3/carried-before`). On the new code it passes
+  at all 31 counts tried (`carried-after`).
+- **Arch Dock's crash in Panel Studio's tests** (once on the owner's desktop,
+  8 October): a 3D texture drawn from a live picture went on refreshing the
+  picture after it was freed. The Studio test run with freed memory
+  overwritten crashed 3 times out of 3 on the old code.
+- **Plasma 6.8.3 stopping when a screen is switched off** (on test desktops
+  only, three times): with the screen gone, Plasma reads a panel's stored
+  settings from nowhere and stops. Arch Dock's own scripts did that read
+  while moving the panel to the other screen.
+
+**What changed.**
+
+- A 3D view never goes along into another window. The moment a panel's dock
+  leaves its window (Plasma replacing its windows, or an edge panel's dock
+  moving into Arch Dock's window over the panel), its 3D views go. They are
+  made anew in the new window a moment later. A window that is only hidden
+  and shown again keeps them.
+- Switching 3D off lets go in two steps. The 3D scene first lets go of every
+  live picture it draws from, and the flat look shows; the scene itself
+  goes two frames later. Switched straight back on, it stays.
+- When any 3D scene goes, every texture drawn from a live picture lets go of
+  it first. Before, only the water mirror's and the icons' did.
+- No picture is taken of an icon that is not finished, not in a shown window,
+  or being taken apart, and a late answer is dropped. A bar's tone is not
+  measured while its 3D lets go or changes window, or as it goes.
+- Panel Studio and Icon Properties draw on Arch Dock's own thread.
+- A flat 3D hologram icon's glow stands beside its solid, not inside it,
+  with the same picture. A test now catches a return of the old way, and
+  also a 3D file that no longer loads (an extra brace once removed every
+  flat 3D icon for five days).
+- Before Arch Dock reads or changes one of a Plasma panel's stored settings,
+  it asks whether the panel's screen is there, the way Plasma looks it up.
+  A panel whose screen went away is first moved to the screen it falls back
+  to, as before, but before anything stored is read. A panel is never moved
+  to a screen Plasma does not have. With no screen to go to, nothing is read
+  or changed, and the panel waits for its screen. Arch Dock writes one plain
+  line to its log when it moves a panel off a screen that is gone.
+
+**What looks different.**
+
+- After login, a Plasma restart, a screen coming back or the return from the
+  second account, a 3D panel shows its flat look for a moment while its 3D is
+  made in the new window, and its 3D icons are made again. It already looks
+  this way while 3D first loads.
+- When Panel Studio changes Stands, Holograms or Visibility of an
+  always-shown edge panel, its 3D shows flat for a moment while the dock
+  moves.
+- Nothing else is meant to change. The glow, before and after, is the same
+  picture to the pixel (0 of 108,000 pixels differ):
+  `evidence/BREAKAGE-FIX-S3/glow/glow-before-after.png` (TEST VIEW).
+
+**Measured** (private test desktops; "freed memory overwritten" makes any use
+of freed memory crash at once).
+
+| | before Step 3 | Step 3 |
+|---|---|---|
+| A 3D scene carried into a new window (Plasma's stop) | stops at count 1 | 31 of 31 counts pass |
+| A 3D view going along into a new window | yes | never |
+| Studio test, freed memory overwritten | 3 of 3 crashed | 5 of 5 pass drawn on a separate thread (as Plasma draws); 2 of 2 drawn on the program's own thread (as Arch Dock now draws Studio) |
+| Second screen switched off and on, owner's mix plus two edge panels | (not run: Plasma crashed first in the screen-off test) | 20 of 20 returns, no crash, Plasma's memory steady at about 900 MB |
+| Plasma's screen-off test (lifecycle) | 3 of 3 crashed | 4 of 4 pass, no crash |
+| An edge panel's dock moved 20 times (Holograms off and on) | survived 20 of 20 (25 Nov) | 20 of 20 |
+| Panel Studio opened and closed 30 times, freed memory overwritten | | no crash, the same backend all along |
+| Arch Dock's answers on the bus, Studio closed / open | | 7.5 / 7.4 ms (slowest 8.1 / 9.0 ms) |
+| Qt drawing thread in Arch Dock with Studio open | yes | none |
+| Plasma idle, the owner's ring as saved (old and new QML, same backend, three runs each, alternating) | 6.6 / 5.9 / 5.1 % of a core (mean 5.9), 763 MB | 6.9 / 5.7 / 5.9 % (mean 6.2), 755 MB: the same within run-to-run noise |
+| Five windows opened and closed | 2.23 s of processor time (mean) | 2.25 s |
+| Arch Dock with Studio open | 630-635 MB, 0.0 % of a core | 630-632 MB, 0.0 % |
+
+**Checks.**
+
+- An independent review (five readers by area, each area's findings checked
+  by a sceptic told to refute them): 11 findings, 4 confirmed and fixed,
+  7 refuted with reasons. A second check of the four fixes, with every
+  Plasma script swept again, found nothing more
+  (`evidence/BREAKAGE-FIX-S3/review/review-outcome.md`).
+- New and changed tests: the glow and the 3D file loading; every live 3D
+  texture asking for its window; 3D views made anew in a new window, never
+  carried; the two-step let-go; the carried-scene reproducer; a flat 3D
+  icon's view made anew in a new window, keeping its solid and picture; no
+  picture of an icon going away; the screen check in every Plasma script
+  that touches stored settings (and a scan of the sources for any that does
+  not); moving a panel off a gone screen first; never to a screen Plasma
+  lacks; visibility left alone while the screen is gone.
+- The screen-off lifecycle test had a race of its own that failed its
+  "unsupported floating" part on the old code too (two baseline runs, six
+  of the runs in Step 1). The test now waits for Arch Dock to finish a
+  panel's placement before stopping it.
+- Complete suite, run once one test at a time: 138 of 139 passed in 52
+  minutes. The one failure is the Star layout's travel check
+  (`path-travel-smoke`, "an entry left the outline between slots", 14.1;
+  it failed the same way before this step, 11.9 and 13.8)
+  (`evidence/BREAKAGE-FIX-S3/suite-1.log`).
+
+**Not done, and why.**
+
+- The plan said 3D panels would use saved icon pictures instead of live
+  layers. That would change how 3D panels look: their icons' tiles would no
+  longer follow hover, press, active and urgent at once. The crash it was
+  meant to stop no longer shows with the releases above (7 clean runs where
+  3 of 3 crashed before). So the live pictures stay, and this is left to the
+  owner (below).
+- Known limits: a picture an icon is taking at the very moment its window
+  changes is not taken again in the new window (an old gap, narrower now:
+  on 3D panels the icons' pictures are taken afresh after a window change).
+  Grabbing an icon that is being destroyed in the same few milliseconds is
+  a race inside Qt that Arch Dock cannot close from QML; no crash record
+  points to it.
+- Plasma's own crash when a script reads a windowless panel's settings is a
+  Plasma 6.8.3 bug; reporting it to KDE needs the owner's account.
+
+**For the owner to decide.**
+
+1. Saved icon pictures on 3D panels: keep the live pictures (no look change;
+   the crash no longer shows), or switch to saved pictures and accept that
+   the tiles follow hover and press a frame or two late? Recommended: keep
+   them; switch only if a crash of this kind shows up again.
+2. After 0.1.1-55: switch to the second account and back about 11 times with
+   a 3D panel or 3D icons on, one switch after another on a quiet desktop,
+   and say whether the desktop ever vanishes. No test desktop can switch
+   accounts, so this is the real proof on the owner's machine.

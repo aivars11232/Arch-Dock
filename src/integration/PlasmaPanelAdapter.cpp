@@ -1,7 +1,9 @@
 // The Plasma scripts that apply and read back native panel placement and
 // visibility.
 #include "PlasmaPanelAdapter.h"
+#include "PlasmaPanelScreenGuard.h"
 
+#include <QDebug>
 #include <QVariantList>
 
 #include <algorithm>
@@ -16,6 +18,7 @@ constexpr int kOwnershipDenied = -1001;
 constexpr int kPropertyUnsupported = -1002;
 constexpr int kScriptFailure = -1003;
 constexpr int kUnrecognizedReadback = -1004;
+constexpr int kScreenUnavailable = kPlasmaPanelScreenUnavailable;
 
 QString plasmaScriptStringLiteral(const QString &value)
 {
@@ -169,11 +172,17 @@ QString plasmaLengthModeName(int rawMode)
     }
 }
 
+// A panel's edge and screen are read and set without its stored settings;
+// everything else waits while its screen is gone (PlasmaPanelScreenGuard.h).
 QString placementScript(int containmentId,
                         const QString &panelId,
                         const QString &ownershipToken,
-                        const QString &operationBody)
+                        const QString &operationBody,
+                        bool needsScreen = true)
 {
+    const QString screenCheck = needsScreen
+        ? QStringLiteral("if %1 { return %2; }").arg(plasmaPanelScreenGone()).arg(kScreenUnavailable)
+        : QString();
     return QStringLiteral(
         "var result = (function() {"
         "try {"
@@ -182,6 +191,7 @@ QString placementScript(int containmentId,
         "panel.currentConfigGroup = ['ArchDock'];"
         "if (panel.readConfig('ownerToken', '') !== %3 || "
         "panel.readConfig('panelId', '') !== %4) { return %5; }"
+        "%8"
         "%6"
         "} catch (error) { return %7; }"
         "})();"
@@ -192,7 +202,8 @@ QString placementScript(int containmentId,
         .arg(plasmaScriptStringLiteral(panelId))
         .arg(kOwnershipDenied)
         .arg(operationBody)
-        .arg(kScriptFailure);
+        .arg(kScriptFailure)
+        .arg(screenCheck);
 }
 
 QString edgeScript(int containmentId,
@@ -218,7 +229,7 @@ QString edgeScript(int containmentId,
         .arg(kPropertyUnsupported)
         .arg(mutation)
         .arg(kUnrecognizedReadback);
-    return placementScript(containmentId, panelId, ownershipToken, body);
+    return placementScript(containmentId, panelId, ownershipToken, body, false);
 }
 
 QString alignmentScript(int containmentId,
@@ -378,6 +389,11 @@ QString integerScript(int containmentId,
     if (value.has_value())
     {
         mutation = QStringLiteral("panel.%1 = %2;").arg(propertyName).arg(*value);
+        // Never to a screen Plasma does not have now (PlasmaPanelScreenGuard.h).
+        if (propertyName == QLatin1String("screen"))
+            mutation.prepend(QStringLiteral("if %1 { return %2; }")
+                                 .arg(plasmaScreenMissing(QString::number(*value)))
+                                 .arg(kScreenUnavailable));
     }
     // Plasma binds length to the applet's preferred content size. In custom
     // mode equal bounds, rather than that changing content size, fix the native
@@ -400,7 +416,8 @@ QString integerScript(int containmentId,
         .arg(mutation)
         .arg(kUnrecognizedReadback)
         .arg(fixedLengthReadback);
-    return placementScript(containmentId, panelId, ownershipToken, body);
+    return placementScript(containmentId, panelId, ownershipToken, body,
+                           propertyName != QLatin1String("screen"));
 }
 
 std::optional<QString> decodedEdge(int result, bool)
@@ -490,6 +507,10 @@ std::optional<PlasmaPanelApplyFailure> executionFailure(
     if (*scriptResult == kUnrecognizedReadback)
     {
         return PlasmaPanelApplyFailure::ReadbackMismatch;
+    }
+    if (*scriptResult == kScreenUnavailable)
+    {
+        return PlasmaPanelApplyFailure::ScreenUnavailable;
     }
     return std::nullopt;
 }
@@ -734,6 +755,8 @@ QString plasmaPanelApplyFailureName(PlasmaPanelApplyFailure failure)
         return QStringLiteral("script-failure");
     case PlasmaPanelApplyFailure::ReadbackMismatch:
         return QStringLiteral("readback-mismatch");
+    case PlasmaPanelApplyFailure::ScreenUnavailable:
+        return QStringLiteral("screen-unavailable");
     }
     return QStringLiteral("unknown-failure");
 }
@@ -881,10 +904,35 @@ PlasmaPanelPlacementApplyResult PlasmaPanelAdapter::applyPlacement(
 
     QList<std::optional<int>> snapshots;
     snapshots.reserve(operations.size());
+    bool movedOffGoneScreen = false;
     for (qsizetype index = 0; index < operations.size(); ++index)
     {
         const std::optional<int> scriptResult = m_executor(operations[index].readScript);
         const std::optional<PlasmaPanelApplyFailure> failure = executionFailure(scriptResult);
+        // The panel's screen is gone (switched off), so its stored settings
+        // cannot be read: it is first moved to the screen asked for (the one
+        // a panel whose screen went away falls back to), which reads none of
+        // them, and read again from the start (the screen is the one setting
+        // set first, then). Still without a screen, nothing else is read or
+        // changed, and the placement waits.
+        if (failure == PlasmaPanelApplyFailure::ScreenUnavailable && !movedOffGoneScreen)
+        {
+            movedOffGoneScreen = true;
+            const auto screen = std::find_if(operations.cbegin(), operations.cend(),
+                [](const FieldOperation &operation) {
+                    return operation.field == NativePlacementField::ScreenFallbackIndex;
+                });
+            if (screen != operations.cend() && !executionFailure(m_executor(screen->mutationScript)).has_value())
+            {
+                qInfo().noquote() << "Plasma panel" << containmentId << "stood on a screen that is gone: moved to screen"
+                                  << screen->requestedValue << "before its settings were read";
+                snapshots.clear();
+                index = -1;
+                continue;
+            }
+            qInfo().noquote() << "Plasma panel" << containmentId
+                              << "stands on a screen that is gone, and no screen is there to move it to: left as it is";
+        }
         if (failure.has_value() && *failure != PlasmaPanelApplyFailure::PropertyUnsupported)
         {
             if (*failure == PlasmaPanelApplyFailure::ContainmentMissing ||

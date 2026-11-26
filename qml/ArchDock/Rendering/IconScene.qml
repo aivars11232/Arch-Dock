@@ -143,8 +143,17 @@ Item {
             HologramClock.release()
     }
     onHologramMovingChanged: holdHologramClock(hologramMoving)
-    Component.onCompleted: holdHologramClock(hologramMoving)
-    Component.onDestruction: holdHologramClock(false)
+    Component.onCompleted: {
+        holdHologramClock(hologramMoving)
+        solidViewHeld = !Window.window
+        pictureTakingAllowed = true
+        takeWaitingGrab()
+    }
+    Component.onDestruction: {
+        goingAway = true
+        pictureTakingAllowed = false
+        holdHologramClock(false)
+    }
     // How far the icon lies from its cell's middle toward its stand's
     // direction, and where the stand's top edge is in its frame (the icon
     // toward -y): the Lift gap, or a hologram's light, between them.
@@ -481,8 +490,29 @@ Item {
     // over the panel as holograms are switched on) takes its pictures again
     // once that window shows, or it would keep none.
     property bool glyphGrabWaiting: false
+    // A picture of the icon is taken only from an icon that is whole, in a
+    // shown window, and not being taken apart: a grab hooks into its
+    // window's drawing, and one taken while the icon (or the Studio page
+    // holding it) was being destroyed crashed Arch Dock. The answer to a
+    // grab is dropped when the icon went meanwhile.
+    property bool pictureTakingAllowed: false
+    // Set first thing when the icon is being destroyed, while its layers
+    // still exist: no picture is taken of it any more, and a 3D panel lets
+    // go of its live layers at once (PanelScene3D's glyph and tile
+    // textures), before Qt frees them.
+    property bool goingAway: false
     function grabGlyph(done, size) {
-        if (!glyphLayer.grabToImage(done, size))
+        if (goingAway)
+            return
+        const window = Window.window
+        if (!pictureTakingAllowed || !window || !window.visible) {
+            glyphGrabWaiting = true
+            return
+        }
+        const owner = root
+        if (!glyphLayer.grabToImage(function(result) {
+                if (owner && owner.pictureTakingAllowed) done(result)
+            }, size))
             glyphGrabWaiting = true
     }
     function takeWaitingGrab() {
@@ -492,7 +522,24 @@ Item {
         glyphGrabWaiting = false
         refreshSolid()
     }
-    Window.onWindowChanged: takeWaitingGrab()
+    // A flat 3D icon's own 3D view never goes along into another window: Qt
+    // Quick 3D keeps its nodes numbered for the window they were drawn in,
+    // and a view carried into a new window (Plasma makes new ones when a
+    // screen comes back) read past the end of a list there and Plasma
+    // stopped. Qt tells each item as it leaves its window, before the new
+    // window takes it: the view goes then, and is made anew in the new
+    // window a moment later. Hidden and shown again, a window keeps it.
+    property bool solidViewHeld: true
+    Timer {
+        id: solidViewSettle
+        interval: 0
+        onTriggered: root.solidViewHeld = !root.Window.window
+    }
+    Window.onWindowChanged: {
+        solidViewHeld = true
+        solidViewSettle.restart()
+        takeWaitingGrab()
+    }
     Connections {
         target: root.Window.window
         function onVisibleChanged() { root.takeWaitingGrab() }
@@ -1491,12 +1538,13 @@ Item {
 
             Loader {
                 id: flatSolidLoader
+                objectName: "flat-icon-solid-view"
 
                 anchors.fill: parent
                 // A hologram's view is larger than the icon, to hold its
                 // glow round it.
                 anchors.margins: root.hologramDrawn ? -0.3 * root.logicalSize : 0
-                active: root.flatSolidWanted
+                active: root.flatSolidWanted && !root.solidViewHeld
                 source: Qt.resolvedUrl("optional3d/IconSolidView.qml")
                 onLoaded: item.icon = root
             }

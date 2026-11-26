@@ -1,5 +1,65 @@
 # Arch Dock current state
 
+## Crashes stopped: no 3D carried between windows, live textures let go, Plasma's screen-off reads — 2026-11-26
+
+- Qt Quick 3D numbers a scene's nodes per window (`QSSGRenderNodeHandle`
+  version and index, `QSSGGlobalRenderNodeData::reindex`) and keeps a node
+  whose version equals the window's current count; a View3D carried into
+  another window could then index past the end of `globalTransforms`
+  (the stl_vector assert of Plasma's four aborts). `PanelSurfaceLoader`
+  (`windowHeld`) and `IconScene` (`solidViewHeld`) drop their 3D Loaders in
+  `Window.onWindowChanged`, which Qt emits post-order during
+  `derefWindow()`, before `refWindow()` of the new window; a zero `Timer`
+  rebuilds them in the new window. A window hidden and shown again keeps
+  its 3D (no hidden-window rule). `QQuick3DViewport::itemChange` never
+  emits `windowChanged`; tests find views by walking `childItems()`.
+- 3D switched off in place (`true3DWanted` false while the window stays
+  shown): `PanelScene3D.releasing` nulls every live `Texture.sourceItem`
+  and the four scene `ShaderEffectSource`s and hides the View3D; the Loader
+  (`active: true3DLoaded`) goes off after two `frameSwapped` (each followed
+  by `update()`) or 250 ms. Its source and `Qt.binding` properties are set
+  once (`synchronizeScene`); `setActive(false)` keeps them, so a scene made
+  again follows its settings. `PanelScene3D`'s `Component.onDestruction`
+  nulls all nine live sources; glyph and tile textures also follow
+  `IconScene.goingAway`. Every `Texture.sourceItem` binding in
+  `optional3d/` checks `Window.window` (RendererCapabilityTest
+  `liveTexturesAskForTheirWindow`).
+- `IconScene.grabGlyph` takes no picture while `goingAway`, before
+  `Component.onCompleted` (`pictureTakingAllowed`) or without a shown
+  window, and drops a late answer; `PanelScene.measureSurfaceTone` waits
+  while the 3D lets go or changes window and drops answers once
+  `sceneGoingAway`.
+- The backend (`src/main.cpp`) sets `QSG_RENDER_LOOP=basic` before
+  `QApplication` unless set, makes one `QQuickWindow` to fix the loop
+  (`QSGRenderLoop::instance()`), then unsets it for the programs it starts.
+- Plasma 6.8 `Panel::panelConfig()`/`panelConfigDefaults()` are invalid
+  when `max(screen, 0) >= screenCount` (a windowless panel whose screen
+  went away), and its getters and setters crash in `KConfigGroup`.
+  `PlasmaPanelScreenGuard.h` (`plasmaPanelScreenGone`, -1005) guards every
+  script touching alignment, offset, height, lengths, length mode, hiding,
+  floating or opacity: the adapter's (`placementScript(..., needsScreen)`;
+  edge and screen scripts are exempt), `nativePanelTemporarilyHidden`, the
+  new-panel set-up (-7), the preset visibility snapshot, preview capture
+  (`{screenUnavailable: true}`) and restore (-2), and the lifecycle test's
+  snapshots. `PlasmaPanelAdapter::applyPlacement` moves a panel off a gone
+  screen first (its screen field's mutation, then reads again from the
+  start), once, and logs it ("stood on a screen that is gone: moved to
+  screen N"); still without a screen every field fails with
+  `ScreenUnavailable` before any other change. A screen mutation never goes
+  to a screen Plasma lacks (`plasmaScreenMissing(<index>)`), nor does the
+  preset preview restore. `PlasmaPanelAdapterTest
+  everyPlasmaScriptAsksForTheScreen` scans `src/` for unguarded scripts.
+  The lifecycle test waits for Arch Dock's own placement to finish
+  (`wait_for_applied_native_placement`) before freezing Plasma for a
+  fixture; stopping it mid-placement left a rollback queued for Plasma.
+- The flat 3D icon's glow (`flat-icon-solid-glow`) is a sibling of the solid
+  with its position, rotation and `scale * (1, 1, stretch)`.
+- Tests: `window-move-3d-smoke` (private KWin: `threeDViewsNeverEnterANewWindow`,
+  `threeDPanelLetsGoInTwoSteps` with freed memory overwritten, and
+  `newWindowNeverReadsAnotherWindowsNodes` at counts 0 to
+  `ARCHDOCK_RENDERING_CARRIED_COUNTS`, default 24). The smoke's default
+  private session is 240 s.
+
 ## Light again: idle motion, covered panels, Studio readings — 2026-11-26
 
 - 3D icon relief defaults to "auto" (made at once from the picture);

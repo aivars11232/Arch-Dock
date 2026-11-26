@@ -119,6 +119,79 @@ TestCase {
         return effect.status === ShaderEffect.Compiled
     }
 
+    Component {
+        id: otherWindowComponent
+
+        Window {
+            width: 160
+            height: 160
+            visible: true
+        }
+    }
+
+    // A flat 3D icon's own 3D view never goes along into another window: it
+    // goes as the icon leaves its window and is made anew in the new one,
+    // wearing the solid and the picture it had (none taken again).
+    function test_solidViewMadeAnewInANewWindow() {
+        const scene = createScene({ solidOnFlat: true, solidDepth: 0.5, solidRelief: "rounded",
+                                    reducedMotion: true })
+        const view = findChild(scene, "flat-icon-solid-view")
+        verify(view !== null)
+        verify(view.active)
+        tryVerify(() => view.status !== Loader.Loading, 3000)
+        const loaded = view.status === Loader.Ready
+        // The test's picture may hold nothing to cut a solid from; whatever
+        // the icon has, it keeps.
+        tryVerify(() => scene.solidPictureUrl.length > 0, 5000)
+        wait(100)
+        const picture = scene.solidPictureUrl
+        const mesh = scene.solidMesh
+        const other = createTemporaryObject(otherWindowComponent, testCase)
+        verify(other !== null)
+        scene.parent = other.contentItem
+        verify(!view.active, "gone as the icon left its window")
+        compare(view.item, null)
+        tryVerify(() => view.active, 3000, "made anew in the new window")
+        if (loaded) {
+            tryVerify(() => view.status === Loader.Ready, 3000)
+            verify(view.item.Window.window === other)
+        }
+        compare(scene.solidPictureUrl, picture)
+        verify(scene.solidMesh === mesh, "the solid it had")
+        // Hidden and shown again, a window keeps its view.
+        const kept = view.item
+        other.visible = false
+        other.visible = true
+        wait(50)
+        verify(view.active && view.item === kept)
+        scene.parent = testCase
+    }
+
+    // No picture is taken of an icon being taken apart or not yet whole,
+    // and an answer that comes after the icon went is dropped.
+    function test_noPictureOfAnIconGoingAway() {
+        const scene = createScene({})
+        let answers = 0
+        const count = function() { ++answers }
+        scene.goingAway = true
+        scene.grabGlyph(count, Qt.size(32, 32))
+        verify(!scene.glyphGrabWaiting, "not even kept for later")
+        scene.goingAway = false
+        scene.pictureTakingAllowed = false
+        scene.grabGlyph(count, Qt.size(32, 32))
+        verify(scene.glyphGrabWaiting, "kept until the icon is whole")
+        scene.glyphGrabWaiting = false
+        scene.pictureTakingAllowed = true
+        scene.grabGlyph(count, Qt.size(32, 32))
+        // As when the icon goes before its picture comes.
+        scene.pictureTakingAllowed = false
+        wait(300)
+        compare(answers, 0, "an answer after the icon went is dropped")
+        scene.pictureTakingAllowed = true
+        scene.grabGlyph(count, Qt.size(32, 32))
+        tryVerify(() => answers === 1, 3000, "a whole icon in a shown window gets its picture")
+    }
+
     // A 3D icon on a flat panel takes its picture while its window is shown:
     // one asked for in a window not shown yet is taken once it shows, or the
     // icon would keep none and stay empty.
