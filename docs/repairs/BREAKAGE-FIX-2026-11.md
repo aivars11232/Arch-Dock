@@ -492,3 +492,16 @@ of freed memory crash at once).
    a 3D panel or 3D icons on, one switch after another on a quiet desktop,
    and say whether the desktop ever vanishes. No test desktop can switch
    accounts, so this is the real proof on the owner's machine.
+
+**The owner's answer (26 November).** Question 1: keep the live pictures.
+The icons on 3D panels stay drawn from the pictures as they are drawn now,
+following hover, press, active and urgent at once. Nothing changes.
+
+**Paused on the owner's word (26 November, evening).** The fresh-clone
+recheck of `73254a5` had built with one job (1847 s) and passed 9 of its 13
+tests one at a time (`profile-manager-test`, `preset-library-test`, both
+`renderer-capability` tests, `panel-window-capability-test`,
+`plasma-panel-adapter-test`, `panel-scene-test`, `icon-scene-test`,
+`rendering-module-import-test`). The four private-session smokes
+(`rendering-import-smoke`, `decoration-3d-smoke`, `window-move-3d-smoke`,
+`studio-truth-matrix-smoke`) and the file comparison are left, then Report 2.
