@@ -340,3 +340,18 @@ surface a touch less smooth). Covered and Show Desktop: `cover-pause-final/`.
   tell) counts as solid; the owner's own saved panel presets and profiles
   exported earlier keep High until saved again; Modelled needs about
   4.5 GB free to start.
+
+### Report 2
+
+Fresh clone of `origin/main` at `3598b1b`, built with one job (1772 s),
+the step's tests one at a time: 16 of 16 passed in 765 s
+(`icon-model-test`, `system-status-test`, `profile-store-test`,
+`profile-manager-test`, `panel-registry-test`, `window-preview-model-test`,
+`panel-window-capability-test`, `studio-scroll-test`, `panel-scene-test`,
+`icon-scene-test`, `dock-entry-test`, `rendering-import-smoke` with the 3D
+checks under a private KWin, `settings-editor-model-test`,
+`configuration-upgrade-test`, `core-accessibility-test`,
+`icon-helper-pictures-test`). All 995 committed files are the same in the
+clone and the workspace. The new check that 3D icons follow their rows
+(moved and doubled entries) was also run alone with the private KWin's
+graphics and passed (`rows-rhi/`). Logs: `evidence/BREAKAGE-FIX-S2/recheck/`.
