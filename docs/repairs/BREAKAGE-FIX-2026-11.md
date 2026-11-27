@@ -702,3 +702,25 @@ and from the second return on all three were back within 1 s.
 1. Left bars: give every bar's window an outline of the bar itself, so that
    popups and tooltips open beside a left bar? Recommended: yes.
 2. The missing line under bar popups: fix it as KDE did? Recommended: yes.
+
+### Report 2
+
+Fresh clone of `origin/main` at `e3c02db`, built with one job (1761 s), the
+step's tests one at a time: 10 of 11 passed (`bar-host-smoke`,
+`bar-view-test`, `panel-window-capability-test`, `free-entry-policy-test`,
+`dock-window-policy-test`, `overflow-host-test`, `free-geometry-settle-test`,
+`preset-audition-matrix-defaults`, and the Wayland hardening tests at scales
+100 and 200). `runtime-ui-interaction-smoke` failed once at a later step,
+the wheel turning a grown free ring, which had never failed before. The new
+top-panel checks ran in the middle of that test and left the panel saved at
+the screen's top edge, changing what the later steps start from (the
+failure's own record shows the wheel never reached the panel, so the exact
+way is not proven). The original free-place checks are back as they were,
+and the top-panel checks run as their own block at the very end, putting
+the panel back where it was saved (`f68b257`). On the previous commit that
+test now fails earlier: asked to move a free panel, Arch Dock stopped waiting
+before the panel had moved, and it was read half-way (the 400 ms wait of
+this step is the fix; `tests-on-old-code/runtime-ui-on-4f897d1-2.log`). The
+clone was brought to `f68b257`, where `runtime-ui-interaction-smoke` passed
+2 of 2, and all 1001 committed files are the same in the clone and the
+workspace. Logs: `evidence/BREAKAGE-FIX-S4/recheck/`.
