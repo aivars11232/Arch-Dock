@@ -21,6 +21,7 @@
 #include <QScreen>
 
 #include <utility>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::isNativeDockPanelEdge;
 using PanelWindowHelpers::panelTypeNeedsDockApplet;
@@ -232,6 +233,8 @@ QVariantMap PanelWindow::applyNativePanelVisibilityMode(
     const QString &panelId,
     const QString &visibilityMode)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     const bool nativePanel = m_panelRegistry.panelIds().contains(panelId) &&
@@ -1163,6 +1166,10 @@ ArchDock::PlasmaPanelPlacementApplyResult PanelWindow::applyNativePanelPlacement
 QVariantMap PanelWindow::applyNativePanelPlacementDraft(const QString &panelId,
                                                         const QVariantMap &values)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     QVariantMap candidate = values;

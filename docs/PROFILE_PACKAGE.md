@@ -95,7 +95,7 @@ first journal or host mutation. If capture/retention fails, apply remains idle
 and no host or registry change occurs. The shared snapshot covers user profiles,
 presets/defaults, managed themes, settings and shortcut data; installed built-ins
 are excluded. The commands and limits are documented in
-[INSTALL.md](INSTALL.md#configuration-recovery-and-upgrades).
+[INSTALL.md](INSTALL.md#configuration-recovery).
 
 The coordinator
 writes an owner-only `profile-apply-journal.json.backup.json` and a recovery

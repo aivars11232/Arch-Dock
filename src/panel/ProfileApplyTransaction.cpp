@@ -11,6 +11,7 @@
 #include <QUuid>
 #include <algorithm>
 #include <limits>
+#include "../updates/UpdateHold.h"
 
 namespace ArchDock
 {
@@ -219,6 +220,8 @@ bool ProfileApplyTransaction::readJournal(QString *code)
 
 QVariantMap ProfileApplyTransaction::apply(const ProfileDefinition &profile)
 {
+    // While an update runs nothing is changed (UpdateHold).
+    if (Updates::UpdateHold::held()) return outcome(false, Updates::UpdateHold::errorCode());
     if (active()) return outcome(false, QStringLiteral("profile-recovery-or-apply-active"));
     const auto &op = m_operations;
     if (!op.backupConfiguration || !op.snapshot || !op.matches || !op.prepare || !op.capture || !op.create || !op.apply ||
@@ -380,6 +383,7 @@ QVariantMap ProfileApplyTransaction::abort(const QString &code)
 }
 QVariantMap ProfileApplyTransaction::recover()
 {
+    if (Updates::UpdateHold::held()) return outcome(false, Updates::UpdateHold::errorCode());
     if (m_running) return outcome(false, QStringLiteral("profile-apply-active"));
     QString code;
     if (!readJournal(&code)) { transition(QStringLiteral("BLOCKED")); return outcome(false, code); }

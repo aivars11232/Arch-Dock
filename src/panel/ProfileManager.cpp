@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QSettings>
 #include <QUrl>
+#include "../updates/UpdateHold.h"
 
 namespace ArchDock
 {
@@ -61,16 +62,22 @@ QVariantMap ProfileManager::shortcutStatus() const { return m_shortcuts->status(
 QVariantMap ProfileManager::getShortcutStatus() const { return shortcutStatus(); }
 QVariantMap ProfileManager::setShortcutsEnabled(bool enabled)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     return m_shortcuts->setEnabled(enabled);
 }
 QVariantMap ProfileManager::setProfileShortcut(const QString &id, const QString &sequence)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     return m_shortcuts->setBinding(id, sequence);
 }
 QVariantMap ProfileManager::clearProfileShortcut(const QString &id)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     return m_shortcuts->clearBinding(id);
 }
@@ -155,6 +162,8 @@ QVariantList ProfileManager::listProfiles() const
 }
 QVariantMap ProfileManager::createProfile(const QString &name)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     if (!m_operations.snapshot) return failure(QStringLiteral("profile-host-operations-unavailable"));
     QString code;
@@ -165,6 +174,10 @@ QVariantMap ProfileManager::createProfile(const QString &name)
 }
 QVariantMap ProfileManager::saveProfile(const QString &id, int revision)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code;
     auto profile = m_store.load(id, &code);
@@ -179,18 +192,24 @@ QVariantMap ProfileManager::saveProfile(const QString &id, int revision)
 }
 QVariantMap ProfileManager::renameProfile(const QString &id, int revision, const QString &name)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code; const auto profile = m_store.rename(id, revision, name, &code);
     return finish(profile, code);
 }
 QVariantMap ProfileManager::duplicateProfile(const QString &id, int revision, const QString &name)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code; const auto profile = m_store.duplicate(id, revision, name, &code);
     return finish(profile, code);
 }
 QVariantMap ProfileManager::deleteProfile(const QString &id, int revision)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code;
     const auto profile = m_store.load(id, &code);
@@ -204,6 +223,8 @@ QVariantMap ProfileManager::deleteProfile(const QString &id, int revision)
 }
 QVariantMap ProfileManager::importProfile(const QString &sourceUrl)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     const QUrl url(sourceUrl);
     if (!url.isLocalFile()) return failure(QStringLiteral("profile-import-requires-local-file"));
@@ -221,6 +242,8 @@ QVariantMap ProfileManager::exportProfile(const QString &id, int revision, const
 }
 QVariantMap ProfileManager::applyProfile(const QString &id, int revision)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code; const auto profile = m_store.load(id, &code);
     if (!profile) return failure(code);
@@ -270,6 +293,8 @@ QStringList ProfileManager::profilePanelNames(const QString &id, const QString &
 
 QVariantMap ProfileManager::replaceProfilePanel(const QString &id, int expectedRevision, const PanelDefinition &panel)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code;
     auto profile = m_store.load(id, &code);
@@ -308,6 +333,8 @@ QVariantList ProfileManager::profilePanels(const QString &id) const
 QVariantMap ProfileManager::renameProfilePanel(const QString &id, int expectedRevision, const QString &panelId,
     const QString &name)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (name.trimmed().isEmpty()) return failure(QStringLiteral("panel-name-required"));
     QString code;
     int revision = 0;
@@ -320,6 +347,8 @@ QVariantMap ProfileManager::renameProfilePanel(const QString &id, int expectedRe
 
 QVariantMap ProfileManager::removeProfilePanel(const QString &id, int expectedRevision, const QString &panelId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto guarded = guard(); if (!guarded.isEmpty()) return failure(guarded);
     QString code;
     auto profile = m_store.load(id, &code);

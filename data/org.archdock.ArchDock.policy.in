@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Arch Dock's one action: its Update button installs an Arch Dock update
+     through the root helper once the password is typed, every time, and only
+     from the active local session. The helper checks the update's signature
+     itself before it installs anything. -->
+<policyconfig>
+  <vendor>Arch Dock</vendor>
+  <icon_name>org.archdock.ArchDock</icon_name>
+  <action id="org.archdock.ArchDock.install-update">
+    <description>Install an Arch Dock update</description>
+    <message>Arch Dock needs your password to install its update.</message>
+    <icon_name>org.archdock.ArchDock</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@ARCHDOCK_HELPER_EXEC@</annotate>
+  </action>
+</policyconfig>

@@ -76,6 +76,11 @@ public:
     [[nodiscard]] bool concealed() const { return m_concealed; }
     [[nodiscard]] bool pointerInside() const { return m_pointerInside; }
 
+    // Whether this Qt has the window part through which a bar asks KWin's
+    // screen edge to hide it. It is one of Qt's private interfaces, which a
+    // Qt update can take away; without it a bar that hides stays shown.
+    [[nodiscard]] static bool waylandWindowPartAvailable();
+
 Q_SIGNALS:
     void wantedLengthChanged();
     void wantedReachChanged();

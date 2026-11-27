@@ -46,6 +46,12 @@ var sections = [
         // How Panel Studio itself looks; nothing on the desktop changes.
         label: "UI Themes",
         subtabs: []
+    },
+    {
+        // Which Arch Dock runs, and its updates from GitHub. Offered only by
+        // an installed release build (Panel Studio hides it elsewhere).
+        label: "Updates",
+        subtabs: []
     }
 ]
 

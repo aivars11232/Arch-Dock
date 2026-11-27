@@ -7,6 +7,9 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QDBusError>
 #include <QDBusReply>
 #include <QDateTime>
 #include <QDebug>
@@ -30,7 +33,7 @@ constexpr int StartCheckMs = 15000;
 BarHostSupervisor::BarHostSupervisor(QObject *parent)
     : QObject(parent)
     , m_watcher(QString::fromLatin1(ServiceName), QDBusConnection::sessionBus(),
-                QDBusServiceWatcher::WatchForUnregistration)
+                QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration)
 {
     m_restart.setSingleShot(true);
     m_restart.setInterval(RestartDelayMs);
@@ -43,6 +46,42 @@ BarHostSupervisor::BarHostSupervisor(QObject *parent)
             hostGone();
     });
     connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, &BarHostSupervisor::hostGone);
+    // Each host that comes up is asked whether its bars can hide, and so is
+    // one already running when the backend starts.
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { askCanHide(); });
+    QTimer::singleShot(0, this, [this]
+    {
+        if (running())
+            askCanHide();
+    });
+}
+
+void BarHostSupervisor::askCanHide(bool mayAskAgain)
+{
+    // Asked without waiting. A host answers once its event loop runs; one
+    // asked in the moment between taking its name and showing its object is
+    // asked once more a little later. A host from before this question (an
+    // older Arch Dock) cannot answer, and its bars count as able to hide.
+    const QString service = QString::fromLatin1(ServiceName);
+    auto *pending = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(
+        QDBusMessage::createMethodCall(service, QStringLiteral("/Bars"), service, QStringLiteral("canHide"))), this);
+    connect(pending, &QDBusPendingCallWatcher::finished, this, [this, mayAskAgain](QDBusPendingCallWatcher *call)
+    {
+        call->deleteLater();
+        const QDBusPendingReply<bool> reply = *call;
+        if (reply.isError() && mayAskAgain && reply.error().type() == QDBusError::UnknownObject)
+        {
+            QTimer::singleShot(2000, this, [this] { if (running()) askCanHide(false); });
+            return;
+        }
+        const bool canHide = reply.isError() || reply.value();
+        if (canHide == m_canHide)
+            return;
+        m_canHide = canHide;
+        if (!canHide)
+            qWarning() << "Arch Dock's bars cannot hide with this Qt; a bar that hides stays shown.";
+        Q_EMIT canHideChanged();
+    });
 }
 
 QString BarHostSupervisor::program()
@@ -187,6 +226,12 @@ void BarHostSupervisor::startHost()
 
 void BarHostSupervisor::hostGone()
 {
+    // Without a host nothing is known about hiding; the next one is asked.
+    if (!m_canHide)
+    {
+        m_canHide = true;
+        Q_EMIT canHideChanged();
+    }
     if (m_wanted && !m_stopped)
         m_restart.start();
 }

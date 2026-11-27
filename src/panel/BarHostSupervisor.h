@@ -30,6 +30,17 @@ public:
     void stop();
 
     [[nodiscard]] bool running() const;
+    // Whether the bars can hide with the Qt they run with: asked after each
+    // start of the host, true until the host says otherwise (an older host
+    // that cannot be asked counts as able).
+    [[nodiscard]] bool canHide() const { return m_canHide; }
+#ifdef ARCHDOCK_TESTING
+    void setCanHideForTesting(bool canHide)
+    {
+        m_canHide = canHide;
+        Q_EMIT canHideChanged();
+    }
+#endif
     // The program started: ARCHDOCK_BARS_EXECUTABLE, else arch-dock-bars
     // beside the backend, else the one on the PATH.
     [[nodiscard]] static QString program();
@@ -37,7 +48,11 @@ public:
     // that starts the bars.
     [[nodiscard]] static bool isTheBackend();
 
+Q_SIGNALS:
+    void canHideChanged();
+
 private:
+    void askCanHide(bool mayAskAgain = true);
     void startHost();
     // A bar host left running from before an update, asked to quit so the
     // new one starts; whether there was one.
@@ -49,6 +64,7 @@ private:
 
     bool m_wanted = false;
     bool m_stopped = false;
+    bool m_canHide = true;
     bool m_autostartKnown = false;
     QDBusServiceWatcher m_watcher;
     QTimer m_restart;

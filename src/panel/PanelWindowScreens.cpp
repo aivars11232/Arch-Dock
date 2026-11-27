@@ -24,6 +24,7 @@
 
 #include <array>
 #include <cmath>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::fitUtilityWindow;
 
@@ -125,6 +126,10 @@ int PanelWindow::screenIndexForPanel(const QString &panelId) const
 
 void PanelWindow::setPanelScreen(const QString &panelId, int screenIndex)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     if (!m_panelRegistry.panelIds().contains(panelId))
@@ -163,6 +168,8 @@ void PanelWindow::setPanelScreen(const QString &panelId, int screenIndex)
 
 bool PanelWindow::setPanelVisible(const QString &panelId, bool visible)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy()) return false;
 
     if (!m_panelRegistry.panelIds().contains(panelId) ||
@@ -182,6 +189,8 @@ bool PanelWindow::setPanelVisible(const QString &panelId, bool visible)
 
 void PanelWindow::setPanelVisibilityMode(const QString &panelId, const QString &visibilityMode)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     const QVariantMap result = applyNativePanelVisibilityMode(panelId, visibilityMode);
     if (!result.value(QStringLiteral("success")).toBool() ||
         panelId != QStringLiteral("bottom"))

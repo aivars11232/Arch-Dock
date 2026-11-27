@@ -20,17 +20,35 @@ Version **0.1.1** (release 54). Original Arch Dock work is licensed
 
 ## Install
 
-On Arch Linux with KDE Plasma 6, one command installs the newest package;
-pacman fetches what it needs from the Arch repositories:
+0.1.1-55, the first release with the Update button, is coming; earlier
+releases are not recommended.
 
-```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-54/arch-dock-0.1.1-54-x86_64.pkg.tar.zst
-systemctl --user restart plasma-plasmashell.service
-```
+On Arch Linux with KDE Plasma 6:
 
-Then open **Arch Dock** from the application menu: Panel Studio appears,
-and a panel is a few clicks away. To update, run the same two lines with
-the newer package from the [releases page](https://github.com/aivars11232/Arch-Dock/releases).
+1. Download the package file, `arch-dock-<version>-x86_64.pkg.tar.zst`, from
+   the newest release on the
+   [releases page](https://github.com/aivars11232/Arch-Dock/releases).
+2. Update your system first: `sudo pacman -Syu`
+3. In the folder where you saved the file, install it; pacman fetches what it
+   needs from the Arch repositories:
+
+   ```bash
+   sudo pacman -U ./arch-dock-<version>-x86_64.pkg.tar.zst
+   ```
+
+4. Open **Arch Dock** from the application menu: Panel Studio appears, and a
+   panel is a few clicks away.
+
+Install from the downloaded file, not with `pacman -U` and a web address:
+pacman wants a signature for a file it downloads itself, and the releases
+carry none for pacman. (The Update button checks a signature of its own.)
+
+From 0.1.1-55 on, updates come from Panel Studio > **Updates**: one button,
+your password once, and Arch Dock restarts by itself. From 0.1.1-54 or older,
+install the new file once with the update line in
+[the installation guide](docs/INSTALL.md#upgrade), or install it and log out
+and in.
+
 Building the package yourself, starting and stopping, recovery and
 uninstalling are in [the installation guide](docs/INSTALL.md).
 
@@ -93,8 +111,8 @@ keeps them, Cancel drops them.
 
 ## Requirements
 
-Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6.8 or newer, KDE
-Frameworks 6 or newer. True 3D needs Qt Quick 3D and a working GPU driver; without
+Arch Linux, KDE Plasma 6.8 or newer, Wayland, Qt 6 at the version the
+package was built with or newer, KDE Frameworks 6 or newer. True 3D needs Qt Quick 3D and a working GPU driver; without
 them panels fall back to flat drawing. Icons made into 3D objects need
 ONNX Runtime (`onnxruntime-cpu`) and the TripoSR model files, as the
 [installation guide](docs/INSTALL.md) describes; without them icons keep a

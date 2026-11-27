@@ -1,0 +1,20 @@
+# The update signing key this build of Arch Dock trusts, on one line:
+#
+#   <key id> <hex of the key's SubjectPublicKeyInfo DER: an ECDSA P-256 public key>
+#
+# Arch Dock's Update button shows and installs only a release whose update
+# description was signed with this key. The backend checks the signature
+# before it shows a release, and the root helper checks it again before it
+# installs anything. Only the public half belongs here. The key itself is a
+# file in a folder the owner chose, outside the repository.
+#
+# A key id is 1 to 64 of a-z, 0-9 and "-". A release names the key that signed
+# it, and a key that is not listed here is never trusted, whatever a release
+# says.
+#
+# One key, kept: there is exactly one key, and it is never replaced. A PC that
+# skipped the release bringing a new key could never check later releases, so
+# a new key would mean one update by hand on every PC.
+#
+# Until the key is made, this file lists none. A build then checks and
+# installs no update, and a release build refuses to configure.

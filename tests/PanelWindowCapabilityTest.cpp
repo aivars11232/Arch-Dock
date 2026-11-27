@@ -1,4 +1,6 @@
 #include "model/PanelIconCapacity.h"
+#include "updates/ArchDockUpdates.h"
+#include "updates/UpdateHold.h"
 #include "model/PanelCapabilityResolver.h"
 #include "RendererBuildConfig.h"
 #include "QmlGarbageCollector.h"
@@ -6,6 +8,8 @@
 #include "model/PanelSettingsSchema.h"
 #include "PanelRegistry.h"
 #include "panel/PanelWindow.h"
+#include "panel/ProfileManager.h"
+#include "IntentionalStop.h"
 #include "persistence/RemovedPanelStore.h"
 #include "presets/PresetPreviewSession.h"
 #include "themes/ThemePackage.h"
@@ -25,6 +29,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJSValue>
+#include <QMetaMethod>
+#include <QMetaProperty>
 #include <QtQuickTest>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
@@ -295,6 +301,75 @@ QVariant truthChangedValue(const QVariantMap &field, const QVariant &current, co
 
 }
 
+
+// A stand-in for the Update button's updater: the properties and calls Panel
+// Studio uses, with no network and no password window.
+class StandInUpdater final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(bool offered MEMBER offered CONSTANT)
+    Q_PROPERTY(QString runningVersion MEMBER runningVersion CONSTANT)
+    Q_PROPERTY(QString state MEMBER state NOTIFY changed)
+    Q_PROPERTY(QString step MEMBER step NOTIFY changed)
+    Q_PROPERTY(QString line MEMBER line NOTIFY changed)
+    Q_PROPERTY(QString lineCode MEMBER lineCode NOTIFY changed)
+    Q_PROPERTY(QString details MEMBER details NOTIFY changed)
+    Q_PROPERTY(QString lastLooked MEMBER lastLooked NOTIFY changed)
+    Q_PROPERTY(QString foundVersion MEMBER foundVersion NOTIFY changed)
+    Q_PROPERTY(QString releasedOn MEMBER releasedOn NOTIFY changed)
+    Q_PROPERTY(qint64 downloadSize MEMBER downloadSize NOTIFY changed)
+    Q_PROPERTY(QStringList noteTitles MEMBER noteTitles NOTIFY changed)
+    Q_PROPERTY(QString notes MEMBER notes NOTIFY changed)
+    Q_PROPERTY(qint64 received MEMBER received NOTIFY changed)
+    Q_PROPERTY(bool canUpdate MEMBER canUpdate NOTIFY changed)
+    Q_PROPERTY(bool canStop MEMBER canStop NOTIFY changed)
+    Q_PROPERTY(QString installLine MEMBER installLine NOTIFY changed)
+    Q_PROPERTY(QString releasesPage MEMBER releasesPage NOTIFY changed)
+    Q_PROPERTY(bool holdsSettings MEMBER holdsSettings NOTIFY changed)
+    Q_PROPERTY(bool checkAutomatically MEMBER checkAutomatically NOTIFY changed)
+    Q_PROPERTY(bool attention MEMBER attention NOTIFY changed)
+
+public:
+    using QObject::QObject;
+    bool offered = true;
+    QString runningVersion = QStringLiteral("0.1.1-55");
+    QString state = QStringLiteral("found");
+    QString step;
+    QString line;
+    QString lineCode;
+    QString details;
+    QString lastLooked;
+    QString foundVersion = QStringLiteral("0.1.1-56");
+    QString releasedOn = QStringLiteral("3 Dec 2026");
+    qint64 downloadSize = 34127137;
+    QStringList noteTitles{QStringLiteral("The bars no longer flicker.")};
+    QString notes = QStringLiteral("- **The bars no longer flicker.**");
+    qint64 received = 0;
+    bool canUpdate = true;
+    bool canStop = false;
+    QString installLine;
+    QString releasesPage;
+    bool holdsSettings = false;
+    bool checkAutomatically = true;
+    bool attention = true;
+    int looks = 0;
+    int updates = 0;
+    int restarts = 0;
+    Q_INVOKABLE void check() { ++looks; }
+    Q_INVOKABLE void update() { ++updates; }
+    Q_INVOKABLE void stop() {}
+    Q_INVOKABLE void restartArchDock() { ++restarts; }
+    Q_INVOKABLE void pageOpened() {}
+    void hold(bool held)
+    {
+        holdsSettings = held;
+        Q_EMIT changed();
+    }
+
+Q_SIGNALS:
+    void changed();
+};
+
 class PanelWindowCapabilityTest final : public QObject
 {
     Q_OBJECT
@@ -391,6 +466,10 @@ private slots:
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
     void dockWindowsAndBarPopupsFollowTheirRules();
+    void studioUpdatesFollowTheUpdater();
+    void updateGuardHoldsEveryChange();
+    void updateControlsStayOffTheBus();
+    void quitWaitsForTheUpdate();
     void studioTruthMatrix_data();
     void studioTruthMatrix();
 
@@ -8218,6 +8297,327 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName(QStringLiteral("PanelWindowCapabilityTest"));
     PanelWindowCapabilityTest test;
     return QTest::qExec(&test, argc, argv);
+}
+
+// Panel Studio's Updates section follows the updater: hidden and refused in
+// a build without a release and a key; offered through a stand-in, with no
+// setting rows, the unapplied-changes dialog before any look, and every other
+// entry and Apply/OK disabled while the hold is held. A bar's hiding choice
+// shows only while the bars can hide; otherwise one orange line stands there.
+void PanelWindowCapabilityTest::studioUpdatesFollowTheUpdater()
+{
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    QVERIFY(registry);
+    const QString panel = registry->addFreePanel();
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../qml/runtime/SettingsPopup.qml")));
+    QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+    const auto call = [](QObject *popup, const char *method, const QVariant &argument = {}) {
+        QVariant value;
+        if (argument.isValid())
+            QMetaObject::invokeMethod(popup, method, Q_RETURN_ARG(QVariant, value), Q_ARG(QVariant, argument));
+        else
+            QMetaObject::invokeMethod(popup, method, Q_RETURN_ARG(QVariant, value));
+        return value;
+    };
+    const auto rows = [](QObject *popup) {
+        QVariant value;
+        QMetaObject::invokeMethod(popup, "rowsForCurrentPage", Q_RETURN_ARG(QVariant, value));
+        QVariantList result;
+        for (const QVariant &row : value.toList()) result.append(row.toMap());
+        return result;
+    };
+
+    // This build has no release and no key: no Updates.
+    {
+        std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+        QVERIFY(popup);
+        QVERIFY(!call(popup.get(), "sectionOffered", 7).toBool());
+        call(popup.get(), "setMainTab", 7);
+        QVERIFY(popup->property("mainTabIndex").toInt() != 7);
+    }
+
+    StandInUpdater standIn;
+    backend.setUpdatesForTesting(&standIn);
+    std::unique_ptr<QObject> popup(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+    QVERIFY(popup);
+    auto *window = qobject_cast<QQuickWindow *>(popup.get());
+    QVERIFY(window);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QVERIFY(call(popup.get(), "sectionOffered", 7).toBool());
+    call(popup.get(), "setMainTab", 7);
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 7);
+    QVERIFY(rows(popup.get()).isEmpty());
+    QTRY_VERIFY(visibleItem(window, "panel-studio-updates-page"));
+
+    // Update Now with changes not applied: the dialog first, no look on GitHub.
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+        Q_ARG(QVariant, (QVariantMap{{"key", "panelGlow"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.8)));
+    QVERIFY(popup->property("hasPendingChanges").toBool());
+    call(popup.get(), "requestUpdate");
+    QCOMPARE(popup->property("pendingSwitch").toString(), QStringLiteral("update"));
+    QCOMPARE(standIn.updates, 0);
+    QCOMPARE(standIn.looks, 0);
+    call(popup.get(), "discardStudioChanges");
+    popup->setProperty("pendingSwitch", QString());
+    QVERIFY(!popup->property("hasPendingChanges").toBool());
+    call(popup.get(), "requestUpdate");
+    QCOMPARE(standIn.updates, 1);
+
+    // Restart Arch Dock closes Studio too: the same dialog first.
+    QVERIFY(QMetaObject::invokeMethod(popup.get(), "setFieldValue",
+        Q_ARG(QVariant, (QVariantMap{{"key", "panelGlow"}, {"scope", "panel"}})), Q_ARG(QVariant, 0.6)));
+    call(popup.get(), "requestRestart");
+    QCOMPARE(popup->property("pendingSwitch").toString(), QStringLiteral("restart"));
+    QCOMPARE(standIn.restarts, 0);
+    call(popup.get(), "discardStudioChanges");
+    call(popup.get(), "continueSwitch", QStringLiteral("restart"));
+    popup->setProperty("pendingSwitch", QString());
+    QCOMPARE(standIn.restarts, 1);
+
+    // While the hold is held: only Updates, with Apply disabled.
+    call(popup.get(), "setMainTab", 1);
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 1);
+    standIn.hold(true);
+    QTRY_COMPARE(popup->property("mainTabIndex").toInt(), 7);
+    QVERIFY(!call(popup.get(), "sectionOffered", 1).toBool());
+    call(popup.get(), "setMainTab", 1);
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 7);
+    auto *apply = popup->findChild<QQuickItem *>(QStringLiteral("studio-apply"));
+    QVERIFY(apply);
+    QVERIFY(!apply->isEnabled());
+    // Every way to another page leads back to Updates, which stays shown.
+    call(popup.get(), "openNewPanelPage", QStringLiteral("free"));
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 7);
+    QCOMPARE(popup->property("newPanelEdge").toString(), QString());
+    call(popup.get(), "editPanel", panel);
+    QCOMPARE(popup->property("mainTabIndex").toInt(), 7);
+    QTRY_VERIFY(visibleItem(window, "panel-studio-updates-page"));
+    auto *form = popup->findChild<QQuickItem *>(QStringLiteral("studio-page-form"));
+    QVERIFY(form);
+    QVERIFY(!form->isEnabled());
+    // A Studio opened while the hold is held starts on Updates.
+    {
+        std::unique_ptr<QObject> opened(component.createWithInitialProperties({{"selectedPanelId", panel}}));
+        QVERIFY(opened);
+        QCOMPARE(opened->property("mainTabIndex").toInt(), 7);
+    }
+    standIn.hold(false);
+    QVERIFY(call(popup.get(), "sectionOffered", 1).toBool());
+
+    // A bar's hiding choice and the bars' answer.
+    const QString bar = backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher"));
+    QVERIFY(!bar.isEmpty());
+    std::unique_ptr<QObject> barStudio(component.createWithInitialProperties({{"selectedPanelId", bar},
+        {"mainTabIndex", 1}, {"subTabIndex", 3}}));
+    QVERIFY(barStudio);
+    const auto hiding = [&]() {
+        bool choice = false;
+        bool line = false;
+        for (const QVariant &row : rows(barStudio.get())) {
+            const QVariantMap map = row.toMap();
+            if (map.value("key").toString() == QLatin1String("visibilityMode"))
+                choice = true;
+            if (map.value("kind").toString() == QLatin1String("notice")
+                && map.value("text").toString().contains(QLatin1String("bars cannot hide")))
+                line = true;
+        }
+        return QStringLiteral("%1/%2").arg(choice ? "choice" : "no-choice", line ? "line" : "no-line");
+    };
+    QCOMPARE(hiding(), QStringLiteral("choice/no-line"));
+    backend.setBarsCanHideForTesting(false);
+    QTRY_COMPARE(hiding(), QStringLiteral("no-choice/line"));
+    backend.setBarsCanHideForTesting(true);
+    QTRY_COMPARE(hiding(), QStringLiteral("choice/no-line"));
+}
+
+// While an update holds the settings, every writing path refuses with
+// "update-active", whoever calls it (Studio, a panel menu, a profile
+// shortcut and D-Bus all reach these same slots); once the hold is released
+// the same calls work again. Changes under way are counted.
+void PanelWindowCapabilityTest::updateGuardHoldsEveryChange()
+{
+    using ArchDock::Updates::UpdateHold;
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    auto *registry = qobject_cast<PanelRegistry *>(engine.rootContext()
+        ->contextProperty("panelRegistry").value<QObject *>());
+    auto *profiles = qobject_cast<ArchDock::ProfileManager *>(engine.rootContext()
+        ->contextProperty("profileManager").value<QObject *>());
+    auto *previews = qobject_cast<ArchDock::PresetPreviewSession *>(engine.rootContext()
+        ->contextProperty("presetAudition").value<QObject *>());
+    QVERIFY(registry && profiles && previews);
+    const QString panel = registry->addFreePanel();
+    const auto revision = [&] { return registry->panelDefinition(panel)->settingsRevision; };
+    const auto refused = [](const QVariantMap &answer) {
+        return !answer.value("success").toBool() && answer.value("errorCode").toString() == QLatin1String("update-active");
+    };
+
+    UpdateHold::take();
+    const auto release = qScopeGuard([] { UpdateHold::release(); });
+    QVERIFY(refused(backend.applyPanelSettingsTransaction(panel, revision(), {{"panelGlow", 0.4}})));
+    QVERIFY(refused(backend.createFreePanel()));
+    QVERIFY(refused(backend.removePanel(panel)));
+    QVERIFY(backend.createBar(QStringLiteral("bottom"), QStringLiteral("launcher")).isEmpty());
+    QVERIFY(!backend.setDockStringConfiguration(panel, QStringLiteral("layout"), QStringLiteral("arc")));
+    QVERIFY(!backend.setDockBooleanConfiguration(panel, QStringLiteral("magnification"), false));
+    QVERIFY(!backend.addPanelEntries(panel, {QStringLiteral("applications:org.kde.konsole.desktop")}));
+    QVERIFY(!backend.setPanelVisible(panel, false));
+    QVERIFY(refused(profiles->applyProfile(QStringLiteral("any"), 0)));
+    QVERIFY(refused(profiles->saveProfile(QStringLiteral("any"), 0)));
+    QVERIFY(refused(profiles->deleteProfile(QStringLiteral("any"), 0)));
+    QVERIFY(refused(previews->beginPreview({{"kind", "scene3d"}, {"panelId", panel}})));
+    QVERIFY(refused(previews->restoreBuiltInDefaults()));
+    // Saved profiles, their panels and their shortcuts.
+    QVERIFY(refused(profiles->createProfile(QStringLiteral("held"))));
+    QVERIFY(refused(profiles->renameProfile(QStringLiteral("any"), 0, QStringLiteral("other"))));
+    QVERIFY(refused(profiles->duplicateProfile(QStringLiteral("any"), 0, QStringLiteral("other"))));
+    QVERIFY(refused(profiles->renameProfilePanel(QStringLiteral("any"), 0, panel, QStringLiteral("other"))));
+    QVERIFY(refused(profiles->removeProfilePanel(QStringLiteral("any"), 0, panel)));
+    QVERIFY(refused(profiles->setShortcutsEnabled(true)));
+    QVERIFY(refused(profiles->setProfileShortcut(QStringLiteral("any"), QStringLiteral("Meta+F9"))));
+    QVERIFY(refused(profiles->clearProfileShortcut(QStringLiteral("any"))));
+    // A widget from Plasma's Add Widgets, and a hidden edge shown as a bar:
+    // refused before anything is written.
+    QVERIFY(refused(backend.adoptFreePanelApplet(1, 2)));
+    const QVariant edgeHost = registry->panelValue(QStringLiteral("bottom"), QStringLiteral("edgeHost"));
+    QVERIFY(!backend.showEdgePanelAsBar(QStringLiteral("bottom")));
+    QCOMPARE(registry->panelValue(QStringLiteral("bottom"), QStringLiteral("edgeHost")), edgeHost);
+    QCOMPARE(registry->panelIds().count(panel), 1);
+
+    // Released: the same change goes through.
+    UpdateHold::release();
+    QVERIFY(backend.applyPanelSettingsTransaction(panel, revision(), {{"panelGlow", 0.4}}).value("success").toBool());
+
+    // Changes under way are counted while they live.
+    QCOMPARE(UpdateHold::changesUnderWay(), 0);
+    {
+        const ArchDock::Updates::ChangeUnderWay first;
+        const ArchDock::Updates::ChangeUnderWay second;
+        QCOMPARE(UpdateHold::changesUnderWay(), 2);
+    }
+    QCOMPARE(UpdateHold::changesUnderWay(), 0);
+}
+
+// /Control, /Profiles and /PresetAudition export every public slot and
+// property. None of them starts, stops or restarts an update, or sets or
+// lifts the update hold: the names that could are those from before the
+// Update button, none of which reaches the updater.
+void PanelWindowCapabilityTest::updateControlsStayOffTheBus()
+{
+    static const QRegularExpression risky(QStringLiteral("updat|restart|install|hold|quit|stop"),
+                                          QRegularExpression::CaseInsensitiveOption);
+    QStringList exported;
+    for (const QMetaObject *object : {&PanelWindow::staticMetaObject, &ArchDock::ProfileManager::staticMetaObject,
+                                      &ArchDock::PresetPreviewSession::staticMetaObject})
+    {
+        for (int index = QObject::staticMetaObject.methodCount(); index < object->methodCount(); ++index)
+        {
+            const QMetaMethod method = object->method(index);
+            if (method.methodType() == QMetaMethod::Slot && method.access() == QMetaMethod::Public
+                && risky.match(QString::fromLatin1(method.name())).hasMatch())
+                exported.append(QStringLiteral("%1::%2()").arg(QLatin1String(object->className()), QLatin1String(method.name())));
+        }
+        for (int index = QObject::staticMetaObject.propertyCount(); index < object->propertyCount(); ++index)
+        {
+            const QMetaProperty property = object->property(index);
+            if (property.isWritable() && risky.match(QString::fromLatin1(property.name())).hasMatch())
+                exported.append(QStringLiteral("%1::%2").arg(QLatin1String(object->className()), QLatin1String(property.name())));
+        }
+    }
+    // Arch Dock's Quit (before the password it stops an update, after it
+    // refuses), and two drafts that are no update: a 3D scene's and a preview's.
+    const QStringList known = {QStringLiteral("PanelWindow::quit()"), QStringLiteral("PanelWindow::updateSceneEditDraft()"),
+                               QStringLiteral("ArchDock::PresetPreviewSession::updateDraft()")};
+    QVERIFY2(exported == known, qPrintable(exported.join(QStringLiteral(", "))));
+
+    // The updater itself is never put on the bus.
+    QFile source(QFINDTESTDATA("../src/panel/PanelWindow.cpp"));
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    for (const QString &line : QString::fromUtf8(source.readAll()).split(u'\n'))
+        if (line.contains(QLatin1String("registerObject")))
+            QVERIFY2(!line.contains(QLatin1String("m_updates")) && !line.contains(QLatin1String("Invokables"))
+                         && !line.contains(QLatin1String("ExportAllContents")),
+                     qPrintable(line));
+}
+
+// While an update installs, quit() refuses (L32) with a notice, and the stop
+// record that `arch-dock --quit` writes before it asks is removed again.
+void PanelWindowCapabilityTest::quitWaitsForTheUpdate()
+{
+    using ArchDock::Updates::ArchDockUpdates;
+    // An own runtime folder: neither the stop record nor the marker touches the login's.
+    QTemporaryDir runtime;
+    QVERIFY(runtime.isValid());
+    QVERIFY(QFile::setPermissions(runtime.path(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+    const QByteArray loginRuntime = qgetenv("XDG_RUNTIME_DIR");
+    qputenv("XDG_RUNTIME_DIR", QFile::encodeName(runtime.path()));
+    const auto restoreRuntime = qScopeGuard([loginRuntime]
+    {
+        if (loginRuntime.isNull())
+            qunsetenv("XDG_RUNTIME_DIR");
+        else
+            qputenv("XDG_RUNTIME_DIR", loginRuntime);
+    });
+
+    // The previous run's install still goes on: its marker, and its helper running.
+    QFile marker(runtime.filePath(QStringLiteral("arch-dock-update.json")));
+    QVERIFY(marker.open(QIODevice::WriteOnly));
+    marker.write(QJsonDocument(QJsonObject{{"format", 1}, {"from", "0.1.1-55"}, {"to", "0.1.1-56"}, {"phase", "installing"},
+                                           {"session", ArchDock::IntentionalStop::sessionIdentity()}}).toJson());
+    marker.close();
+    struct InstalledArchDock final : ArchDock::Updates::CommandRunner
+    {
+        Result run(const QString &program, const QStringList &arguments, const QByteArray &) override
+        {
+            Result result;
+            if (program.endsWith(QLatin1String("/pacman")) && arguments == QStringList{"-Q", "arch-dock"})
+            {
+                result.started = true;
+                result.exitCode = 0;
+                result.output = "arch-dock 0.1.1-55\n";
+            }
+            return result;
+        }
+    } runner;
+    ArchDockUpdates::Environment environment;
+    environment.runner = &runner;
+    environment.runtimeFolder = runtime.path();
+    environment.cacheFolder = runtime.filePath(QStringLiteral("cache"));
+    environment.stateFolder = runtime.filePath(QStringLiteral("state"));
+    environment.toolFolder = runtime.filePath(QStringLiteral("tools"));
+    environment.release = QStringLiteral("0.1.1-55");
+    environment.offered = true;
+    environment.processRuns = [](const QString &name, bool) { return name == QLatin1String("arch-dock-insta"); };
+    QStringList notices;
+    environment.notice = [&notices](const QString &event, const QString &title, const QString &text, const QString &)
+    { notices.append(event + QStringLiteral(" | ") + title + QStringLiteral(" | ") + text); };
+    ArchDockUpdates::setSystemForTesting(environment);
+    const auto restoreUpdater = qScopeGuard([] { ArchDockUpdates::setSystemForTesting(std::nullopt); });
+
+    QQmlApplicationEngine engine;
+    engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml-imports");
+    PanelWindow backend(engine);
+    QObject *updates = engine.rootContext()->contextProperty("archDockUpdates").value<QObject *>();
+    QVERIFY(updates);
+    QCOMPARE(updates->property("state").toString(), QStringLiteral("updating"));
+    QCOMPARE(updates->property("step").toString(), QStringLiteral("installing"));
+
+    QVERIFY(ArchDock::IntentionalStop::record(QStringLiteral("quit")));
+    const QVariantMap answer = backend.quit();
+    QVERIFY(!answer.value("success").toBool());
+    QCOMPARE(answer.value("errorCode").toString(), QStringLiteral("update-installing"));
+    QCOMPARE(answer.value("message").toString(), QStringLiteral("Arch Dock is installing its update. Quit again when it has finished."));
+    QVERIFY(!QFile::exists(ArchDock::IntentionalStop::statePath()));
+    QVERIFY(QFile::exists(marker.fileName()));
+    // The menu's Quit has no window: a notice says why nothing happened.
+    QCOMPARE(notices, QStringList{QStringLiteral("QuitRefused | Arch Dock did not quit | "
+                                                 "Arch Dock is installing its update. Quit again when it has finished.")});
 }
 
 #include "PanelWindowCapabilityTest.moc"

@@ -35,8 +35,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "ArchDockVersion.h"
 #include "IntentionalStop.h"
 #include "QmlGarbageCollector.h"
+#include "QtBuildCheck.h"
 #include "WindowWatcher.h"
 #include "panel/PanelManager.h"
 #include "persistence/ConfigurationBackup.h"
@@ -112,9 +114,11 @@ int main(int argc, char *argv[])
     bool quitCommand = false;
     bool resumeCommand = false;
     bool activated = false;
+    bool versionCommand = false;
     for (int i = 1; i < argc; ++i)
     {
         const QString argument = QString::fromLocal8Bit(argv[i]);
+        versionCommand = versionCommand || argument == QStringLiteral("--version") || argument == QStringLiteral("-v");
         recoveryCommand = recoveryCommand || argument == QStringLiteral("--backup-config") ||
             argument == QStringLiteral("--list-config-backups") ||
             argument == QStringLiteral("--restore-config-backup") ||
@@ -122,6 +126,14 @@ int main(int argc, char *argv[])
         quitCommand = quitCommand || argument == QStringLiteral("--quit");
         resumeCommand = resumeCommand || argument == QStringLiteral("--resume");
         activated = activated || argument == QStringLiteral("--dbus-activated");
+    }
+    // `arch-dock --version`: which Arch Dock this is, with no display, bus or
+    // session needed.
+    if (versionCommand)
+    {
+        QCoreApplication version(argc, argv);
+        QTextStream(stdout) << "Arch Dock " << ArchDock::Version::displayVersion() << '\n';
+        return EXIT_SUCCESS;
     }
     // `arch-dock --resume`, a panel's Start: ends a stop asked for earlier
     // and asks the session bus to start Arch Dock, which it does as on any
@@ -196,10 +208,12 @@ int main(int argc, char *argv[])
 
     QGuiApplication::setApplicationName(QStringLiteral("Arch Dock"));
     QGuiApplication::setOrganizationName(QStringLiteral("Arch Dock"));
+    QCoreApplication::setApplicationVersion(ArchDock::Version::displayVersion());
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Glass application dock for KDE Plasma"));
     parser.addHelpOption();
+    parser.addVersionOption();
     const QCommandLineOption settingsOption(
         QStringList{QStringLiteral("settings"), QStringLiteral("configure")},
         QStringLiteral("Open the Arch Dock control center."));
@@ -300,6 +314,10 @@ int main(int argc, char *argv[])
         QTextStream(stdout) << (id.isEmpty() ? QStringLiteral("Configuration restored.") : id) << '\n';
         return EXIT_SUCCESS;
     }
+
+    qInfo().noquote() << QStringLiteral("Arch Dock %1 starts.").arg(ArchDock::Version::displayVersion());
+    if (const QString mismatch = ArchDock::qtBuildMismatch(); !mismatch.isEmpty())
+        qWarning().noquote() << mismatch;
 
     // The engine reads the collector policy as it is created (see the header);
     // the policy leaves the environment again before anything is started.

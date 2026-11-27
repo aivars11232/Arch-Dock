@@ -53,3 +53,26 @@ file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.service"
 file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.desktop"
                 "${_archdock_generated}/org.archdock.ArchDock.Bars.desktop"
      DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications")
+
+# The update helper, which the password window's action names
+# (org.freedesktop.policykit.exec.path). A rehearsal build installs no
+# action, so no action ever points into a folder this account can write.
+if("@ARCHDOCK_UPDATE_REHEARSAL_ROOT@" STREQUAL "")
+  set(_archdock_libdir "@CMAKE_INSTALL_LIBDIR@")
+  if(IS_ABSOLUTE "${_archdock_libdir}")
+    set(_archdock_helper "${_archdock_libdir}/arch-dock/arch-dock-install-update")
+  else()
+    set(_archdock_helper "${CMAKE_INSTALL_PREFIX}/${_archdock_libdir}/arch-dock/arch-dock-install-update")
+  endif()
+  if(_archdock_helper MATCHES "[\r\n\t]")
+    message(FATAL_ERROR "Arch Dock's update helper path contains a control character")
+  endif()
+  string(REPLACE "&" "&amp;" _archdock_helper "${_archdock_helper}")
+  string(REPLACE "<" "&lt;" _archdock_helper "${_archdock_helper}")
+  string(REPLACE ">" "&gt;" _archdock_helper "${_archdock_helper}")
+  set(ARCHDOCK_HELPER_EXEC "${_archdock_helper}")
+  configure_file("@CMAKE_CURRENT_BINARY_DIR@/startup-templates/org.archdock.ArchDock.policy.in"
+                 "${_archdock_generated}/org.archdock.ArchDock.policy" @ONLY)
+  file(INSTALL "${_archdock_generated}/org.archdock.ArchDock.policy"
+       DESTINATION "${CMAKE_INSTALL_PREFIX}/share/polkit-1/actions")
+endif()

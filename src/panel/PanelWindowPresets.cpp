@@ -5,6 +5,7 @@
 
 #include "PanelWindow.h"
 #include "PanelWindowHelpers.h"
+#include "updates/UpdateHold.h"
 
 #include "../PanelVisibility.h"
 #include "../ScreenIdentity.h"
@@ -1004,6 +1005,9 @@ var result = (function() {
     std::optional<QVariantMap> observed;
     std::optional<QVariantMap> previous;
     int stableSamples = 0;
+    // Other events run while this waits on Plasma, an update's finisher
+    // check included: it is a change under way until it settles.
+    const ArchDock::Updates::ChangeUnderWay waitingOnPlasma;
     for (int attempt = 0; applied == 1 && attempt < 80; ++attempt)
     {
         QEventLoop wait;

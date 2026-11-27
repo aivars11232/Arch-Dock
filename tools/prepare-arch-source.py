@@ -45,6 +45,9 @@ def main():
         if stage != "0":
             parser.error(f"unmerged source entry: {relative}")
         tracked_modes[relative] = mode
+    # Debugging code left in by mistake never goes into a package (the
+    # markers are spelt in two parts so this file does not carry them).
+    unfinished = (b"TEMPORARY " + b"DIAGNOSTIC", b"W2" + b"DIAG")
     records = []
     for relative in paths:
         path = root / relative
@@ -68,8 +71,11 @@ def main():
             # Developer-only inputs keep executable intent, never arbitrary
             # checkout read/write bits. Official release inputs must be tracked.
             mode = 0o755 if stat.S_IMODE(path.stat().st_mode) & 0o111 else 0o644
+        content = path.read_bytes()
+        if any(marker in content for marker in unfinished):
+            parser.error(f"unfinished debugging code in {relative}: finish or remove it before packaging")
         records.append({"path": relative,
-                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(content).hexdigest(),
                         "mode": mode})
     checkpoint = {"head": head, "source_date_epoch": epoch,
                   "excluded_operational_files": sorted(excluded | excluded_folders),

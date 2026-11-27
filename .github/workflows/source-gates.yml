@@ -1,7 +1,8 @@
-# The gates that need only the source tree. The rest of the suite needs Qt
-# 6.11, KDE Plasma 6 and private Wayland sessions, which hosted runners do not
-# provide; those gates run locally under CTest (see docs/CURRENT_STATE.md).
-# Each command is the one CMakeLists.txt registers for the CTest of that name.
+# The gates that need only the source tree. The rest of the suite needs the Qt
+# the package is built with, KDE Plasma 6 and private Wayland sessions, which
+# hosted runners do not provide; those gates, and every C++ test, run locally
+# under CTest (see docs/CURRENT_STATE.md). Each command is the one
+# CMakeLists.txt registers for the CTest of that name.
 name: Source gates
 
 # Run when a release tag is pushed, on a pull request, or by hand (Actions >
@@ -41,3 +42,48 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python3 tests/test_prepare_arch_source.py
+
+      # Python 3.14 reads the .tar.zst packages the release tool checks; the
+      # runner's openssl makes the tests' keys.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install route in README and INSTALL.md (install-docs-test)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 tests/test_install_docs.py "$GITHUB_WORKSPACE"
+
+      - name: pacman's Qt hook (qt-hook-test)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          # The installed script and its test copy, made as CMakeLists.txt makes them.
+          out="$RUNNER_TEMP/qt-hook"
+          tools="$out/qt-hook-test/tools"
+          mkdir -p "$tools"
+          cat > "$out/configure.cmake" <<'EOF'
+          set(ARCHDOCK_QT_MINOR 6.12)
+          set(ARCHDOCK_HOOK_OD /usr/bin/od)
+          set(ARCHDOCK_HOOK_ENV /usr/bin/env)
+          set(ARCHDOCK_HOOK_PACMAN /usr/bin/pacman)
+          set(ARCHDOCK_HOOK_LOADER /usr/lib/ld-linux-x86-64.so.2)
+          configure_file(${SOURCE}/data/arch-dock-check-qt.in ${OUT}/arch-dock-check-qt @ONLY)
+          set(ARCHDOCK_HOOK_PACMAN ${TOOLS}/pacman)
+          set(ARCHDOCK_HOOK_LOADER ${TOOLS}/ld-linux)
+          configure_file(${SOURCE}/data/arch-dock-check-qt.in ${OUT}/qt-hook-test/arch-dock-check-qt @ONLY)
+          EOF
+          cmake -DSOURCE="$GITHUB_WORKSPACE" -DOUT="$out" -DTOOLS="$tools" -P "$out/configure.cmake"
+          python3 tests/test_qt_hook.py "$out/arch-dock-check-qt" "$out/qt-hook-test/arch-dock-check-qt" \
+            "$tools" data/arch-dock-qt.hook.in 6.12
+
+      - name: The update finisher (update-finisher-test)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 tests/test_update_finisher.py
+
+      - name: Release files and the manifest vectors (release-files-test)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 tests/test_release_files.py

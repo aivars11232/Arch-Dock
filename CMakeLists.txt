@@ -10,15 +10,110 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Qt6 REQUIRED COMPONENTS Core DBus Gui Network Qml Quick Widgets)
+# The Qt Arch Dock is built with is the lowest Qt it runs with. The package
+# recipe reads it from qt-build-version, and the pacman hook compares the
+# installed Qt with its minor version.
+string(REGEX MATCH "^[0-9]+\\.[0-9]+" ARCHDOCK_QT_MINOR "${Qt6Core_VERSION}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/qt-build-version" "${Qt6Core_VERSION}\n")
 
 find_package(KF6Kirigami REQUIRED)
 find_package(KF6Service REQUIRED)
 find_package(KF6KIO REQUIRED)
 find_package(KF6GlobalAccel REQUIRED)
+find_package(KF6Notifications REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
 include(GNUInstallDirs)
+
+# The release this build is and the one key its Update button trusts
+# (data/update-keys.txt, in the form of LCL's trusted_keys.txt). A
+# development build has no release and checks no updates; a release build
+# must list exactly one key. A test key list or a rehearsal root makes a TEST
+# build, which only tests and rehearsals use.
+set(ARCHDOCK_RELEASE "" CACHE STRING
+    "The release this build is, ${PROJECT_VERSION}-<package release>; empty for a development build")
+set(ARCHDOCK_UPDATE_REPOSITORY "aivars11232/Arch-Dock" CACHE STRING
+    "The GitHub repository, owner/name, whose releases the Update button looks at")
+set(ARCHDOCK_UPDATE_TEST_KEYS "" CACHE FILEPATH
+    "TEST builds only: a key list of one test key, used instead of data/update-keys.txt")
+set(ARCHDOCK_UPDATE_REHEARSAL_ROOT "" CACHE PATH
+    "TEST builds only: the private root a rehearsal build installs into")
+set(ARCHDOCK_UPDATE_REHEARSAL_FEED "" CACHE STRING
+    "Rehearsal builds only: the local test server standing in for GitHub, http://127.0.0.1:<port>")
+if(ARCHDOCK_UPDATE_TEST_KEYS OR ARCHDOCK_UPDATE_REHEARSAL_ROOT)
+  set(ARCHDOCK_BUILD_KIND test)
+elseif(ARCHDOCK_RELEASE)
+  set(ARCHDOCK_BUILD_KIND release)
+else()
+  set(ARCHDOCK_BUILD_KIND development)
+endif()
+if(ARCHDOCK_RELEASE)
+  string(REPLACE "." "\\." archdock_version_pattern "${PROJECT_VERSION}")
+  set(archdock_release_pattern "^${archdock_version_pattern}-[1-9][0-9]*$")
+  if(ARCHDOCK_BUILD_KIND STREQUAL "test")
+    set(archdock_release_pattern "^${archdock_version_pattern}-[1-9][0-9]*(\\.[1-9][0-9]*)?$")
+  endif()
+  if(NOT ARCHDOCK_RELEASE MATCHES "${archdock_release_pattern}")
+    message(FATAL_ERROR "ARCHDOCK_RELEASE must be ${PROJECT_VERSION}-<n> (a TEST build may add .<m>), "
+                        "not \"${ARCHDOCK_RELEASE}\"")
+  endif()
+endif()
+if(NOT ARCHDOCK_UPDATE_REPOSITORY MATCHES "^[A-Za-z0-9](-?[A-Za-z0-9])*/[A-Za-z0-9_.-]+$"
+   OR ARCHDOCK_UPDATE_REPOSITORY MATCHES "/\\.\\.?$")
+  message(FATAL_ERROR "ARCHDOCK_UPDATE_REPOSITORY must be owner/name, not \"${ARCHDOCK_UPDATE_REPOSITORY}\"")
+endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ArchDockUpdateKeys.cmake)
+set(archdock_key_list "${CMAKE_CURRENT_SOURCE_DIR}/data/update-keys.txt")
+if(ARCHDOCK_UPDATE_TEST_KEYS)
+  set(archdock_key_list "${ARCHDOCK_UPDATE_TEST_KEYS}")
+endif()
+archdock_select_update_key("${ARCHDOCK_BUILD_KIND}" "${archdock_key_list}"
+  ARCHDOCK_UPDATE_KEY_ID ARCHDOCK_UPDATE_KEY_HEX)
+archdock_update_places("${ARCHDOCK_UPDATE_REHEARSAL_ROOT}" "${ARCHDOCK_UPDATE_REHEARSAL_FEED}"
+  "${ARCHDOCK_UPDATE_TEST_KEYS}" "${CMAKE_INSTALL_PREFIX}"
+  ARCHDOCK_TOOL_FOLDER ARCHDOCK_PACMAN_LOCK ARCHDOCK_UPDATE_API ARCHDOCK_UPDATE_DOWNLOADS)
+set(ARCHDOCK_BACKEND_PATH "${CMAKE_INSTALL_FULL_BINDIR}/arch-dock")
+set(ARCHDOCK_HELPER_PATH "${CMAKE_INSTALL_FULL_LIBDIR}/arch-dock/arch-dock-install-update")
+set(ARCHDOCK_FINISHER_PATH "${CMAKE_INSTALL_FULL_LIBDIR}/arch-dock/arch-dock-finish-update")
+set(ARCHDOCK_POLICY_PATH
+    "${CMAKE_INSTALL_FULL_DATADIR}/polkit-1/actions/org.archdock.ArchDock.policy")
+configure_file(cmake/ArchDockVersion.h.in generated/archdock-version-constants.h @ONLY)
+message(STATUS "Arch Dock ${ARCHDOCK_BUILD_KIND} build, release \"${ARCHDOCK_RELEASE}\", "
+               "update key \"${ARCHDOCK_UPDATE_KEY_ID}\"")
+add_library(archdock-version STATIC src/ArchDockVersion.cpp)
+target_include_directories(archdock-version
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(archdock-version PUBLIC Qt6::Core)
+# What the Update button and its root helper share: reading a release's
+# signed update manifest and checking its signature, pacman's order of
+# versions and pacman's form of a dependency (src/updates/UpdateCore).
+add_library(archdock-update-core STATIC src/updates/UpdateCore.cpp)
+target_include_directories(archdock-update-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(archdock-update-core PUBLIC Qt6::Core)
+# The update helper, the one part of Arch Dock that runs as root (through the
+# password window). Its package rules read packages with libarchive, as
+# libalpm does. A test build, never installed, takes its paths and key from a
+# test root.
+find_package(LibArchive REQUIRED)
+add_library(archdock-package-check STATIC src/updates/PackageCheck.cpp)
+target_include_directories(archdock-package-check PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(archdock-package-check PUBLIC Qt6::Core LibArchive::LibArchive)
+add_executable(arch-dock-install-update src/updates/helper/main.cpp)
+target_link_libraries(arch-dock-install-update PRIVATE archdock-update-core archdock-package-check archdock-version)
+install(TARGETS arch-dock-install-update RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/arch-dock)
+install(PROGRAMS data/arch-dock-finish-update DESTINATION ${CMAKE_INSTALL_LIBDIR}/arch-dock)
+# The Update button's notices: popups only, never a sound.
+install(FILES data/arch-dock.notifyrc DESTINATION share/knotifications6)
+# The Update button's side in the backend: looking on GitHub, the download
+# and the commands it runs, with the fence for builds without a release and
+# a key.
+add_library(archdock-updater STATIC
+  src/updates/CommandRunner.cpp src/updates/ReleaseSource.cpp src/updates/UpdateDownload.cpp)
+target_include_directories(archdock-updater PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(archdock-updater PUBLIC archdock-update-core archdock-version Qt6::Core Qt6::Network)
 
 set(ARCHDOCK_ENABLE_QUICK3D AUTO CACHE STRING
     "Optional Qt Quick 3D support: AUTO, OFF, or ON")
@@ -391,6 +486,9 @@ target_link_libraries(archdock-profile-backend PUBLIC Qt6::Core PRIVATE Qt6::Gui
 qt_add_executable(
   arch-dock
   src/main.cpp
+  src/updates/ArchDockUpdates.h
+  src/updates/ArchDockUpdates.cpp
+  src/updates/UpdateHold.h
   src/DockModel.h
   src/DockModel.cpp
   src/model/FolderContentModel.cpp
@@ -527,14 +625,22 @@ set(ARCHDOCK_APPLICATION_QML_FILES
   qml/runtime/StudioThemePreview.qml
   qml/runtime/StudioThemes.js
   qml/runtime/StudioThemesPage.qml
+  qml/runtime/StudioUpdatesPage.qml
   qml/runtime/StudioWidgetsPage.qml
   qml/runtime/ThemeSampleCard.qml
   qml/runtime/SettingsPopup.qml)
+# The backend's QML is compiled to Qt's portable byte code only. Compiled to
+# C++ it would call into the QML engine's private interface, which changes
+# with every Qt minor release, and a Qt update would then stop Arch Dock,
+# Panel Studio and its Update button from starting at all.
+set_target_properties(arch-dock PROPERTIES QT_QMLCACHEGEN_ARGUMENTS "--only-bytecode")
 qt_add_qml_module(
   arch-dock
   URI ArchDock
   VERSION 1.0
   NO_IMPORT_SCAN
+  # Debug builds otherwise still check lookups through the private interface.
+  NO_GENERATE_AOT_VALIDATION
   IMPORT_PATH ${ARCHDOCK_RENDERING_IMPORT_ROOT}
   QML_FILES ${ARCHDOCK_APPLICATION_QML_FILES})
 add_dependencies(arch-dock archdock-rendering-module)
@@ -557,6 +663,9 @@ qt_add_resources(
 target_link_libraries(
   arch-dock
   PRIVATE archdock-profile-backend
+          archdock-updater
+          archdock-version
+          KF6::Notifications
           Qt6::Core
           Qt6::DBus
           Qt6::Gui
@@ -624,7 +733,8 @@ qt6_generate_wayland_protocol_client_sources(arch-dock-bars PRIVATE_CODE
 target_include_directories(arch-dock-bars PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(
   arch-dock-bars
-  PRIVATE Qt6::Core
+  PRIVATE archdock-version
+          Qt6::Core
           Qt6::DBus
           Qt6::Gui
           Qt6::GuiPrivate
@@ -1548,7 +1658,10 @@ if(BUILD_TESTING)
     src/WindowWatcher.h
     src/WindowWatcher.cpp
     src/IntentionalStop.h
-    src/IntentionalStop.cpp)
+    src/IntentionalStop.cpp
+    src/updates/ArchDockUpdates.h
+    src/updates/ArchDockUpdates.cpp)
+  target_compile_definitions(panel-window-capability-test PRIVATE ARCHDOCK_TESTING)
   qt_add_resources(
     panel-window-capability-test
     panel-window-capability-theme-catalog
@@ -1568,7 +1681,7 @@ if(BUILD_TESTING)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(
     panel-window-capability-test
-    PRIVATE archdock-profile-backend Qt6::Core
+    PRIVATE archdock-profile-backend archdock-updater archdock-version KF6::Notifications Qt6::Core
             Qt6::DBus
             Qt6::Gui
             Qt6::Network
@@ -1594,6 +1707,11 @@ if(BUILD_TESTING)
   add_test(
     NAME panel-window-capability-test
     COMMAND panel-window-capability-test)
+  # The update guard, from the same backend build.
+  add_test(NAME update-guard-test COMMAND panel-window-capability-test updateGuardHoldsEveryChange
+    updateControlsStayOffTheBus quitWaitsForTheUpdate)
+  set_tests_properties(update-guard-test PROPERTIES ENVIRONMENT
+    "QT_QPA_PLATFORM=offscreen;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/update-guard-config;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/update-guard-data;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-data/update-guard-cache")
   set_tests_properties(
     panel-window-capability-test
     PROPERTIES ENVIRONMENT
@@ -2229,6 +2347,10 @@ if(BUILD_TESTING)
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
       -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioWidgetsPage.qml)
   set_tests_properties(studio-widgets-page-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+  add_test(NAME studio-updates-page-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+      -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_StudioUpdatesPage.qml)
+  set_tests_properties(studio-updates-page-test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
   foreach(profile_matrix_group apply shortcuts)
     add_test(NAME profile-matrix-${profile_matrix_group}
       COMMAND ${CMAKE_COMMAND} -E env
@@ -2308,11 +2430,19 @@ if(BUILD_TESTING)
     visibility-status-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+  if(ARCHDOCK_RELEASE)
+    set(archdock_expected_version "${ARCHDOCK_RELEASE}")
+  else()
+    set(archdock_expected_version "${PROJECT_VERSION} (development build)")
+  endif()
   add_test(NAME session-startup-metadata-test
     COMMAND ${CMAKE_COMMAND}
       -DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
       -DINSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}
       -DINSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -DQT_VERSION=${Qt6Core_VERSION}
+      "-DEXPECTED_VERSION=${archdock_expected_version}"
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ValidateSessionStartup.cmake)
   set(ARCHDOCK_TEST_TMPDIR "${CMAKE_CURRENT_BINARY_DIR}/test-tmp" CACHE PATH
       "Disk-backed temporary root for disposable runtime fixtures")
@@ -2369,8 +2499,18 @@ endif()
 
 install(TARGETS arch-dock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES LICENSE packaging/LICENSING.md DESTINATION share/licenses/arch-dock)
+# After Qt, Plasma or Arch Dock itself is updated, pacman says when the
+# installed Arch Dock no longer fits them. pacman reads hooks only from
+# /usr/share/libalpm/hooks, so the hook names its script there.
+set(ARCHDOCK_HOOK_PACMAN /usr/bin/pacman)
+set(ARCHDOCK_HOOK_OD /usr/bin/od)
+set(ARCHDOCK_HOOK_ENV /usr/bin/env)
+set(ARCHDOCK_HOOK_LOADER /usr/lib/ld-linux-x86-64.so.2)
+configure_file(data/arch-dock-check-qt.in arch-dock-check-qt @ONLY)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/arch-dock-check-qt" DESTINATION share/libalpm/scripts)
+install(FILES data/arch-dock-qt.hook.in DESTINATION share/libalpm/hooks RENAME arch-dock-qt.hook)
 foreach(startup_descriptor IN ITEMS arch-dock.service org.archdock.ArchDock.service org.archdock.ArchDock.desktop
-                                    org.archdock.ArchDock.Bars.desktop)
+                                    org.archdock.ArchDock.Bars.desktop org.archdock.ArchDock.policy)
   configure_file("data/${startup_descriptor}.in"
                  "startup-templates/${startup_descriptor}.in" COPYONLY)
 endforeach()
@@ -2504,3 +2644,113 @@ install(
 install(
   DIRECTORY plasma-layout-template-free/
   DESTINATION share/plasma/layout-templates/org.archdock.plasma.desktop.circularFreeDock)
+
+# Qt's private interface: none in the programs and QML libraries. Checked here
+# at the end, where every program exists.
+if(BUILD_TESTING)
+  find_program(ARCHDOCK_READELF readelf REQUIRED)
+  set(ARCHDOCK_PRIVATE_CHECK_FILES "")
+  foreach(checked_target IN ITEMS
+      arch-dock arch-dock-bars arch-dock-icon-object arch-dock-install-update
+      archdock-input archdock-inputplugin
+      archdock-decorations archdock-decorationsplugin
+      archdock-decorations3d archdock-decorations3dplugin
+      archdock-integration archdock-integrationplugin)
+    if(TARGET ${checked_target})
+      list(APPEND ARCHDOCK_PRIVATE_CHECK_FILES "$<TARGET_FILE:${checked_target}>")
+    endif()
+  endforeach()
+  list(JOIN ARCHDOCK_PRIVATE_CHECK_FILES "|" ARCHDOCK_PRIVATE_CHECK_FILES)
+  add_test(NAME qt-private-interface-test
+    COMMAND ${CMAKE_COMMAND}
+      -DREADELF=${ARCHDOCK_READELF}
+      -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      "-DBINARIES=${ARCHDOCK_PRIVATE_CHECK_FILES}"
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/QtPrivateInterfaceCheck.cmake)
+
+  add_executable(arch-dock-install-update-test src/updates/helper/main.cpp)
+  target_compile_definitions(arch-dock-install-update-test PRIVATE ARCHDOCK_HELPER_TEST_BUILD)
+  target_link_libraries(arch-dock-install-update-test PRIVATE archdock-update-core archdock-package-check archdock-version)
+
+  qt_add_executable(update-package-check-test tests/UpdatePackageCheckTest.cpp)
+  target_link_libraries(update-package-check-test PRIVATE archdock-package-check Qt6::Test)
+  add_test(NAME update-package-check-test COMMAND update-package-check-test)
+
+  qt_add_executable(update-download-test tests/UpdateDownloadTest.cpp)
+  target_link_libraries(update-download-test PRIVATE archdock-updater Qt6::Test)
+  add_test(NAME update-download-test COMMAND update-download-test)
+
+  qt_add_executable(release-source-test tests/ReleaseSourceTest.cpp)
+  target_link_libraries(release-source-test PRIVATE archdock-updater Qt6::Network Qt6::Test)
+  target_compile_definitions(release-source-test PRIVATE
+    UPDATE_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/update-manifest-vectors")
+  add_test(NAME release-source-test COMMAND release-source-test)
+
+  # The Update button's whole flow with stand-ins: a local server for GitHub,
+  # a script for pkexec and the root helper, a runner for pacman and
+  # systemd-run. No session or system bus is reachable from it.
+  qt_add_executable(update-installer-test
+    tests/UpdateInstallerTest.cpp
+    src/updates/ArchDockUpdates.h
+    src/updates/ArchDockUpdates.cpp
+    src/updates/UpdateHold.h
+    src/IntentionalStop.h
+    src/IntentionalStop.cpp)
+  target_include_directories(update-installer-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(update-installer-test PRIVATE archdock-profile-backend archdock-updater archdock-version
+    KF6::Notifications Qt6::Core Qt6::DBus Qt6::Network Qt6::Test)
+  target_compile_definitions(update-installer-test PRIVATE
+    UPDATE_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/update-manifest-vectors"
+    ARCHDOCK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME update-installer-test COMMAND update-installer-test)
+  set_tests_properties(update-installer-test PROPERTIES ENVIRONMENT
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null/no-bus;DBUS_SYSTEM_BUS_ADDRESS=unix:path=/dev/null/no-bus")
+
+  qt_add_executable(update-manifest-test tests/UpdateCoreTest.cpp)
+  target_link_libraries(update-manifest-test PRIVATE archdock-update-core Qt6::Test)
+  target_compile_definitions(update-manifest-test PRIVATE
+    UPDATE_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/update-manifest-vectors")
+  add_test(NAME update-manifest-test COMMAND update-manifest-test)
+
+  qt_add_executable(qt-build-check-test tests/QtBuildCheckTest.cpp)
+  target_include_directories(qt-build-check-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(qt-build-check-test PRIVATE Qt6::Core Qt6::Test)
+  add_test(NAME qt-build-check-test COMMAND qt-build-check-test)
+
+  # The install route in README and INSTALL.md, and the guide's update line
+  # run behind the fence.
+  add_test(NAME install-docs-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_install_docs.py ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(install-docs-test PROPERTIES TIMEOUT 120
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
+  add_test(NAME release-files-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_release_files.py)
+  set_tests_properties(release-files-test PROPERTIES RUN_SERIAL TRUE TIMEOUT 300
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
+
+  add_test(NAME update-helper-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_update_helper.py
+      $<TARGET_FILE:arch-dock-install-update-test>)
+  set_tests_properties(update-helper-test PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
+  add_test(NAME update-finisher-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_update_finisher.py)
+  set_tests_properties(update-finisher-test PROPERTIES RUN_SERIAL TRUE TIMEOUT 300
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
+
+  # The Qt hook's script: a test copy whose pacman and loader are stand-ins
+  # the test writes. The installed copy is only read, never run.
+  set(ARCHDOCK_HOOK_TEST_TOOLS "${CMAKE_CURRENT_BINARY_DIR}/qt-hook-test/tools")
+  set(ARCHDOCK_HOOK_PACMAN "${ARCHDOCK_HOOK_TEST_TOOLS}/pacman")
+  set(ARCHDOCK_HOOK_LOADER "${ARCHDOCK_HOOK_TEST_TOOLS}/ld-linux")
+  configure_file(data/arch-dock-check-qt.in qt-hook-test/arch-dock-check-qt @ONLY)
+  add_test(NAME qt-hook-test
+    COMMAND ${ARCHDOCK_TEST_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_qt_hook.py
+      ${CMAKE_CURRENT_BINARY_DIR}/arch-dock-check-qt
+      ${CMAKE_CURRENT_BINARY_DIR}/qt-hook-test/arch-dock-check-qt
+      ${ARCHDOCK_HOOK_TEST_TOOLS}
+      ${CMAKE_CURRENT_SOURCE_DIR}/data/arch-dock-qt.hook.in
+      ${ARCHDOCK_QT_MINOR})
+  set_tests_properties(qt-hook-test PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
+    ENVIRONMENT "TMPDIR=${ARCHDOCK_TEST_TMPDIR};PYTHONDONTWRITEBYTECODE=1")
+endif()

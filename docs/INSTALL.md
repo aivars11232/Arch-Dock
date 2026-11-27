@@ -6,26 +6,48 @@ be installed together.
 
 ## The simple way: the released package
 
-```bash
-sudo pacman -U https://github.com/aivars11232/Arch-Dock/releases/download/v0.1.1-54/arch-dock-0.1.1-54-x86_64.pkg.tar.zst
-systemctl --user restart plasma-plasmashell.service
-```
+1. Download the package file, `arch-dock-<version>-x86_64.pkg.tar.zst`, from
+   the newest release on the releases page,
+   https://github.com/aivars11232/Arch-Dock/releases
+2. Update your system first: `sudo pacman -Syu`. Arch Dock is built for the
+   Qt and Plasma of an up-to-date system.
+3. In the folder where you saved the file, install it; pacman installs the
+   dependencies from the Arch repositories:
 
-pacman installs the dependencies from the Arch repositories. Every release
-on the [releases page](https://github.com/aivars11232/Arch-Dock/releases)
-carries the package, its source archive, the PKGBUILD and SHA256SUMS; to
-update, install the newer package the same way. The rest of this guide
-describes building the package yourself from the checksum-pinned source
-archive and PKGBUILD, and everything about starting, stopping, upgrading,
-recovery and uninstalling.
+   ```bash
+   sudo pacman -U ./arch-dock-<version>-x86_64.pkg.tar.zst
+   ```
+
+4. Open **Arch Dock** from the application menu.
+
+Install from the downloaded file, never with `pacman -U` and a web address:
+pacman requires a signature for a file it downloads itself, and the releases
+carry none for pacman.
+
+From 0.1.1-55 on, Arch Dock updates itself from Panel Studio > **Updates**
+(see [Upgrade](#upgrade)). Every release on
+https://github.com/aivars11232/Arch-Dock/releases carries:
+
+- the package, `arch-dock-<version>-x86_64.pkg.tar.zst`, and its checksum,
+  `arch-dock-<version>-x86_64.pkg.tar.zst.sha256`;
+- `update-manifest.json` and `update-manifest.sig`, the signed description of
+  the release that the Update button reads;
+- the source archive `arch-dock-0.1.1.tar.gz`, the `PKGBUILD`, `SHA256SUMS`
+  (the source archive's checksum, for building the package yourself) and
+  `SOURCE_CHECKPOINT.json`.
+
+The rest of this guide describes building the package yourself from the
+checksum-pinned source archive and PKGBUILD, and everything about starting,
+stopping, updating, recovery and uninstalling.
 
 ## Session startup
 
 **Direct session D-Bus activation is authoritative.** The installed service
 descriptor owns `org.archdock.ArchDock` and runs the installed executable.
 The native Plasma applet's service watcher can request that activation when
-the applet needs its backend. There is no desktop autostart entry or automatic
-systemd enablement.
+the applet needs its backend. Installing adds no autostart entry and enables no
+systemd unit; only while there are bars does Arch Dock keep a login entry of
+its own (see [Arch Dock's own bars](#arch-docks-own-bars)).
 
 Opening **Arch Dock** from the application menu runs `arch-dock --settings`
 and always shows Panel Studio: it starts Arch Dock when it is stopped, also
@@ -282,12 +304,12 @@ Arch Dock for now: a panel or a window event starts it again on demand. Use
 Quit to keep it stopped; starting the unit starts it again.
 Installation never starts or enables this unit.
 
-## Configuration recovery and upgrades
+## Configuration recovery
 
-Before upgrading, stop the Arch Dock backend and ensure installed applets will
-not immediately reactivate it. Recovery commands acquire the same session
-D-Bus name as the running service and refuse a live owner. They use Qt Core
-and do not require a display:
+The recovery commands take Arch Dock's D-Bus name, so they refuse to run while
+Arch Dock does: choose **Quit Arch Dock** on the application menu entry first,
+run the command, then open Arch Dock from the application menu again. They use
+Qt Core and do not require a display:
 
 ```bash
 arch-dock --backup-config
@@ -461,10 +483,24 @@ helper's models, 3D icons keep their pictures' own reliefs. Install the
 recipe's declared build dependencies before running makepkg; it does not
 install them.
 
-After reviewing the resulting package, the owner can install or remove it:
+**Qt versions.** The package needs at least the Qt version it was built with
+(its major and minor number, taken from the build), so pacman refuses it on a
+system that is behind. Arch Dock's own QML is kept as Qt's bytecode, and none
+of its programs or libraries uses Qt's internal parts, so a later Qt does not
+stop it from starting. One exception remains: Arch Dock's bars hide through
+one internal Qt window part, which they look up while they run. After a Qt
+update that changes Qt's middle number (6.12 to 6.13), pacman prints one Arch
+Dock line and the log says which Qt Arch Dock was built with; if that window
+part is gone, the bars stay shown instead of hiding, and Panel Studio says so.
+Ask for a rebuilt Arch Dock; once it is published, Panel Studio > Updates
+installs it.
+
+After reviewing the resulting package, install it from the build folder with
+the same line as an update (see [Upgrade](#upgrade)); `<version>` is the
+version makepkg built:
 
 ```bash
-sudo pacman -U arch-dock-0.1.1-11-x86_64.pkg.tar.zst
+sudo pacman -U ./arch-dock-<version>-x86_64.pkg.tar.zst && { pkill -u "$USER" -x arch-dock-bars; pkill -u "$USER" -x arch-dock; systemctl --user restart plasma-plasmashell.service; }
 ```
 
 Installation places the executable, direct D-Bus descriptor, manual systemd
@@ -476,46 +512,229 @@ request. Removal deletes package-owned files and preserves user configuration
 and user presets. It does not remove panel records from the user's Plasma
 configuration, nor the login entry Arch Dock keeps while it has bars
 (`~/.config/autostart/org.archdock.ArchDock.Bars.autostart.desktop`), which
-then starts nothing and can be deleted. No cache rebuild or Plasma restart was needed in the verified
-private install/startup flow; there are no package hooks to perform either.
+then starts nothing and can be deleted.
+
+Installing starts nothing by itself. The package has one pacman hook: after
+pacman changes Qt, Plasma or Arch Dock, it checks that Arch Dock still fits
+them and prints at most one line, changing nothing:
+
+- "Arch Dock was built for Qt 6.12 and this system now has Qt 6.13. It keeps
+  working, but its bars may stay shown instead of hiding. Ask for a rebuilt
+  Arch Dock; once it is published, Panel Studio > Updates installs it."
+- "Arch Dock's bars cannot start with this Plasma (libPlasma.so.9 is
+  missing). Ask for a rebuilt Arch Dock; once it is published, Panel Studio >
+  Updates installs it."
+
+Its one polkit action, `org.archdock.ArchDock.install-update`, is used only by
+the Update button. There is no hook that restarts Arch Dock in every account
+after an install: it would drop another account's Panel Studio changes that
+were not applied yet.
 
 ## Upgrade
 
-The current correction uses application `0.1.1`, package `0.1.1-11`; its
-verification status is recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
-The previous verified owner installation is `0.1.1-10`; native pacman performs
-the upgrade after candidate verification:
+### The Update button (0.1.1-55 and newer)
 
-```bash
-sudo pacman -U arch-dock-0.1.1-11-x86_64.pkg.tar.zst
-```
+Panel Studio > **Updates** shows the version you are using. With **Look for
+updates by itself** on (the default), Arch Dock asks GitHub once a day whether
+a newer version is out. It sends nothing about you or your panels and installs
+nothing by itself. When one is out, a quiet notice says so, and the page shows
+what it fixes.
 
-After the install, the backend that is already running and the panels in
-plasmashell keep the old code until they are restarted. Stop the backend and
-restart the shell; the panels' widgets start the new backend by themselves:
+**Update Now** then does this, in order:
 
-```bash
-pkill -x arch-dock
-systemctl --user restart plasma-plasmashell.service
-```
+1. It asks GitHub again, so a release withdrawn in the meantime is never
+   installed.
+2. It downloads the package and checks it against the signed description of
+   the release.
+3. It saves a copy of your settings, one per new version (see
+   [Configuration recovery](#configuration-recovery)).
+4. The system's password window opens once: type the password sudo asks for.
+5. It installs the update. This goes on even if you close Panel Studio.
+6. It restarts Arch Dock, its bars and Plasma's panels: they blink and Panel
+   Studio closes for a moment, then opens again with "Arch Dock <version> is
+   installed and running."
 
-Do not use `arch-dock --quit` for this: it keeps the backend stopped for the
-rest of the login session and refuses the widgets' activation until Arch Dock
-is started by hand. Cancel an active audition first.
+Until the password is accepted, **Stop** ends the update and nothing is
+installed. Panel Studio asks you to apply or discard changes you have not
+applied before it updates, and an update waits until a preview or a profile
+apply has finished.
+
+**Signed updates.** Every update is signed with the Arch Dock project's key,
+and the key Arch Dock trusts is built into it. Arch Dock's installer checks the
+signature itself, as root, before anything else, so the password window only
+ever installs an Arch Dock update signed with that key. A release that is not
+signed with it is not offered at all.
+
+**The password.** A wrong password can be typed again in the same window.
+After three wrong tries your password is locked for 10 minutes, also for sudo
+and the lock screen. Switching to another account while the window waits ends
+it too; nothing is installed then.
+
+**Other accounts** on the same PC keep running the old version until they
+restart it: their Updates page and a notice say a restart is needed, and
+**Restart Arch Dock** (no password) or logging out and in finishes it.
+
+**Versions.** The Updates page shows the version that runs;
+`pacman -Q arch-dock` shows the one installed.
+
+**Network use.** Only the daily look, one small request to GitHub that the
+switch turns off, and the download after **Update Now**.
+
+Do not use `arch-dock --quit` to restart Arch Dock after an update: it keeps
+Arch Dock stopped for the rest of the login, until it is started from the
+application menu.
 
 If the Profiles page then says "Profile recovery is required", an earlier
 Apply was interrupted: press Recover Interrupted Apply, which removes the
 panels that apply created and restores the arrangement from before it. A
 profile saved before 0.1.1-19 may hold free panels that are long gone from
 the desktop; with the panels you want on the desktop, press Save Current to
-Profile once, and the profile holds those panels only.
-Use the backup commands above before an owner-controlled upgrade. Start the
-installed service normally after upgrading. Destructive schema migration saves
-a validated configuration snapshot first; future schemas remain untouched.
+Profile once, and the profile holds those panels only. Destructive schema
+migration saves a validated configuration snapshot first; future schemas
+remain untouched.
 
 Package upgrade preserves user configuration, presets, profiles and backups.
 The package gate checks native version readback and payload bytes/modes, then
 uses the existing migration/restore fixture with the upgraded `/usr/bin/arch-dock`.
+
+### From 0.1.1-54 or older, or from a file you built
+
+Download the new package file. Close Panel Studio (changes you have not
+applied there are dropped), cancel an active audition, then run this one line
+in Konsole (bash or zsh) in the folder where you saved the file:
+
+```bash
+sudo pacman -U ./arch-dock-<version>-x86_64.pkg.tar.zst && { pkill -u "$USER" -x arch-dock-bars; pkill -u "$USER" -x arch-dock; systemctl --user restart plasma-plasmashell.service; }
+```
+
+The part after `&&` runs only if pacman installed the file. It stops Arch
+Dock's bars, then Arch Dock itself, then restarts Plasma's panels, which bring
+the new Arch Dock back. After an update from 0.1.1-54 or older, open Arch Dock
+from the application menu once. Instead of the part after `&&` you can also
+log out and in. In a second account, log out and in.
+
+### What the Update button's messages mean
+
+Looking for an update:
+
+- "Could not reach GitHub. Check that this PC is online, then try again."
+- "GitHub is not answering right now. Try again later."
+- "GitHub asked Arch Dock to wait. Try again after 15:20." GitHub limits how
+  often a PC may ask; the time is when it allows the next look.
+- "Arch Dock can no longer check for updates this way. Look on the releases
+  page for a newer Arch Dock." Install the newest release by hand, as in
+  [From 0.1.1-54 or older](#from-0111-54-or-older-or-from-a-file-you-built).
+- "The newest release on GitHub is not complete, so nothing can be installed
+  from it. Try again later."
+- "The newest release on GitHub is not signed with the Arch Dock key, so it is
+  not offered." Never install such a release by hand either.
+- "Arch Dock 0.1.1-60 has to be installed by hand once. The releases page says
+  how." Install it as in
+  [From 0.1.1-54 or older](#from-0111-54-or-older-or-from-a-file-you-built).
+- "Arch Dock 0.1.1-56 needs newer system parts (qt6-base 6.13 or newer).
+  Update your system first, then press Check for Updates again." Run
+  `sudo pacman -Syu`.
+- "Arch Dock 0.1.1-56 needs qt6-foo, which is not installed. Install it first,
+  then press Check for Updates again." **Copy Install Line** copies
+  `sudo pacman -Syu --needed qt6-foo`, which updates the system and installs
+  the part together. Installing one part alone from refreshed package lists,
+  without updating the rest, is a partial upgrade, which Arch does not
+  support.
+
+Updating:
+
+- "The download stopped before it finished. Try again."
+- "The downloaded file is not the one the signed update describes, so nothing
+  was installed. Try again later."
+- "There is not enough free disk space for the update." Free some space, then
+  try again.
+- "Arch Dock could not save a copy of your settings first, so nothing was
+  installed. Check that your home folder has free space, then try again."
+- "Another program is installing software right now. Press Update Now again
+  when it has finished."
+- "An earlier software install was cut off and left its lock behind, so
+  nothing was installed. It also blocks your own system updates. Copy Details
+  has the steps that clear it." See [Leftover install lock](#leftover-install-lock).
+- "Nothing was installed: the password was not accepted. After three wrong
+  tries your password is locked for 10 minutes (also for sudo and the lock
+  screen). This also happens if you switch to another account during the
+  update."
+- "The password window could not open, so nothing was installed. Log out and
+  in, then try again."
+- "The update file did not pass Arch Dock's checks, so nothing was installed.
+  Try again later."
+- "This update is not signed with the Arch Dock key, so nothing was
+  installed."
+- "Arch Dock 0.1.1-56 or newer is already installed. Nothing was changed."
+- "The update could not be installed. Nothing was changed." **Copy Details**
+  says what went wrong.
+- "The install finished, but Arch Dock 0.1.1-57 is installed now, not
+  0.1.1-56. Press Check for Updates."
+
+Restarting:
+
+- "Arch Dock 0.1.1-56 is installed, but the restart did not start. Press
+  Restart Arch Dock, or log out and in."
+- "Arch Dock 0.1.1-56 is installed. Log out and in to finish the update."
+- "Arch Dock 0.1.1-56 is installed, but it did not start again. Open Arch Dock
+  from the application menu. If it still does not start, log out and in."
+- "Plasma's panels did not come back after the Arch Dock update. Log out and
+  in." See [If Arch Dock does not come back](#if-arch-dock-does-not-come-back).
+
+Waiting for something else:
+
+- "Finish or cancel the preview on the desktop first."
+- "A profile is being applied. Update when it has finished."
+- "Arch Dock 0.1.1-56 is installed. Finish the preview, the profile or the
+  panel change first, then press Restart Arch Dock."
+- "Arch Dock is being updated. Try again when it has finished." Settings
+  cannot be changed during an update.
+- "Arch Dock is installing its update. Quit again when it has finished."
+  Quit Arch Dock was chosen while the update installs; a notice says so,
+  and Arch Dock quits when asked again after the update.
+- "Arch Dock could not check the release on this PC. Check that your home
+  folder has free space, then try again." Arch Dock writes the release's
+  signature check into your home folder first, and could not. Copy Details
+  says which folder.
+
+The bars:
+
+- "Arch Dock's bars cannot hide with this Qt version, so they stay shown. Ask
+  for a rebuilt Arch Dock; once it is published, Panel Studio > Updates
+  installs it."
+
+### Leftover install lock
+
+An earlier software install was cut off (for example by a power cut) and left
+pacman's lock file behind. Until it is removed, no software can be installed,
+not even with `sudo pacman -Syu`.
+
+1. First make sure nothing is installing software: close Discover and any
+   Konsole window that is installing.
+2. Paste this line into Konsole and type your password:
+   `sudo rm /var/lib/pacman/db.lck`
+3. Run your usual system update (`sudo pacman -Syu`) before pressing
+   **Update Now** again.
+
+### If Arch Dock does not come back
+
+Open Arch Dock from the application menu. If it still does not start, log out
+and in.
+
+To go back to the version before:
+
+1. Download that release's package file from
+   https://github.com/aivars11232/Arch-Dock/releases. Your PC keeps no copy of
+   it: a package installed from a file is not kept in pacman's package store.
+2. In the folder where you saved it, run:
+
+   ```bash
+   sudo pacman -U ./arch-dock-<previous version>-x86_64.pkg.tar.zst && { pkill -u "$USER" -x arch-dock-bars; pkill -u "$USER" -x arch-dock; systemctl --user restart plasma-plasmashell.service; }
+   ```
+
+   pacman then says it is downgrading; that is expected.
+
+The Update button never goes back to an older version by itself.
 
 ## Uninstall
 
@@ -532,8 +751,7 @@ Package removal preserves user configuration, user presets, profiles and
 backups. It does not rewrite personal Plasma configuration or remove unrelated
 panels/widgets. Removing managed panels before the package prevents a retained
 Plasma record from referring to an uninstalled Arch Dock applet. Reinstallation
-can reuse the preserved user data. No global cache rebuild, Plasma restart or
-automatic service enablement is part of the package route.
+can reuse the preserved user data. Removal restarts and enables nothing.
 
 Original Arch Dock work is GPL-3.0-or-later unless separately declared. The
 package records GPL-3.0-or-later plus MIT for its preserved MIT components.
@@ -581,21 +799,27 @@ all configured names with the final results so no test is skipped. The source
 checkout's [current state](CURRENT_STATE.md) and [release checklist](RELEASE_CHECKLIST.md)
 record acceptance evidence.
 
-After building the package, test it without installing into the host system:
+After building the package, test it without installing into the host system.
+`candidate` is the package makepkg built, `previous` the previous release's
+package file:
 
 ```bash
+candidate="$PWD/build-codex-arch-package/arch-dock-<version>-x86_64.pkg.tar.zst"
+previous=/absolute/path/to/arch-dock-<previous version>-x86_64.pkg.tar.zst
 mkdir -p "$PWD/build-codex-package-evidence"
 ARCHDOCK_BUILD_DIR="$task_build" \
 ARCHDOCK_PACKAGE_INSTALL_MANIFEST="$PWD/build-codex-arch-package/src/build/install_manifest.txt" \
 ARCHDOCK_PACKAGE_EVIDENCE_DIR="$PWD/build-codex-package-evidence" \
 TMPDIR="$task_tmp" \
-bash tests/run-arch-package-smoke.sh \
-    build-codex-arch-package/arch-dock-0.1.1-11-x86_64.pkg.tar.zst \
-    /absolute/path/to/arch-dock-0.1.1-10-x86_64.pkg.tar.zst
+bash tests/run-arch-package-smoke.sh "$candidate" "$previous"
 ```
 
 The second package argument is optional for install/uninstall verification;
 release upgrade evidence requires it and a strictly older package version.
+The smoke also runs `tests/check-package-release.sh`, which says whether the
+package may be published as an update: a release build that trusts exactly the
+key `data/update-keys.txt` lists, with the Update button's parts in place. A
+package from a development or test build fails it, as it should.
 Create the evidence and temporary directories first. The test also requires
 native pacman/bsdtar, desktop-file validation and systemd metadata validation.
 It copies the host's native dependency records into its disposable root and

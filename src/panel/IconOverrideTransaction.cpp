@@ -7,6 +7,7 @@
 #include <QUrl>
 
 #include <limits>
+#include "../updates/UpdateHold.h"
 
 namespace
 {
@@ -107,6 +108,14 @@ std::optional<IconOverrideTransactionDraft> IconOverrideTransaction::prepare(
         outcome->previousRevision = currentPanel.settingsRevision;
         outcome->revision = currentPanel.settingsRevision;
         outcome->reset = request.reset;
+    }
+
+    // While an update runs nothing is changed (UpdateHold).
+    if (Updates::UpdateHold::held())
+    {
+        fail(outcome, IconOverrideTransactionStatus::ValidationFailed, Updates::UpdateHold::errorCode(),
+             Updates::UpdateHold::refusal());
+        return std::nullopt;
     }
 
     if (request.panelId.trimmed().isEmpty() ||

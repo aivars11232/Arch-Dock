@@ -1,0 +1,116 @@
+#!/bin/sh
+# arch-dock-finish-update <expected version> <old backend pid>: run once an
+# Arch Dock update is installed, by the Update button through systemd-run in
+# a user unit of its own, so that it outlives the Arch Dock it restarts. It
+# follows the owner's update rule: Arch Dock's bars and Arch Dock stop (TERM,
+# never KILL), Plasma's panels restart, and Arch Dock is started again. What
+# happened is written to $XDG_RUNTIME_DIR/arch-dock-update-result.json for
+# the Arch Dock that starts, and notices say what went wrong.
+#
+# Its interface is frozen: an older Arch Dock starts a newer finisher. Tools
+# are called by name; systemd-run gives PATH=/usr/bin.
+set -f
+
+[ "$#" -eq 2 ] || exit 2
+expected=$1
+old=$2
+case $expected in '' | *[!0-9.-]*) exit 2 ;; esac
+case $old in '' | *[!0-9]*) exit 2 ;; esac
+[ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ] || exit 2
+result="$XDG_RUNTIME_DIR/arch-dock-update-result.json"
+record="$XDG_RUNTIME_DIR/arch-dock-intentional-stop.json"
+
+# The result, written whole: a temporary file renamed into place.
+status() {
+    temporary="$result.$$"
+    printf '{"format":1,"version":"%s","status":"%s","at":"%s"}\n' \
+        "$expected" "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$temporary" &&
+        mv -f "$temporary" "$result"
+}
+
+# A notice, through busctl's typed arguments: a quote or a backslash in a
+# text arrives unchanged. busctl reads options after its verb too, so `--`
+# ends them: the timeout -1 (and a text starting with -) is an argument.
+notify() {
+    busctl --user -- call org.freedesktop.Notifications /org/freedesktop/Notifications \
+        org.freedesktop.Notifications Notify 'susssasa{sv}i' \
+        "Arch Dock" 0 org.archdock.ArchDock "$1" "$2" 0 0 -1 > /dev/null 2>&1
+}
+
+# A process's start time, so a reused process number counts as another process.
+start_time() {
+    stat=$(cat "/proc/$1/stat" 2> /dev/null) || return 1
+    rest=${stat##*) }
+    # shellcheck disable=SC2086
+    set -- $rest
+    shift 19
+    printf '%s\n' "$1"
+}
+
+owner() {
+    busctl --user -- call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+        NameHasOwner s org.archdock.ArchDock 2> /dev/null
+}
+
+installed=$(pacman -Q arch-dock 2> /dev/null)
+if [ "$installed" != "arch-dock $expected" ]; then
+    status not-installed
+    exit 0
+fi
+
+started=$(start_time "$old")
+user=$(id -u)
+pkill -u "$user" -x arch-dock-bars
+pkill -u "$user" -x arch-dock
+
+tries=0
+while [ -n "$started" ] && [ "$(start_time "$old")" = "$started" ]; do
+    if [ "$tries" -ge 150 ]; then
+        status log-out-needed
+        notify "Arch Dock $expected is installed" "Arch Dock $expected is installed. Log out and in to finish the update."
+        exit 0
+    fi
+    sleep 0.1
+    tries=$((tries + 1))
+done
+
+plasma=back
+if systemctl --user restart plasma-plasmashell.service; then
+    status starting
+else
+    plasma=gone
+    status plasma-not-back
+    # Plasma shows the notices, so this one may not get through.
+    tries=0
+    while [ "$tries" -lt 20 ]; do
+        notify "Plasma did not come back" "Plasma's panels did not come back after the Arch Dock update. Log out and in." && break
+        sleep 1
+        tries=$((tries + 1))
+    done
+fi
+
+# Arch Dock's own panels and bars do not need Plasma's, so it is asked to
+# start in any case. Why a start failed cannot be read from the bus, so the
+# stop record says whether it was a Quit of this login, which is respected.
+not_started() {
+    [ "$plasma" = back ] || exit 0
+    if [ -e "$record" ]; then
+        status quit
+    else
+        status not-started
+        notify "Arch Dock did not start again" "Arch Dock $expected is installed, but it did not start again. Open Arch Dock from the application menu. If it still does not start, log out and in."
+    fi
+    exit 0
+}
+
+busctl --user -- call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+    StartServiceByName su org.archdock.ArchDock 0 > /dev/null 2>&1 || not_started
+tries=0
+until [ "$(owner)" = "b true" ]; do
+    [ "$tries" -ge 300 ] && not_started
+    sleep 0.1
+    tries=$((tries + 1))
+done
+
+[ "$plasma" = back ] && status done
+exit 0

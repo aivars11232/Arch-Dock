@@ -38,6 +38,10 @@
 #include "ProfileManager.h"
 
 class QQmlApplicationEngine;
+namespace ArchDock::Updates
+{
+class ArchDockUpdates;
+}
 class QScreen;
 class QWindow;
 
@@ -77,6 +81,9 @@ class PanelWindow final : public QObject, protected QDBusContext
     // whether they are covered (panelAreaCovered).
     Q_PROPERTY(qulonglong coverRevision READ coverRevision NOTIFY coverRevisionChanged)
     Q_PROPERTY(qulonglong presentationRequestRevision READ presentationRequestRevision NOTIFY presentationRequestRevisionChanged)
+    // Whether Arch Dock's bars can hide with the Qt they run with. Read only:
+    // /Control exports every property and slot, and only the bars answer it.
+    Q_PROPERTY(bool barsCanHide READ barsCanHide NOTIFY barsCanHideChanged)
 
 public:
     explicit PanelWindow(QQmlApplicationEngine &engine,
@@ -92,6 +99,7 @@ public:
     [[nodiscard]] qulonglong nativeVisibilityRevision() const;
     [[nodiscard]] qulonglong coverRevision() const;
     [[nodiscard]] qulonglong presentationRequestRevision() const;
+    [[nodiscard]] bool barsCanHide() const { return m_barHost.canHide(); }
     bool setDockConfiguration(const QString &panelId, const QString &key, const QVariant &value);
     // Leaves the event loop, returning any audition to the saved desktop.
     // For a Quit (any `reason` but "signal") it first records that the user
@@ -106,6 +114,15 @@ public:
     // its Segments page, a status pill in its preview): the sources are
     // sampled while it does.
     Q_INVOKABLE void setStudioStatusShown(bool shown);
+    // Opens Panel Studio on its Updates page (from an update's notice, or
+    // after the restart). Not a slot, so nothing on the bus reaches it.
+    void showUpdatesPage();
+#ifdef ARCHDOCK_TESTING
+    // Tests only: Studio's Updates page binds to this object instead of the
+    // updater, and the bars' answer whether they can hide.
+    void setUpdatesForTesting(QObject *standIn);
+    void setBarsCanHideForTesting(bool canHide) { m_barHost.setCanHideForTesting(canHide); }
+#endif
 
 public slots:
     void showSettings();
@@ -395,6 +412,7 @@ signals:
     void nativeVisibilityRevisionChanged();
     void coverRevisionChanged();
     void presentationRequestRevisionChanged();
+    void barsCanHideChanged();
     void nativePanelRecoveryFinished();
     void barHostRecordsChanged();
     void barHostWindowsChanged();
@@ -866,6 +884,8 @@ private:
     // whenever the list for Panel Studio is asked for.
     const QVariantMap &installedBarWidgets(bool reread = false) const;
     BarHostSupervisor m_barHost;
+    // The Update button (Panel Studio > Updates).
+    ArchDock::Updates::ArchDockUpdates *m_updates = nullptr;
     QTimer m_barRecordsTimer;
     QString m_barRecordsJson;
     QTimer m_barWindowsTimer;

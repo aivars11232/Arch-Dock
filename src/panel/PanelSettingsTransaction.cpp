@@ -5,6 +5,7 @@
 #include <QVariantList>
 
 #include <limits>
+#include "../updates/UpdateHold.h"
 
 namespace ArchDock
 {
@@ -95,6 +96,13 @@ std::optional<PanelSettingsTransactionDraft> PanelSettingsTransaction::prepare(
         outcome->revision = currentPanel.settingsRevision;
     }
 
+    // While an update runs nothing is changed (UpdateHold).
+    if (Updates::UpdateHold::held())
+    {
+        fail(outcome, PanelSettingsTransactionStatus::ValidationFailed, Updates::UpdateHold::errorCode(),
+             Updates::UpdateHold::refusal());
+        return std::nullopt;
+    }
     if (request.panelId.trimmed().isEmpty() ||
         request.panelId != currentPanel.identity.id)
     {

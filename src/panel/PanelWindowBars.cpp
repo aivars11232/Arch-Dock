@@ -20,6 +20,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::isNativeDockPanelEdge;
 using PanelWindowHelpers::isNativeDockPanelType;
@@ -95,6 +96,10 @@ bool PanelWindow::barHosted(const QString &panelId) const
 
 QString PanelWindow::createBar(const QString &edge, const QString &type)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return {};
     if (profileBusy()) return {};
 
     const QString normalizedEdge = edge.trimmed().toLower();
@@ -189,7 +194,8 @@ QString PanelWindow::barHostRecordsJson() const
 
 bool PanelWindow::showEdgePanelAsBar(const QString &panelId)
 {
-    if (profileBusy() || !m_panelRegistry.panelIds().contains(panelId)
+    // Refused before anything is written while an update holds the settings.
+    if (ArchDock::Updates::UpdateHold::held() || profileBusy() || !m_panelRegistry.panelIds().contains(panelId)
         || !isNativeDockPanelEdge(m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
     {
         return false;
@@ -300,6 +306,8 @@ QVariantList PanelWindow::availableBarWidgets() const
 
 QString PanelWindow::addBarWidget(const QString &panelId, const QString &plugin)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return {};
     if (profileBusy() || !barHosted(panelId) || !installedBarWidgets().contains(plugin))
         return {};
     QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
@@ -310,6 +318,8 @@ QString PanelWindow::addBarWidget(const QString &panelId, const QString &plugin)
 
 bool PanelWindow::removeBarWidget(const QString &panelId, const QString &key)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy() || !barHosted(panelId) || key == ArchDock::Bars::BarWidget::dockKey())
         return false;
     QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
@@ -320,6 +330,8 @@ bool PanelWindow::removeBarWidget(const QString &panelId, const QString &key)
 
 bool PanelWindow::moveBarWidget(const QString &panelId, const QString &key, int index)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy() || !barHosted(panelId))
         return false;
     QList<ArchDock::Bars::BarWidget> widgets = barWidgetsOf(panelId);
@@ -342,6 +354,8 @@ bool PanelWindow::barWidgetRemoved(const QString &panelId, const QString &key)
 
 bool PanelWindow::moveEdgePanelIntoBar(const QString &panelId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy() || !m_panelRegistry.panelIds().contains(panelId) || barHosted(panelId)
         || !isNativeDockPanelEdge(m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString()))
         return false;

@@ -1,0 +1,75 @@
+#!/bin/sh
+PATH=/usr/bin; export PATH; LC_ALL=C; export LC_ALL
+# Run by pacman after Qt, Plasma, layer-shell-qt or Arch Dock itself is
+# installed or updated (arch-dock-qt.hook). It says in at most one line when
+# the installed Arch Dock no longer fits: a library one of its programs needs
+# is missing, or Qt has moved to another minor version than the one Arch Dock
+# was built with. It never stops the update, and always exits 0.
+#
+# pacman may run this as root with the PATH of whoever started it, so every
+# tool is called by its full path.
+built='@ARCHDOCK_QT_MINOR@'
+pacman='@ARCHDOCK_HOOK_PACMAN@'
+od='@ARCHDOCK_HOOK_OD@'
+env='@ARCHDOCK_HOOK_ENV@'
+loader='@ARCHDOCK_HOOK_LOADER@'
+
+# The first library that one of Arch Dock's programs or libraries cannot
+# find, as "<file> <library>". The loader runs with an empty environment, so
+# an LD_LIBRARY_PATH or LD_PRELOAD from whatever started pacman cannot change
+# its answer. The parts that need an optional package are skipped when that
+# package is not installed.
+missing=$("$pacman" -Qlq arch-dock 2>/dev/null | while IFS= read -r file; do
+    case $file in */) continue ;; esac
+    [ -f "$file" ] || continue
+    case $("$od" -An -tx1 -N4 "$file" 2>/dev/null) in
+        *'7f 45 4c 46'*) ;;
+        *) continue ;;
+    esac
+    case $file in
+        */arch-dock-icon-object)
+            "$pacman" -Q onnxruntime-cpu >/dev/null 2>&1 || continue ;;
+        */ArchDock/Decorations3D/*|*/libarchdock-decorations3d.so*)
+            "$pacman" -Q qt6-quick3d >/dev/null 2>&1 || continue ;;
+    esac
+    listing=$("$env" -i "$loader" --list "$file" 2>&1)
+    while IFS= read -r line; do
+        case $line in
+            *'=> not found'*)
+                library=${line%% =>*}
+                library=${library#"${library%%[! 	]*}"}
+                printf '%s %s\n' "$file" "$library"
+                exit 0 ;;
+        esac
+    done <<EOF
+$listing
+EOF
+done)
+
+if [ -n "$missing" ]; then
+    file=${missing% *}
+    library=${missing##* }
+    case $file in
+        */bin/arch-dock-bars)
+            printf '%s\n' "Arch Dock's bars cannot start with this Plasma ($library is missing). Ask for a rebuilt Arch Dock; once it is published, Panel Studio > Updates installs it." ;;
+        */bin/arch-dock)
+            printf '%s\n' "Arch Dock cannot start with this system ($library is missing). Ask for a rebuilt Arch Dock and install it by hand, as the releases page says." ;;
+        *)
+            printf '%s\n' "Part of Arch Dock cannot start with this system ($library is missing). Ask for a rebuilt Arch Dock; once it is published, Panel Studio > Updates installs it." ;;
+    esac
+    exit 0
+fi
+
+# Qt's installed version, without its epoch and release, cut to major.minor.
+installed=$("$pacman" -Q qt6-base 2>/dev/null) || exit 0
+version=${installed#* }
+version=${version#*:}
+version=${version%-*}
+case $version in *.*) ;; *) exit 0 ;; esac
+major=${version%%.*}
+rest=${version#*.}
+minor=${rest%%.*}
+if [ "$major.$minor" != "$built" ]; then
+    printf '%s\n' "Arch Dock was built for Qt $built and this system now has Qt $major.$minor. It keeps working, but its bars may stay shown instead of hiding. Ask for a rebuilt Arch Dock; once it is published, Panel Studio > Updates installs it."
+fi
+exit 0

@@ -1,5 +1,64 @@
 # Arch Dock current state
 
+## The Update button, and Arch Dock after Qt updates — 2026-11-27
+
+Breakage fix step 5 (plan: evidence/BREAKAGE-FIX-S5/final-plan-v5-key-on-pc).
+Implemented; the focused tests pass. Still to come before the commit:
+verification packages, F1, R1, the review, the complete suite.
+
+- Qt updates: `qt_add_qml_module(arch-dock ...)` compiles QML to bytecode only
+  (`QT_QMLCACHEGEN_ARGUMENTS --only-bytecode`, `NO_GENERATE_AOT_VALIDATION`),
+  which removes 36 ahead-of-time imports (4 `Qt_6_PRIVATE_API`). The bars'
+  `QNativeInterface::Private::QWaylandWindow` is looked up at run time
+  (`BarWindow::waylandWindowPartAvailable`); without it `canHide()` is false
+  on `/Bars`, `BarHostSupervisor::canHide` follows it and Studio shows L33 in
+  place of the hiding choice. `qt-private-interface-test` (readelf over every
+  program and plugin) and its source guard keep it so. PKGBUILD writes
+  `qt6-base>=X.Y` and `qt6-declarative>=X.Y` from `qt-build-version`.
+- pacman hook `share/libalpm/hooks/arch-dock-qt.hook` and its script
+  (`data/arch-dock-check-qt.in`): tools by full path, the loader with a
+  cleared environment, at most one line, always exit 0 (`qt-hook-test`).
+- Version and key: `cmake/ArchDockUpdateKeys.cmake` reads
+  `data/update-keys.txt` (one ECDSA P-256 key; a release build refuses none
+  or two) and gives the Update button's places (`archdock_update_places`: a
+  rehearsal build points its tools, pacman's lock and GitHub into its own
+  root). `src/ArchDockVersion.{h,cpp}` holds them; `arch-dock --version`.
+- Release files: `tools/release-files.py` (make, verify, check-published,
+  check-key-place); `update-manifest.json` format 1 plus `update-manifest.sig`;
+  86 shared vectors that the C++ and Python readers judge alike (strict
+  JSON: no raw control character inside a text).
+- Root helper `lib/arch-dock/arch-dock-install-update` (src/updates/helper):
+  pkexec, a system scope of its own, the signature before anything else,
+  libarchive package rules, exit codes 0, 2, 10-22; `--check-only` and
+  `--about` as the user. Polkit action `org.archdock.ArchDock.install-update`
+  (auth_admin). Finisher `lib/arch-dock/arch-dock-finish-update` (POSIX sh,
+  through `systemd-run --user`, which gets the session's `XDG_RUNTIME_DIR`
+  and bus address through `CommandRunner::runInSession`; result file in
+  `$XDG_RUNTIME_DIR`; its notices through `busctl --user -- call`).
+- Backend: `src/updates/ArchDockUpdates` (QML context object
+  `archDockUpdates`, never on the bus) takes an `Environment`;
+  `Environment::system()` gives the real places. `UpdateHold` refuses every
+  setting change with `update-active` while an update runs (from Update Now,
+  or Restart Arch Dock, until the restart); changes under way are counted
+  and waited for before the restart. Every end of an update before the
+  restart goes through `endUpdate()`, which also lets a Quit that waited for
+  the Stop go on; a Quit while the update installs is refused with a notice
+  (`QuitRefused`). The verified release is kept in the state folder for the
+  next start's Done, which shows what it fixed. `CommandRunner` refuses
+  pkexec, systemd-run and `pacman -U`, and the network layer every request,
+  in a build without a release and a key. Notices through KNotification
+  (`data/arch-dock.notifyrc`).
+- Studio: section 8, Updates (`qml/runtime/StudioUpdatesPage.qml`). While
+  an update holds the settings, every way into another page leads to
+  Updates; Restart Arch Dock asks about unapplied changes first, as Update
+  Now does.
+- Tests: update-manifest-test, release-source-test, update-download-test,
+  update-package-check-test, update-helper-test, update-finisher-test,
+  update-installer-test, update-guard-test, release-files-test,
+  qt-hook-test, qt-build-check-test, qt-private-interface-test,
+  install-docs-test, studio-updates-page-test; T3 and T5 extended.
+  `tests/check-package-release.sh` (T6) runs in the package smoke.
+
 ## Bars and edge panels: one window per bar, popups at the bar, free places on the screen — 2026-11-27
 
 - `plasma-dock-widget/contents/ui/DockWindowPolicy.js`: `overlayWanted`
@@ -7435,4 +7494,4 @@ The task-local system-site Python environment supplies pinned PySide6 6.11.2
 alongside existing system GI; no global dependency was installed. Builds use
 one job and tests one worker, short disk-backed TMPDIR, bounded batches and
 individual private runtime gates. Commands and recovery limits are in
-[INSTALL.md](INSTALL.md#configuration-recovery-and-upgrades).
+[INSTALL.md](INSTALL.md#configuration-recovery).

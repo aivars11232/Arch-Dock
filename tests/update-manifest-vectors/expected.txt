@@ -1,0 +1,102 @@
+# Update manifest vectors: the bytes a reader sees once the signature has
+# verified, and whether it must ACCEPT or REFUSE them. Arch Dock's C++ reader
+# (tests/UpdateCoreTest.cpp) and tools/release-files.py (tests/test_release_files.py)
+# read every file here and must both reach the result listed; a file that is
+# not listed fails both. A comment line explains the case below it.
+#
+# <file> <ACCEPT|REFUSE>
+valid.json ACCEPT
+invalid-utf8.json REFUSE
+utf8-bom.json REFUSE
+unknown-field.json REFUSE
+unknown-package-field.json REFUSE
+missing-field.json REFUSE
+missing-package-field.json REFUSE
+malformed-digest.json REFUSE
+short-digest.json REFUSE
+oversized-package.json REFUSE
+largest-package.json ACCEPT
+undersized-package.json REFUSE
+smallest-package.json ACCEPT
+malformed-version.json REFUSE
+version-with-letters.json REFUSE
+wrong-product.json REFUSE
+wrong-channel.json REFUSE
+wrong-format.json REFUSE
+mismatched-release-tag.json REFUSE
+mismatched-file.json REFUSE
+minimum-newer-than-release.json REFUSE
+minimum-equal-to-release.json ACCEPT
+malformed-minimum.json REFUSE
+# well formed, for a newer updater: the button says it must be installed by hand, a later check
+future-updater-version.json ACCEPT
+bad-updater-version.json REFUSE
+overflowing-updater-version.json REFUSE
+# well formed, for a newer updater: install by hand, a later check
+largest-updater-version.json ACCEPT
+negative-size.json REFUSE
+text-for-a-number.json REFUSE
+true-for-a-number.json REFUSE
+number-for-a-text.json REFUSE
+leading-zero-number.json REFUSE
+plus-signed-number.json REFUSE
+# JSON numbers are read by value: 34127137.0 is the number 34127137
+whole-number-written-as-decimal.json ACCEPT
+fractional-updater-version.json REFUSE
+bare-word-value.json REFUSE
+lone-surrogate.json REFUSE
+trailing-content.json REFUSE
+top-level-array.json REFUSE
+top-level-text.json REFUSE
+empty.json REFUSE
+notes-too-long.json REFUSE
+# 20000 characters, half of them outside the Basic Multilingual Plane
+astral-notes-at-limit.json ACCEPT
+# 20000 characters, but more than 64 KiB of UTF-8
+oversized-manifest.json REFUSE
+malformed-source-commit.json REFUSE
+malformed-published-at.json REFUSE
+published-at-with-offset.json REFUSE
+malformed-key-id.json REFUSE
+wrong-arch.json REFUSE
+epoch-in-version.json REFUSE
+# a subrelease, which only a TEST build reads
+subrelease.json REFUSE
+file-with-path.json REFUSE
+trailing-newline-after-version.json REFUSE
+trailing-newline-after-file.json REFUSE
+trailing-newline-after-need.json REFUSE
+escaped-key-beside-plain.json REFUSE
+escaped-key.json REFUSE
+duplicate-key.json REFUSE
+duplicate-package-key.json REFUSE
+# a line feed written raw inside the notes
+raw-line-feed-in-notes.json REFUSE
+# a tab written raw inside the notes
+raw-tab-in-notes.json REFUSE
+# a NUL written raw inside the notes
+raw-nul-in-notes.json REFUSE
+needs-in-pacman-forms.json ACCEPT
+no-needs.json ACCEPT
+too-many-needs.json REFUSE
+most-needs.json ACCEPT
+needs-not-a-list.json REFUSE
+need-not-a-text.json REFUSE
+need-leading-dash.json REFUSE
+need-leading-dot.json REFUSE
+need-no-version.json REFUSE
+need-empty-epoch.json REFUSE
+need-letter-epoch.json REFUSE
+need-two-releases.json REFUSE
+need-slash.json REFUSE
+need-reversed-operator.json REFUSE
+need-letter-release.json REFUSE
+need-space.json REFUSE
+need-non-ascii-name.json REFUSE
+need-shell-character.json REFUSE
+need-long-name.json REFUSE
+longest-need-name.json ACCEPT
+version-with-non-ascii-digits.json REFUSE
+minimum-with-non-ascii-digits.json REFUSE
+published-at-with-non-ascii-digits.json REFUSE
+need-non-ascii-epoch.json REFUSE

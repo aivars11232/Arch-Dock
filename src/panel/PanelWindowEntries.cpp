@@ -22,6 +22,7 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QMimeDatabase>
+#include "updates/UpdateHold.h"
 
 namespace
 {
@@ -405,6 +406,10 @@ QVariantMap PanelWindow::applyIconOverrideTransaction(
     const QString &entryIdentity,
     const QVariantMap &overrideValues)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     return commitIconOverrideTransaction(
         panelId,
         expectedRevision,
@@ -418,6 +423,8 @@ QVariantMap PanelWindow::resetIconOverrideTransaction(
     qulonglong expectedRevision,
     const QString &entryIdentity)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     return commitIconOverrideTransaction(
         panelId,
         expectedRevision,
@@ -727,11 +734,15 @@ bool PanelWindow::closeAllDockEntry(const QString &appId)
 
 bool PanelWindow::togglePinnedDockEntry(const QString &appId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     return m_dockModel.togglePinnedApplication(appId);
 }
 
 bool PanelWindow::moveDockEntryBefore(const QString &appId, const QString &beforeAppId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     // Free entries are panel-specific and reorder through
     // movePanelEntryBefore; the shared application model cannot order them
     // and must never receive them.
@@ -745,11 +756,15 @@ bool PanelWindow::moveDockEntryBefore(const QString &appId, const QString &befor
 
 bool PanelWindow::pinDockUrl(const QString &url)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     return pinDockUrls({url});
 }
 
 bool PanelWindow::pinDockUrls(const QStringList &urls)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     bool pinnedAny = false;
     for (const QString &urlString : urls)
     {
@@ -766,6 +781,8 @@ bool PanelWindow::pinDockUrls(const QStringList &urls)
 // alone; on the other edge panels it joins the launchers they share.
 bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition || !definition->holdsOwnEntries())
     {
@@ -776,6 +793,8 @@ bool PanelWindow::pinPanelUrls(const QString &panelId, const QStringList &urls)
 
 bool PanelWindow::removePanelContent(const QString &panelId, const QString &entryId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition || !definition->holdsOwnEntries())
     {
@@ -849,6 +868,8 @@ QVariantMap PanelWindow::panelIconRoom(const QString &panelId) const
 
 bool PanelWindow::addPanelEntries(const QString &panelId, const QStringList &entries)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     ArchDock::PanelContentRequest request;
     request.operation = ArchDock::PanelContentOperation::Add;
     for (const QString &item : entries)
@@ -895,6 +916,8 @@ bool PanelWindow::addPanelEntries(const QString &panelId, const QStringList &ent
 
 bool PanelWindow::setPanelDecorationSeat(const QString &panelId, const QString &entryId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition)
         return false;
@@ -920,6 +943,8 @@ bool PanelWindow::seatPanelUrl(const QString &panelId, const QString &url)
 
 bool PanelWindow::removePanelEntry(const QString &panelId, const QString &entryId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     ArchDock::PanelContentRequest request;
     request.operation = ArchDock::PanelContentOperation::Remove;
     request.entryId = entryId;
@@ -930,6 +955,8 @@ bool PanelWindow::movePanelEntryBefore(const QString &panelId,
                                        const QString &entryId,
                                        const QString &beforeEntryId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     const auto definition = m_panelRegistry.panelDefinition(panelId);
     if (!definition)
         return false;
@@ -956,6 +983,8 @@ bool PanelWindow::movePanelEntryBefore(const QString &panelId,
 
 bool PanelWindow::setPanelEntryOrder(const QString &panelId, const QStringList &entryIds)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     ArchDock::PanelContentRequest request;
     request.operation = ArchDock::PanelContentOperation::SetOrder;
     request.order = entryIds;
@@ -1099,6 +1128,8 @@ QVariantMap PanelWindow::panelFolderSnapshot(const QString &panelId, const QStri
 
 QVariantMap PanelWindow::setPanelFolderView(const QString &panelId, const QString &appId, const QVariantMap &values)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const QVariantMap entry = panelFolderEntry(panelId, appId);
     const QString identity = entry.value(QStringLiteral("stableIdentity")).toString();
     const auto definition = m_panelRegistry.panelDefinition(panelId);

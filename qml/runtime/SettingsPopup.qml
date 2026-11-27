@@ -32,6 +32,12 @@ Window {
             dockSettings.studioTheme = String(themeId);
     }
     readonly property bool currentThemesPage: mainTabIndex === 6
+    readonly property bool currentUpdatesPage: mainTabIndex === 7
+    // The Update button's updater (or a test's stand-in) and its hold:
+    // while an update runs, only the Updates page is open.
+    readonly property var updatesService: typeof archDockUpdates !== "undefined" ? archDockUpdates : null
+    readonly property bool updateHold: updatesService !== null && updatesService.holdsSettings === true
+    onUpdateHoldChanged: if (updateHold) setMainTab(7)
     // A bar's Plasma widgets are on its own Panels page, Widgets.
     readonly property bool currentWidgetsPage: mainTabIndex === 1 && subTabIndex === 12
     palette.window: studioTheme.windowBottom
@@ -62,7 +68,7 @@ Window {
     property bool showPanels: false
     property int mainTabIndex: 0
     property int subTabIndex: 0
-    property var subTabMemory: [0, 0, 0, 0, 0]
+    property var subTabMemory: [0, 0, 0, 0, 0, 0, 0, 0]
     property var editorSession: EditorModel.emptySession("", "")
     property var artifactDraft: ({})
     property string themeTargetPanelId: ""
@@ -342,7 +348,7 @@ Window {
     readonly property var mainTabLabels: StudioNavigation.mainLabels()
     // One icon per section of StudioNavigation.sections, in order.
     // UI Themes wears Arch Dock's own logo.
-    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "draw-ellipse", "document-save", "org.archdock.ArchDock"]
+    readonly property var mainTabIcons: ["view-dashboard", "preferences-desktop-display", "preferences-desktop-icons", "draw-rectangle", "draw-ellipse", "document-save", "org.archdock.ArchDock", "system-software-update"]
 
     function titleCase(value) {
         const text = String(value || "").replace(/-/g, " ");
@@ -457,6 +463,11 @@ Window {
     // keeps its changes until they are applied or dropped: while some are
     // not, the user is asked first.
     function openNewPanelPage(edge) {
+        // While an update holds the settings only the Updates page is open.
+        if (updateHold) {
+            openUpdatesPage();
+            return false;
+        }
         occupiedEdges = Array.from(panelController.occupiedScreenEdges() || []);
         removedPanelList = Array.from(panelController.removedPanels() || []);
         const wanted = newPanelKinds.includes(String(edge)) ? String(edge) : "free";
@@ -476,8 +487,41 @@ Window {
         setMainTab(1);
         return true;
     }
+    // The Updates page, from an update's notice or after the restart.
+    function openUpdatesPage() {
+        if (!sectionOffered(7))
+            return false;
+        if (profileMode && !leaveProfileMode())
+            return false;
+        newPanelEdge = "";
+        setMainTab(7);
+        return true;
+    }
+    // Update Now: changes not applied yet are applied or discarded first,
+    // because updating closes Panel Studio.
+    function requestUpdate() {
+        if (!updatesService)
+            return;
+        if (hasPendingChanges) {
+            askBeforeLeaving("update");
+            return;
+        }
+        updatesService.update();
+    }
+    // Restart Arch Dock closes Panel Studio too: the same question first, so
+    // a draft never makes the restart wait.
+    function requestRestart() {
+        if (!updatesService)
+            return;
+        if (hasPendingChanges) {
+            askBeforeLeaving("restart");
+            return;
+        }
+        updatesService.restartArchDock();
+    }
     // Leaving a panel with changes that are not applied: Apply, Discard or
-    // Keep editing. `target` is a panel id, or "new:<place>".
+    // Keep editing. `target` is a panel id, "new:<place>", "update" or
+    // "restart".
     property string pendingSwitch: ""
     function askBeforeLeaving(target) {
         pendingSwitch = String(target);
@@ -489,6 +533,10 @@ Window {
         const id = String(panelId || "");
         if (id.length === 0)
             return false;
+        if (updateHold) {
+            openUpdatesPage();
+            return false;
+        }
         if (id !== selectedPanelId && auditionBusy) {
             studioError = qsTr("Apply or cancel desktop audition before editing another panel.");
             return false;
@@ -503,6 +551,20 @@ Window {
     }
     function continueSwitch(target) {
         const place = String(target);
+        if (place === "update") {
+            if (updatesService)
+                updatesService.update();
+            return;
+        }
+        if (place === "restart") {
+            if (updatesService)
+                updatesService.restartArchDock();
+            return;
+        }
+        if (updateHold) {
+            openUpdatesPage();
+            return;
+        }
         if (place === "profiles") {
             leaveProfileMode();
         } else if (place.startsWith("profile:")) {
@@ -578,6 +640,8 @@ Window {
     // The sidebar: Profiles, while a profile's panel is edited, goes back to
     // the desktop's panels.
     function chooseMainTab(index) {
+        if (!sectionOffered(index))
+            return;
         if (profileMode && Number(index) === 5) {
             leaveProfileMode();
             return;
@@ -607,6 +671,15 @@ Window {
             setMainTab(1);
             setSubTab(0);
         }
+    }
+
+    // Whether a section is offered: Updates only by an installed release
+    // build, and while an update runs only Updates.
+    function sectionOffered(sectionIndex) {
+        const index = Number(sectionIndex);
+        if (index === 7)
+            return updatesService !== null && updatesService.offered === true;
+        return !updateHold;
     }
 
     // Whether a tab has anything to change on the selected panel. A tab with
@@ -694,6 +767,8 @@ Window {
 
     function setMainTab(index) {
         const next = StudioNavigation.clampSectionIndex(index);
+        if (!sectionOffered(next))
+            return;
         mainTabIndex = next;
         subTabIndex = StudioNavigation.clampSubtabIndex(next, subTabMemory[next] || 0);
     }
@@ -1628,8 +1703,17 @@ Window {
     }
 
     function panelBehaviorRows() {
+        // While this Qt lacks the window part Arch Dock's bars hide with, a
+        // bar's hiding choice would do nothing: one orange line stands in its
+        // place.
+        const barsStayShown = barSelected && panelController.barsCanHide === false;
         const rows = schemaSectionRows("panels-behavior", qsTr("Behavior"), qsTr("Visibility and interaction rules."))
-            .filter(function(row) { return row.key !== "showTooltips"; });
+            .filter(function(row) { return row.key !== "showTooltips"; })
+            .map(function(row) {
+                return barsStayShown && row.key === "visibilityMode"
+                    ? notice(qsTr("Arch Dock's bars cannot hide with this Qt version, so they stay shown. Ask for a rebuilt Arch Dock; once it is published, Panel Studio > Updates installs it."), true)
+                    : row;
+            });
         // Only a visibility Plasma refused is reported, not the raw result.
         if (isNativePanel() && VisibilityStatus.isProblem(selectedVisibilityResult))
             rows.push(notice(qsTr("Visibility detail: %1").arg(VisibilityStatus.problemText(selectedVisibilityResult)), true));
@@ -1967,7 +2051,7 @@ Window {
     function rowsForCurrentPage() {
         // A preset page is a browser, and UI Themes and a bar's Widgets
         // pages of their own, not settings forms.
-        if (currentPresetPage || currentThemesPage || currentWidgetsPage)
+        if (currentPresetPage || currentThemesPage || currentWidgetsPage || currentUpdatesPage)
             return [];
         if (mainTabIndex === 0)
             return subTabIndex === 0 ? overviewPanelRows() : subTabIndex === 1 ? overviewIconRows()
@@ -2345,7 +2429,8 @@ Window {
             if (result && result.success === true && String(result.panelId || "").length > 0) {
                 openPanelEditor(String(result.panelId));
             } else {
-                studioError = qsTr("Could not create the free panel (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
+                studioError = result && result.message ? String(result.message)
+                    : qsTr("Could not create the free panel (%1).").arg(String(result && result.errorCode ? result.errorCode : "unknown-error"));
             }
         } else if (action === "create-edge") {
             const edge = String(data.edge || "");
@@ -2607,7 +2692,12 @@ Window {
             setMainTab(1);
     }
 
-    Component.onCompleted: loadEditor(selectedPanelId)
+    Component.onCompleted: {
+        loadEditor(selectedPanelId);
+        // Opened while an update holds the settings: the Updates page.
+        if (updateHold)
+            openUpdatesPage();
+    }
 
     Connections {
         target: root.auditionService
@@ -2922,6 +3012,8 @@ Window {
                         icon.name: root.mainTabIcons[index]
                         checkable: true
                         checked: root.mainTabIndex === index
+                        visible: index !== 7 || root.sectionOffered(7)
+                        enabled: !root.updateHold || index === 7
                         onClicked: root.chooseMainTab(index)
 
                         contentItem: RowLayout {
@@ -2934,7 +3026,8 @@ Window {
                                 source: mainTabDelegate.icon.name
                                 // UI Themes shows the plain theme icon where
                                 // Arch Dock's logo is not installed.
-                                fallback: mainTabDelegate.index === 6 ? "preferences-desktop-theme-global" : "unknown"
+                                fallback: mainTabDelegate.index === 6 ? "preferences-desktop-theme-global"
+                                    : mainTabDelegate.index === 7 ? "update-none" : "unknown"
                                 color: mainTabDelegate.checked ? root.studioTheme.sidebarIconActive : root.studioTheme.sidebarIcon
                             }
 
@@ -2945,6 +3038,19 @@ Window {
                                 font.letterSpacing: root.studioTheme.letterSpacing / 2
                                 font.weight: mainTabDelegate.checked ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
+                            }
+
+                            // Updates: an update is ready, or a restart is needed.
+                            Rectangle {
+                                objectName: "studio-updates-dot"
+                                visible: mainTabDelegate.index === 7 && root.updatesService !== null
+                                    && root.updatesService.attention === true
+                                Layout.preferredWidth: 8
+                                Layout.preferredHeight: 8
+                                radius: 4
+                                color: root.studioTheme.accent
+                                Accessible.role: Accessible.Indicator
+                                Accessible.name: qsTr("An update is ready")
                             }
                         }
 
@@ -3464,8 +3570,8 @@ Window {
                 id: studioForm
                 objectName: "studio-page-form"
                 visible: root.currentPresetPage === null && !root.currentProfilePage && !root.currentThemesPage
-                    && !root.currentWidgetsPage && !root.newPanelPicked
-                enabled: !root.profilesService || !root.profilesService.active
+                    && !root.currentWidgetsPage && !root.currentUpdatesPage && !root.newPanelPicked
+                enabled: (!root.profilesService || !root.profilesService.active) && !root.updateHold
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 240
@@ -3481,6 +3587,25 @@ Window {
                 Layout.fillHeight: true
                 currentThemeId: root.studioTheme.id
                 onThemeChosen: function(themeId) { root.chooseStudioTheme(themeId); }
+            }
+
+            // Loaded only while shown: it asks GitHub when opened a day after
+            // the last answer.
+            Loader {
+                objectName: "panel-studio-updates-page"
+                active: root.currentUpdatesPage && (root.updateHold || !root.newPanelPicked)
+                visible: active
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: StudioUpdatesPage {
+                    updates: root.updatesService
+                    theme: root.studioTheme
+                    barsCanHide: panelController.barsCanHide !== false
+                    blocked: root.auditionBusy || (root.profilesService !== null && root.profilesService.active === true)
+                    onUpdateRequested: root.requestUpdate()
+                    onRestartRequested: root.requestRestart()
+                }
+                onLoaded: if (root.updatesService) root.updatesService.pageOpened()
             }
 
             StudioWidgetsPage {
@@ -3667,7 +3792,7 @@ Window {
 
         Button {
             text: qsTr("OK")
-            enabled: !root.auditionBusy
+            enabled: !root.auditionBusy && !root.updateHold
             icon.name: "dialog-ok"
             onClicked: root.acceptStudioChanges()
         }
@@ -3676,7 +3801,7 @@ Window {
             text: qsTr("Apply")
             objectName: "studio-apply"
             icon.name: "dialog-ok-apply"
-            enabled: !root.auditionBusy && root.hasPendingChanges
+            enabled: !root.auditionBusy && root.hasPendingChanges && !root.updateHold
             onClicked: root.applyStudioChanges()
         }
 
@@ -3723,7 +3848,11 @@ Window {
 
         title: qsTr("Changes not applied")
         text: qsTr("%1 has changes that are not applied yet.").arg(root.editedPanelName)
-        informativeText: qsTr("Apply them, discard them, or keep editing this panel.")
+        informativeText: root.pendingSwitch === "update"
+            ? qsTr("Apply them or discard them first: updating closes Panel Studio.")
+            : root.pendingSwitch === "restart"
+                ? qsTr("Apply them or discard them first: restarting Arch Dock closes Panel Studio.")
+                : qsTr("Apply them, discard them, or keep editing this panel.")
         buttons: MessageDialog.Apply | MessageDialog.Discard | MessageDialog.Cancel
         onButtonClicked: function(button, role) {
             const target = root.pendingSwitch;

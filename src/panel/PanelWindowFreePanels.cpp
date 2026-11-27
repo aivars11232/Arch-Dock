@@ -24,6 +24,7 @@
 #include <limits>
 #include <optional>
 #include <unistd.h>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::plasmaScriptStringLiteral;
 
@@ -559,6 +560,10 @@ void PanelWindow::reportRemovedPanel(const QVariantMap &record, const QString &c
 
 QVariantMap PanelWindow::createFreePanel()
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     const QList<QScreen *> screens = QGuiApplication::screens();
@@ -586,6 +591,8 @@ QVariantMap PanelWindow::createFreePanelFromTemplate(
     int containmentId,
     const QString &ownershipToken)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     ArchDock::FreePanelCreationRequest request;
@@ -611,6 +618,9 @@ QVariantMap PanelWindow::adoptFreePanelApplet(
     int desktopContainmentId,
     int dockAppletId)
 {
+    // A widget added while an update runs asks again when Arch Dock is back.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (profileBusy()) return {{QStringLiteral("success"), false}, {QStringLiteral("errorCode"), QStringLiteral("profile-recovery-or-apply-active")}};
 
     ArchDock::FreePanelCreationRequest request;
@@ -1517,6 +1527,8 @@ print("ARCHDOCK_RESULT:" + String(outcome));
 
 void PanelWindow::saveFreePanelPosition(const QString &panelId, int x, int y)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     if (m_panelRegistry.panelValue(panelId, QStringLiteral("edge")).toString() != QStringLiteral("free"))

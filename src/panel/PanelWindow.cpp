@@ -6,6 +6,7 @@
 // PanelWindow*.cpp files beside this one; PanelWindow.h lists them.
 
 #include "PanelWindow.h"
+#include "updates/ArchDockUpdates.h"
 #include "PanelWindowHelpers.h"
 
 #include "../PanelVisibility.h"
@@ -29,7 +30,9 @@
 #include <QWindow>
 
 #include <array>
+#include <memory>
 #include <utility>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::fitUtilityWindow;
 
@@ -114,6 +117,8 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
                     m_pendingLaunchReplies.remove(appId);
             });
 
+    connect(&m_barHost, &BarHostSupervisor::canHideChanged, this, &PanelWindow::barsCanHideChanged);
+
     // The objects Studio and the utility windows bind to by name.
     m_engine.rootContext()->setContextProperty(
         QStringLiteral("windowModel"),
@@ -160,6 +165,19 @@ PanelWindow::PanelWindow(QQmlApplicationEngine &engine,
     m_engine.rootContext()->setContextProperty(
         QStringLiteral("panelController"),
         this);
+    // The Update button. It reaches the rest of Arch Dock only through these
+    // hooks, and nothing on the bus reaches it.
+    ArchDock::Updates::ArchDockUpdates::Hooks updateHooks;
+    updateHooks.profileBusy = [this] { return profileBusy(); };
+    updateHooks.previewActive = [this] { return m_presetAudition && m_presetAudition->active(); };
+    updateHooks.studioOpen = [this] { return m_settingsWindow && m_settingsWindow->isVisible(); };
+    updateHooks.studioDraft = [this]
+    {
+        return m_settingsWindow && m_settingsWindow->isVisible() && m_settingsWindow->property("hasPendingChanges").toBool();
+    };
+    updateHooks.openStudioOnUpdates = [this] { showUpdatesPage(); };
+    m_updates = new ArchDock::Updates::ArchDockUpdates(updateHooks, this);
+    m_engine.rootContext()->setContextProperty(QStringLiteral("archDockUpdates"), m_updates);
 
     // The D-Bus objects the applets and Studio call. When plasmashell goes
     // away, native panel state is stale and an audition in progress is
@@ -548,6 +566,42 @@ QVariantMap PanelWindow::entryOverlay(const QVariantMap &entry) const
 
 QVariantMap PanelWindow::quit()
 {
+    // `arch-dock --quit` records the stop before it asks, so a refused Quit
+    // removes it again and leaves nothing behind. The menu's Quit has no
+    // window, so a notice says why nothing happened.
+    const auto refuseQuit = [this]
+    {
+        ArchDock::IntentionalStop::clear();
+        if (m_updates)
+            m_updates->tellQuitRefused();
+    };
+    const QVariantMap refused{{QStringLiteral("success"), false},
+                              {QStringLiteral("errorCode"), QStringLiteral("update-installing")},
+                              {QStringLiteral("message"),
+                               tr("Arch Dock is installing its update. Quit again when it has finished.")}};
+    if (m_updates && m_updates->quitRefused())
+    {
+        refuseQuit();
+        return refused;
+    }
+    if (m_updates && m_updates->holdsSettings())
+    {
+        // Before the password was accepted, Quit stops the update first. A
+        // password accepted in the same moment refuses the Quit at once.
+        const auto answered = std::make_shared<bool>(false);
+        m_updates->stopForQuit([this, refuseQuit, answered](bool refusedNow)
+        {
+            *answered = true;
+            if (refusedNow)
+                refuseQuit();
+            else
+                stopIntentionally(QStringLiteral("quit"));
+        });
+        if (*answered && m_updates->quitRefused())
+            return refused;
+        return {{QStringLiteral("success"), true},
+                {QStringLiteral("message"), tr("The update stops first, then Arch Dock quits.")}};
+    }
     if (profileBusy())
     {
         return {{QStringLiteral("success"), false},
@@ -691,8 +745,17 @@ QWindow *PanelWindow::settingsWindow()
                         // Its draft goes with it, as Cancel takes it.
                         clearPanelSettingsPreview();
                     }
-                    // A closed Studio shows no readings.
-                    if (!visible) m_studioStatusShown = false;
+                    // A closed Studio shows no readings, and an update that
+                    // has not passed the password window stops with it. An
+                    // opened one shows whether a restart is needed.
+                    if (!visible)
+                    {
+                        m_studioStatusShown = false;
+                        if (m_updates)
+                            m_updates->studioClosing();
+                    }
+                    else if (m_updates)
+                        m_updates->studioOpened();
                     updateContentDemand();
                 });
     }
@@ -727,6 +790,24 @@ void PanelWindow::showPanelSettings(const QString &panelId)
     }
     presentUtilityWindow(studio, panelId);
 }
+
+void PanelWindow::showUpdatesPage()
+{
+    QWindow *studio = settingsWindow();
+    if (studio)
+    {
+        QVariant opened;
+        QMetaObject::invokeMethod(studio, "openUpdatesPage", Q_RETURN_ARG(QVariant, opened));
+    }
+    presentUtilityWindow(studio, m_panelRegistry.activePanelId());
+}
+
+#ifdef ARCHDOCK_TESTING
+void PanelWindow::setUpdatesForTesting(QObject *standIn)
+{
+    m_engine.rootContext()->setContextProperty(QStringLiteral("archDockUpdates"), standIn);
+}
+#endif
 
 void PanelWindow::showNewPanelPage()
 {
@@ -897,6 +978,10 @@ void PanelWindow::presentUtilityWindow(QWindow *window, const QString &panelId)
 
 void PanelWindow::resetSettings()
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     m_settings.reset();
@@ -905,6 +990,8 @@ void PanelWindow::resetSettings()
 
 void PanelWindow::toggleAutoHide()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     const bool autoHide = m_panelRegistry.panelValue(
@@ -917,6 +1004,8 @@ void PanelWindow::toggleAutoHide()
 
 void PanelWindow::toggleDesktopSuite()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     m_settings.setDesktopSuite(!m_settings.desktopSuite());
@@ -925,6 +1014,8 @@ void PanelWindow::toggleDesktopSuite()
 
 void PanelWindow::toggleTopLauncher()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     const bool launcherVisible = !m_settings.topLauncherVisible();
@@ -939,6 +1030,8 @@ void PanelWindow::toggleTopLauncher()
 
 void PanelWindow::toggleSideRail()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     const bool railVisible = !m_settings.sideRailVisible();
@@ -953,6 +1046,8 @@ void PanelWindow::toggleSideRail()
 
 void PanelWindow::toggleBottomPanel()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     const bool visible = !m_panelRegistry.panelValue(
@@ -969,6 +1064,8 @@ void PanelWindow::toggleBottomPanel()
 
 void PanelWindow::applyProfile(const QString &profileName)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return;
     if (profileBusy()) return;
 
     m_settings.applyProfile(profileName);

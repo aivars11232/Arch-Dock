@@ -213,6 +213,20 @@ class PrepareArchSourceTest(unittest.TestCase):
         self.assertEqual(list(output.iterdir()), [old])
         self.assertEqual(old.read_bytes(), b"existing candidate must remain untouched")
 
+    def test_unfinished_debugging_code_is_refused(self):
+        # Spelt in two parts, as the exporter spells them, so this file
+        # carries no marker itself.
+        for marker in (b"TEMPORARY " + b"DIAGNOSTIC", b"W2" + b"DIAG"):
+            with self.subTest(marker=marker):
+                self.write("plain.txt", b"tracked source\n// " + marker + b" (remove)\n")
+                result, output = self.export("unfinished-" + marker.decode().replace(" ", "-"))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unfinished debugging code in plain.txt", result.stderr)
+                self.assertFalse(output.exists() and any(output.iterdir()))
+        self.write("plain.txt", b"tracked source\n")
+        result, _ = self.export("finished")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_source_symlinks_are_refused(self):
         for tracked in (False, True):
             for dangling in (False, True):

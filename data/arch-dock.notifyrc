@@ -1,0 +1,24 @@
+[Global]
+IconName=org.archdock.ArchDock
+Comment=Arch Dock
+DesktopEntry=org.archdock.ArchDock
+
+[Event/UpdateFound]
+Name=An Arch Dock update is ready
+Comment=A newer Arch Dock is out; Panel Studio > Updates installs it
+Action=Popup
+
+[Event/RestartNeeded]
+Name=Arch Dock needs a restart
+Comment=Arch Dock was updated and runs the old version until it restarts
+Action=Popup
+
+[Event/UpdateProblem]
+Name=An Arch Dock update did not finish
+Comment=What went wrong, and what to do
+Action=Popup
+
+[Event/QuitRefused]
+Name=Arch Dock cannot quit during its update
+Comment=Quit was pressed while Arch Dock installs its update; it quits when asked again afterwards
+Action=Popup

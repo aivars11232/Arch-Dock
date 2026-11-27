@@ -1,5 +1,202 @@
 # Arch Dock release checklist
 
+## Every release, from 0.1.1-55 on
+
+The Update button installs only releases signed with the project's update
+key. These steps come before every release; the older entries below stay as
+the record of earlier releases.
+
+### The update signing key
+
+- **Where it lives.** A file on this PC, in a folder that holds only keys (a
+  new one is fine) at a place the owner chooses, with one backup copy in a
+  second such folder. No USB stick.
+  - It is made with umask 077, so only the owner's account can read it; the
+    home folder and /mnt/F keep that mode.
+  - This PC has one disk, so the backup guards against a deleted file, not a
+    failed disk. A further copy off this PC is the owner's choice.
+  - Neither copy goes in or below a git work tree, the build folder (where
+    `--pkgbuild` lies), the release output folder (`--out`), /tmp (the
+    scratchpad included), /var/tmp, /dev/shm or `$XDG_RUNTIME_DIR`: there it
+    could be committed, packed into a build or wiped.
+    `tools/release-files.py check-key-place` checks both paths for a git work
+    tree and the temporary places before they are made, and `make` checks the
+    key file against all of them at every signing. Any other place is the
+    owner's choice.
+  - Downloads, Pictures, Videos and Documents are allowed too, but then the
+    owner runs the key and signing lines, because the agent stays out of
+    those folders.
+  - Clean-ups never touch the two folders or any folder that holds them. The
+    agent's notes name the folders, never the key.
+- **Making it.** Once, before the recipe commit of 0.1.1-55, and only after
+  `tools/release-files.py check-key-place <key folder>/arch-dock-update-1.key <backup folder>/arch-dock-update-1.key`
+  has passed (it opens nothing):
+  - `(umask 077 && mkdir -p -- <key folder> && openssl ecparam -name prime256v1 -genkey -noout -out <key folder>/arch-dock-update-1.key)`
+  - `openssl pkey -in <key folder>/arch-dock-update-1.key -pubout -outform DER | od -An -v -tx1 | tr -d ' \n'`
+- **Its public half.** The printed hex goes into `data/update-keys.txt` as
+  `arch-dock-update-1 <hex>` and is committed.
+- **Backup.** Into the second folder:
+  - `(umask 077 && mkdir -p -- <backup folder> && openssl pkey -in <key folder>/arch-dock-update-1.key -out <backup folder>/arch-dock-update-1.key)`
+  - then `openssl pkey -in <backup folder>/arch-dock-update-1.key -pubout -outform DER | od -An -v -tx1 | tr -d ' \n'`
+    must print exactly the committed hex, so a bad backup shows up on day
+    one, not when it is needed.
+- **Only openssl ever opens the key file.** No Read, cat, od or grep of it,
+  and no listing of its two folders, by the agent, because the session's
+  transcript on disk would then hold it. The agent passes only its path.
+  `release-files.py` refuses the places above and a key file that group or
+  others can read.
+- **Never** printed, committed, bundled, copied into a build, pasted into a
+  chat or photographed. Its only copies are the key file and its one backup
+  (and any further copy the owner keeps off this PC).
+- **One key, kept.** If it is lost, no further button update can be
+  published, and every PC needs one install by hand of a build that lists a
+  new key. If it is stolen, the same route applies, and until then whoever
+  holds it can sign updates that every Arch Dock accepts. It has no expiry
+  and cannot be revoked. Because it is a file on this PC (the owner's
+  choice), a harmful program running in the owner's account could read it;
+  installing what it signs would still need a password, but that is no
+  barrier: such a program could fake or watch the window, and once it is
+  published, every other PC's button offers it like any other signed update.
+
+### Before building
+
+1. Main holds only finished work. `git status --porcelain` is empty, and the
+   exporter guard passes.
+2. `data/update-keys.txt` lists exactly one key. CMake refuses a release build
+   otherwise.
+3. Recipe commit: pkgrel N, README "release N", and CHANGELOG "## Unreleased"
+   becomes "## 0.1.1-N — <date>" (plain words, no commands). Push.
+4. Annotated tag v0.1.1-N on that commit, kept local.
+
+### Build
+
+5. Export twice from a clean worktree; both exports byte-identical;
+   `verify-tagged-arch-source.py` passes.
+6. `makepkg --verifysource`, then `--cleanbuild` with one job. Record the
+   package's sha256. One build per version: never rebuild or re-upload under
+   the same version.
+
+### Check
+
+7. Package smoke against the previous package, which includes
+   `tests/check-package-release.sh`.
+8. F1: a first install, and the previous release's helper installing the
+   candidate.
+9. The previous release's helper `--check-only` accepts the candidate's signed
+   manifest and package, so every installed button can take it. 0.1.1-55 has
+   no previous helper; `make`'s own check (step 11) covers it.
+10. R1b whenever the updater, the stop and start code or the restart part
+    changed.
+
+### Release files
+
+11. `tools/release-files.py make ... --key-file <key folder>/arch-dock-update-1.key`
+    (for 0.1.1-55 also `--first-update-release`).
+    - The owner runs it, or allows it to be run; there is no passphrase.
+    - It checks the signature three ways (the key's own public half,
+      `data/update-keys.txt`, and the packaged helper's `--check-only`) and
+      the release history, and prints the key's fingerprint and the
+      package's signed sha256.
+    - 0.1.1-55 names any earlier release (0.1.1-1) as its minimum version. No
+      older Arch Dock has the button, so this changes nothing for anyone; it
+      lets the packaged helper's own check run on this PC, which still runs an
+      older release (0.1.1-53) until 55 is installed by hand.
+12. The API version the button sends is supported for at least another year;
+    otherwise the next release moves to the newer one.
+
+### Publish
+
+Only with the owner's explicit OK for this release; one OK covers 13-16, with
+a stop at any failure.
+
+13. Push the tag; the Source gates workflow passes.
+14. `gh release create v0.1.1-N --verify-tag --draft --title "Arch Dock 0.1.1-N" --notes-file notes.md`
+    with the package, `update-manifest.json`, `update-manifest.sig`, the
+    package's `.sha256`, `arch-dock-0.1.1.tar.gz`, `PKGBUILD`, `SHA256SUMS`
+    and `SOURCE_CHECKPOINT.json`. Every GitHub digest must equal the local
+    sha256.
+15. `gh release edit v0.1.1-N --draft=false --prerelease=false --latest`.
+16. `release-files.py check-published v0.1.1-N`, without credentials:
+    - /releases/latest is this tag;
+    - the release is immutable (its `immutable` field), from 0.1.1-55 on;
+    - the asset names are exact;
+    - the manifest and signature verify with the repository key;
+    - the package downloaded by name matches the signed size and sha256.
+
+    Then Check for Updates on a PC with the previous release says it is
+    ready.
+17. Tell the owner.
+18. Records: this checklist, CURRENT_STATE and the repair record. Commit and
+    sync.
+
+### 0.1.1-55 only, in this order, each with the owner's OK
+
+1. Before step 13, so before 55's draft exists:
+   - the owner confirms two-step sign-in on the owner's GitHub account;
+   - then immutable releases are switched on for the repository.
+
+   GitHub applies immutability only to releases published after the switch,
+   so a 55 published first would stay changeable, and its files could still
+   be replaced.
+2. Steps 13-16 as usual: a draft, every file attached, then published.
+   `check-published` confirms that 55 is immutable.
+3. Afterwards, the old notes of -43, -45, -46, -47 and -54 point to 55 (they
+   stay pre-releases).
+
+### Withdrawing a release
+
+- Mark it pre-release again (allowed even for immutable releases) and put one
+  plain sentence on top of its notes.
+- Fix it with the next pkgrel. Never replace files; never downgrade.
+- It stays signed, so it can still be installed by hand. The button no longer
+  offers it.
+- Withdrawing hides a release only from a GitHub account that nobody else
+  controls. Immutable releases still let whoever controls the account change
+  the pre-release and Latest flags. That person can:
+  - make /releases/latest any earlier signed release that is newer than a
+    PC's version, a withdrawn one included;
+  - freeze every button, by marking newer releases pre-release or by
+    publishing an incomplete "latest" (it shows as incomplete or unsigned
+    until it is fixed).
+
+  No format change helps here: a signed withdrawal list would not stop
+  someone serving the old manifest itself. Two-step sign-in is the
+  protection.
+
+### Frozen in 0.1.1-55, never broken for any old button
+
+- `update-manifest.json` and `update-manifest.sig`, format 1 and its fields,
+  the dependency form, the key id, one key;
+- the package file naming, the repository address, tags
+  `v<pkgver>-<pkgrel>`;
+- the helper:
+  - its path, standard-input layout, options and exit codes (0, 2 and 10-22);
+  - the rule that it runs pacman in a system scope of its own, outside the
+    login session, so a logout cannot cut an install;
+  - its folder /run/arch-dock-update and the lock in it;
+- the finisher's path, arguments, result file and statuses; the update
+  marker's format and phases; the stop record's place, which the finisher
+  reads; the polkit action id;
+- the process names arch-dock and arch-dock-bars, plus arch-dock-insta and
+  arch-dock-finis, which the next start looks for; and the
+  plasma-plasmashell unit;
+- the package itself:
+  - no .INSTALL;
+  - the payload only under usr/, every entry owned by root, no group or other
+    write bit, no xattrs or ACLs, no setuid;
+  - one pkgname, pkgbase, pkgver and arch line each, and .MTREE equal to the
+    entries;
+  - tar with zstd;
+  - no epoch, and no subrelease in a normal release;
+- no new dependency that a fully updated Plasma system lacks, unless the
+  notes name the package to install.
+
+Notices, the hook, the bars line, Copy Details and See It on GitHub can change
+later through the button.
+
+**Notes rule:** exactly that version's CHANGELOG section, in plain words: no
+commands, no web-address installs, no images, at most 20,000 characters.
+
 <!-- ADREP_TASK_005_RELEASE_BEGIN -->
 ## ADREP five-task repair delivery — 0.1.1-13, verified and rechecked, 2026-10-08
 

@@ -28,6 +28,7 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QUuid>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::plasmaScriptStringLiteral;
 using PanelWindowHelpers::isNativeDockPanelType;
@@ -36,6 +37,10 @@ using PanelWindowHelpers::panelTypeNeedsDockApplet;
 
 QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return {};
     if (profileBusy()) return {};
 
     const QString normalizedEdge = edge.trimmed().toLower();
@@ -65,6 +70,8 @@ QString PanelWindow::createNativePanel(const QString &edge, const QString &type)
 
 bool PanelWindow::setNativePanelType(const QString &panelId, const QString &type)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy()) return false;
 
     const QString normalizedType = type.trimmed().toLower();
@@ -823,6 +830,8 @@ bool PanelWindow::attachNativeDockApplet(const QString &panelId, int containment
 
 bool PanelWindow::createNativeKdePanel(const QString &panelId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy()) return false;
 
     if (!m_panelRegistry.panelIds().contains(panelId))
@@ -1004,6 +1013,8 @@ bool PanelWindow::createNativeKdePanel(const QString &panelId)
 
 bool PanelWindow::addKdeWidget(const QString &panelId, const QString &appletId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy()) return false;
 
     const QString pluginId = appletId.trimmed();
@@ -1050,6 +1061,8 @@ bool PanelWindow::addKdeWidget(const QString &panelId, const QString &appletId)
 
 bool PanelWindow::removeNativeKdePanel(const QString &panelId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (profileBusy()) return false;
 
     if (!m_panelRegistry.panelIds().contains(panelId))
@@ -1253,6 +1266,8 @@ QStringList PanelWindow::occupiedScreenEdges() const
 
 QVariantMap PanelWindow::removePanel(const QString &panelId)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto refused = [&panelId](const QString &errorCode, const QString &message)
     {
         qWarning().noquote() << QStringLiteral("Panel %1 was not removed (%2): %3")
@@ -1351,6 +1366,8 @@ QVariantMap PanelWindow::removePanel(const QString &panelId)
 
 QVariantMap PanelWindow::removePanelOfWidget(const QString &panelId, const QString &ownerToken)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     // A widget whose panel Arch Dock no longer has: there is nothing of
     // Arch Dock's to remove, and the widget itself goes in Plasma's edit
     // mode, which the widget says.
@@ -1412,6 +1429,8 @@ QVariantList PanelWindow::removedPanels() const
 
 QVariantMap PanelWindow::bringBackRemovedPanel(const QString &key)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     const auto failed = [](const QString &errorCode, const QString &message)
     {
         qWarning().noquote() << "A removed panel was not brought back:" << errorCode;

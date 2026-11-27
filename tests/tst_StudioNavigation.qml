@@ -17,7 +17,8 @@ TestCase {
             "Icon Tiles",
             "Pedestals",
             "Profiles",
-            "UI Themes"
+            "UI Themes",
+            "Updates"
         ])
     }
 
@@ -59,12 +60,14 @@ TestCase {
             "Shortcuts"
         ])
         compareList(StudioNavigation.subtabsFor(6), [])
+        compareList(StudioNavigation.subtabsFor(7), [])
     }
 
     function test_clampsMainSectionIndices() {
         compare(StudioNavigation.clampSectionIndex(-4), 0)
         compare(StudioNavigation.clampSectionIndex(2), 2)
-        compare(StudioNavigation.clampSectionIndex(99), 6)
+        compare(StudioNavigation.clampSectionIndex(7), 7)
+        compare(StudioNavigation.clampSectionIndex(99), 7)
         compare(StudioNavigation.clampSectionIndex("invalid"), 0)
     }
 
@@ -77,6 +80,7 @@ TestCase {
         compare(StudioNavigation.clampSubtabIndex(4, 99), 2)
         compare(StudioNavigation.clampSubtabIndex(5, 2.9), 2)
         compare(StudioNavigation.clampSubtabIndex(6, 99), 0)
+        compare(StudioNavigation.clampSubtabIndex(7, 99), 0)
     }
 
     // The settings pages that existed before the preset pages keep their

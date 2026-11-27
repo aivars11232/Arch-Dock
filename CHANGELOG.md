@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Arch Dock updates itself.** Panel Studio has a new last section,
+  Updates. Once a day Arch Dock asks GitHub whether a newer version is out
+  (a switch on that page turns this off); it sends nothing about you or your
+  panels, and a quiet notice says when one is ready. Update Now downloads
+  it, saves a copy of your settings, asks for your password once, installs
+  it and restarts Arch Dock and Plasma's panels by itself. Until the
+  password is accepted, Stop ends it and nothing is installed. Every update
+  is signed with the Arch Dock key, which Arch Dock checks before anything
+  is installed; a release that is not signed with it is never offered.
+  While an update runs, settings cannot be changed; Quit before the
+  password stops the update, and Quit while it installs is refused with a
+  notice (quit again when it has finished). Another account on the same PC
+  is told to restart Arch Dock, with no password.
+- **Arch Dock keeps starting after a Qt update.** It used parts of Qt that
+  change with every Qt version, so a Qt update stopped it from starting
+  until it was rebuilt. Now it uses only Qt's lasting parts. The one
+  exception is the part through which Arch Dock's bars hide, which they look
+  up while they run: without it the bars stay shown, and Panel Studio says
+  why in one line where a bar's hiding choice was. The package asks for at
+  least the Qt it was built with.
+- **pacman says when Arch Dock no longer fits.** After an update of Qt or
+  Plasma, pacman prints one Arch Dock line when something does not fit, and
+  changes nothing.
 - **Panels are not lost on Plasma's word alone.** When Plasma reported a
   panel's widget removed, Arch Dock deleted the panel and its settings
   within seconds, with nothing kept (so a free panel went on 31 October).

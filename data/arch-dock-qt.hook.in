@@ -1,0 +1,17 @@
+# After Qt, Plasma, layer-shell-qt or Arch Dock itself is installed or
+# updated, pacman says in one line when the installed Arch Dock no longer
+# fits them (arch-dock-check-qt). The check never stops the update.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = qt6-base
+Target = qt6-declarative
+Target = libplasma
+Target = layer-shell-qt
+Target = arch-dock
+
+[Action]
+Description = Checking that Arch Dock fits the installed Qt and Plasma...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/arch-dock-check-qt

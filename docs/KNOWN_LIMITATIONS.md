@@ -10,6 +10,12 @@ observations to [the platform matrix](PLATFORM_MATRIX.md).
 The production target is Arch Linux, KDE Plasma 6 and Wayland. Other operating
 systems, desktop environments and X11 are outside this verification record.
 
+Arch Dock uses none of Qt's private interfaces except one: Arch Dock's own
+bars ask KWin to hide them through Qt's Wayland window part, which a Qt update
+can change. Arch Dock keeps starting with a newer Qt. If that part is missing,
+the bars stay shown, Panel Studio hides a bar's hiding choice and says why in
+one orange line, and a rebuilt Arch Dock fixes it.
+
 Native edge panels retain real Plasma containments and the standard Plasma
 editing model. They lay their row out along their edge, horizontal at the top
 and bottom and vertical at the sides; their renderer tiers are procedural/skinned
@@ -509,7 +515,7 @@ must be resolved through the existing profile transaction; configuration
 restore cannot bypass it. Recovery commands refuse a conflicting live service.
 Backups are bounded and exclude installed built-ins, generated caches,
 executable content and symbolic links. See
-[configuration recovery](INSTALL.md#configuration-recovery-and-upgrades).
+[configuration recovery](INSTALL.md#configuration-recovery).
 
 A profile holds the panels that are on the desktop when it is created or
 saved: native panels always, a free panel only while the backend has
@@ -532,6 +538,20 @@ Package removal preserves user data and does not rewrite personal Plasma
 records. Cancel auditions and remove managed panels through their verified
 removal actions before uninstalling the applet package. Follow
 [the uninstall route](INSTALL.md#uninstall).
+
+## Updates
+
+- Updates come only from Arch Dock's releases on GitHub, and need internet. A
+  package file can always be installed by hand instead
+  ([Upgrade](INSTALL.md#upgrade)).
+- The Update button updates only Arch Dock. It refuses an update that needs
+  newer system parts than the system has, and asks for a system update
+  (`sudo pacman -Syu`) first.
+- Other accounts on the same PC keep running the old version until they press
+  **Restart Arch Dock** or log in again.
+- Updates are signed with one project key, which has no expiry and cannot be
+  revoked. If it is lost or stolen, every PC needs one install by hand of a
+  build that trusts a new key.
 
 ## Versioning and licensing
 

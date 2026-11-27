@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <utility>
+#include "updates/UpdateHold.h"
 
 using PanelWindowHelpers::plasmaScriptStringLiteral;
 using PanelWindowHelpers::panelTypeNeedsDockApplet;
@@ -2604,6 +2605,10 @@ QVariantMap PanelWindow::resolveProfilePanelEditorDraft(const QString &profileId
 QVariantMap PanelWindow::applyProfilePanelSettings(const QString &profileId, const QString &panelId,
                                                    qulonglong expectedRevision, const QVariantMap &panelValues)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     ArchDock::PanelSettingsTransactionOutcome outcome;
     auto draft = profilePanelDraft(profileId, panelId, expectedRevision, panelValues, &outcome);
     if (!draft) return outcome.toVariantMap();
@@ -2650,6 +2655,8 @@ QVariantMap PanelWindow::applyPanelSettingsTransaction(
     const QVariantMap &panelValues,
     const QVariantMap &globalValues)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     ArchDock::PanelSettingsTransactionOutcome outcome;
     const std::optional<ArchDock::PanelSettingsTransactionDraft> draft =
         preparePanelSettingsDraft(
@@ -2800,6 +2807,8 @@ bool PanelWindow::setDockConfiguration(const QString &panelId,
                                        const QString &key,
                                        const QVariant &value)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return false;
     if (!m_panelRegistry.panelIds().contains(panelId))
     {
         return false;

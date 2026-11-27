@@ -7,6 +7,9 @@
 
 #include "BarCorona.h"
 #include "BarHost.h"
+#include "ArchDockVersion.h"
+#include "BarWindow.h"
+#include "QtBuildCheck.h"
 
 #include <KPackage/PackageLoader>
 
@@ -48,6 +51,13 @@ public Q_SLOTS:
     {
         QCoreApplication::quit();
     }
+
+    // Whether a bar that hides can hide with this Qt (Panel Studio hides a
+    // bar's hiding choice when it cannot).
+    Q_SCRIPTABLE bool canHide() const
+    {
+        return ArchDock::Bars::BarWindow::waylandWindowPartAvailable();
+    }
 };
 }
 
@@ -83,6 +93,13 @@ int main(int argc, char **argv)
         qInfo() << "Arch Dock's bars are already shown.";
         return EXIT_SUCCESS;
     }
+    qInfo().noquote() << QStringLiteral("Arch Dock's bars %1 start.").arg(ArchDock::Version::displayVersion());
+    if (const QString mismatch = ArchDock::qtBuildMismatch(); !mismatch.isEmpty())
+        qWarning().noquote() << mismatch;
+    if (!ArchDock::Bars::BarWindow::waylandWindowPartAvailable())
+        qCWarning(archdockBars).noquote()
+            << "This Qt lacks the window part Arch Dock's bars were built with, so a bar that hides stays "
+               "shown. A rebuilt Arch Dock fixes it.";
     BarHostControl control;
     bus.registerObject(QStringLiteral("/Bars"), &control, QDBusConnection::ExportScriptableSlots);
 

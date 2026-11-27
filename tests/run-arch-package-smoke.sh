@@ -30,6 +30,10 @@ mkdir -p "$sysroot/var/lib/pacman" "$sysroot/var/cache/pacman/pkg" \
     "$sysroot/var/log" "$root/empty-hooks" "$root/expected" "$root/tests" \
     "$root/tmp" "$root/config" "$root/cache" "$root/data" "$root/home" "$root/runtime"
 chmod 700 "$root/runtime"
+# The package's pacman hook runs a shell script, and the private root has no
+# shell: a link to /dev/null under the hook's name keeps it from running there
+# (pacman reads it, so the private pacman gets real devices).
+ln -s /dev/null "$root/empty-hooks/arch-dock-qt.hook"
 # Reuse native dependency records, without copying or modifying host payloads.
 cp -a /var/lib/pacman/local "$sysroot/var/lib/pacman/"
 cat >"$root/pacman.conf" <<'CONF'
@@ -40,7 +44,7 @@ LocalFileSigLevel = Never
 CONF
 pacman_private() {
     bwrap --die-with-parent --unshare-user --uid 0 --gid 0 \
-        --ro-bind / / --bind "$root" "$root" \
+        --ro-bind / / --dev-bind /dev /dev --bind "$root" "$root" \
         pacman --config "$root/pacman.conf" --root "$sysroot" \
         --dbpath "$sysroot/var/lib/pacman" --cachedir "$sysroot/var/cache/pacman/pkg" \
         --logfile "$sysroot/var/log/pacman.log" --hookdir "$root/empty-hooks" \
@@ -57,6 +61,22 @@ if pacman_private -Q arch-dock >/dev/null 2>&1; then
 fi
 bsdtar -xf "$package" -C "$root/expected"
 [[ ! -e "$root/expected/.INSTALL" ]] || exit 1
+# Whether the package may be published as an update; with the signed release
+# files of the package step, also the packaged helper's own check. A
+# verification package (ARCHDOCK_PACKAGE_TEST_BUILD=1, built with a test key)
+# must be refused, and the rest of the smoke still runs on it.
+release_check=("$project_root/tests/check-package-release.sh" "$package")
+if [[ -n "${ARCHDOCK_PACKAGE_MANIFEST:-}" ]]; then
+    release_check+=(--manifest "$ARCHDOCK_PACKAGE_MANIFEST"
+        --signature "${ARCHDOCK_PACKAGE_SIGNATURE:?supply the signature with the manifest}")
+fi
+if [[ "${ARCHDOCK_PACKAGE_TEST_BUILD:-0}" == 1 ]]; then
+    if bash "${release_check[@]}" >"$evidence/package-release-check.log" 2>&1; then
+        printf 'A test-key package passed the release check.\n' >&2; exit 1
+    fi
+else
+    bash "${release_check[@]}" >"$evidence/package-release-check.log" 2>&1
+fi
 rg -q '^pkgname = arch-dock$' "$root/expected/.PKGINFO"
 rg -q '^license = GPL-3.0-or-later$' "$root/expected/.PKGINFO"
 rg -q '^license = MIT$' "$root/expected/.PKGINFO"
@@ -91,7 +111,13 @@ required = {'usr/bin/arch-dock', 'usr/lib/systemd/user/arch-dock.service',
     'usr/share/plasma/plasmoids/org.archdock.bar/metadata.json',
     'usr/share/plasma/shells/org.archdock.barshell/metadata.json',
     'usr/share/licenses/arch-dock/LICENSE',
-    'usr/share/licenses/arch-dock/LICENSING.md'}
+    'usr/share/licenses/arch-dock/LICENSING.md',
+    'usr/lib/arch-dock/arch-dock-install-update',
+    'usr/lib/arch-dock/arch-dock-finish-update',
+    'usr/share/polkit-1/actions/org.archdock.ArchDock.policy',
+    'usr/share/knotifications6/arch-dock.notifyrc',
+    'usr/share/libalpm/hooks/arch-dock-qt.hook',
+    'usr/share/libalpm/scripts/arch-dock-check-qt'}
 assert required <= set(files), 'required runtime resources are absent'
 assert sum('/layout-templates/' in p and p.endswith('/metadata.json') for p in files) == 5
 for kind in ('panels', 'icons'):
@@ -142,6 +168,8 @@ ldd "$sysroot/usr/bin/arch-dock" >"$evidence/package-ldd.log"
 ! rg -q 'not found|libQt6Quick3D' "$evidence/package-ldd.log"
 ldd "$sysroot/usr/bin/arch-dock-bars" >"$evidence/package-bars-ldd.log"
 ! rg -q 'not found' "$evidence/package-bars-ldd.log"
+ldd "$sysroot/usr/lib/arch-dock/arch-dock-install-update" >"$evidence/package-helper-ldd.log"
+! rg -q 'not found' "$evidence/package-helper-ldd.log"
 desktop-file-validate "$sysroot/usr/share/applications/org.archdock.ArchDock.desktop"
 desktop-file-validate "$sysroot/usr/share/applications/org.archdock.ArchDock.Bars.desktop"
 bwrap --die-with-parent --ro-bind / / --tmpfs /tmp \

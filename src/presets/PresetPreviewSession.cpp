@@ -3,6 +3,7 @@
 #include "../model/PanelSettingsSchema.h"
 
 #include <QUuid>
+#include "../updates/UpdateHold.h"
 
 namespace ArchDock
 {
@@ -119,6 +120,10 @@ bool PresetPreviewSession::journal(const QString &phase, QString *error)
 
 QVariantMap PresetPreviewSession::beginPreview(const QVariantMap &request)
 {
+    // While an update runs nothing is changed (UpdateHold), so the restart
+    // that ends it cuts off nothing.
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (m_state != State::Idle && m_state != State::Active)
         return outcome(false, m_state == State::Blocked ? QStringLiteral("preview-blocked")
                                                        : QStringLiteral("preview-busy"));
@@ -254,6 +259,8 @@ bool PresetPreviewSession::rollback(QString *error)
 
 QVariantMap PresetPreviewSession::applyAsActive()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (!active()) return outcome(false, QStringLiteral("preview-not-active"));
     const QString guardError = guard();
     if (!guardError.isEmpty()) return outcome(false, guardError);
@@ -323,6 +330,8 @@ QVariantMap PresetPreviewSession::defaultSelection() const
 }
 QVariantMap PresetPreviewSession::setAsDefault(const QString &kind, const QString &presetId, bool remove)
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (m_state != State::Idle && m_state != State::Active) return outcome(false, QStringLiteral("preview-busy"));
     if (!m_operations.validDefault || !m_operations.validDefault(kind, presetId))
         return outcome(false, QStringLiteral("invalid-default-preset"));
@@ -347,6 +356,8 @@ QVariantMap PresetPreviewSession::revert() { return cancel(); }
 
 QVariantMap PresetPreviewSession::restoreBuiltInDefaults()
 {
+    if (ArchDock::Updates::UpdateHold::held())
+        return ArchDock::Updates::UpdateHold::refusedChange();
     if (!active()) return outcome(false, QStringLiteral("preview-not-active"));
     if (m_prepared->record.kind == QStringLiteral("scene3d"))
         return outcome(false, QStringLiteral("scene-edit-has-no-preset"));

@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include <limits>
+#include "../updates/UpdateHold.h"
 
 namespace ArchDock
 {
@@ -186,6 +187,12 @@ std::optional<PanelDefinition> PanelContentTransaction::prepare(
 {
     const QStringList currentOrder = current.content.canonicalEntryOrder();
 
+    // While an update runs nothing is changed (UpdateHold).
+    if (Updates::UpdateHold::held())
+    {
+        fail(outcome, currentOrder, Updates::UpdateHold::errorCode(), Updates::UpdateHold::refusal());
+        return std::nullopt;
+    }
     if (!current.holdsOwnEntries())
     {
         fail(outcome, currentOrder,

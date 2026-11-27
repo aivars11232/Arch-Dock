@@ -213,6 +213,19 @@ void BarWindow::setHides(bool hides, ScreenEdgeManager *edges)
     attachEdge();
 }
 
+bool BarWindow::waylandWindowPartAvailable()
+{
+    // Looked up once, on a window that is never shown: the answer depends
+    // only on the Qt that runs, not on a bar.
+    static const bool available = []
+    {
+        QWindow probe;
+        probe.create();
+        return probe.nativeInterface<QNativeInterface::Private::QWaylandWindow>() != nullptr;
+    }();
+    return available;
+}
+
 void BarWindow::attachEdge()
 {
     if (!m_hides || m_autoHide)

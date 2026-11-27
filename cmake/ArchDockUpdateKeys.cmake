@@ -1,0 +1,103 @@
+# Arch Dock's update key list (data/update-keys.txt, in the form of LCL's
+# trusted_keys.txt), read at configure time, and the places the Update button
+# uses. Used by CMakeLists.txt and, in script mode, by the startup metadata
+# test.
+
+# Reads a key list: `<key id> <hex of an ECDSA P-256 SubjectPublicKeyInfo>`
+# per line, with # comments. Anything else, an id outside 1-64 of a-z, 0-9
+# and -, another kind of key, or one id twice stops the configuration.
+function(archdock_read_update_keys file out_ids out_keys)
+  if(NOT EXISTS "${file}")
+    message(FATAL_ERROR "The update key list ${file} is missing")
+  endif()
+  # The DER every P-256 SubjectPublicKeyInfo starts with, then the 65-byte
+  # uncompressed point, which starts with 04.
+  set(p256_prefix "3059301306072a8648ce3d020106082a8648ce3d030107034200")
+  file(STRINGS "${file}" lines)
+  set(ids "")
+  set(keys "")
+  foreach(line IN LISTS lines)
+    string(STRIP "${line}" line)
+    if(line STREQUAL "" OR line MATCHES "^#")
+      continue()
+    endif()
+    if(NOT line MATCHES "^([^ \t]+)[ \t]+([^ \t]+)$")
+      message(FATAL_ERROR "${file}: this line is not <key id> <hex>: ${line}")
+    endif()
+    set(id "${CMAKE_MATCH_1}")
+    string(TOLOWER "${CMAKE_MATCH_2}" key)
+    string(LENGTH "${id}" id_length)
+    if(NOT id MATCHES "^[a-z0-9-]+$" OR id_length GREATER 64)
+      message(FATAL_ERROR "${file}: \"${id}\" is not a key id: 1 to 64 of a-z, 0-9 and -")
+    endif()
+    string(LENGTH "${key}" key_length)
+    if(NOT key MATCHES "^[0-9a-f]+$" OR NOT key_length EQUAL 182
+       OR NOT key MATCHES "^${p256_prefix}04")
+      message(FATAL_ERROR "${file}: key ${id} is not an ECDSA P-256 public key")
+    endif()
+    if(id IN_LIST ids)
+      message(FATAL_ERROR "${file}: key ${id} is listed twice")
+    endif()
+    list(APPEND ids "${id}")
+    list(APPEND keys "${key}")
+  endforeach()
+  set(${out_ids} "${ids}" PARENT_SCOPE)
+  set(${out_keys} "${keys}" PARENT_SCOPE)
+endfunction()
+
+# The one key a build of `kind` (release, test or development) trusts from a
+# key list: none or one, and exactly one for a release build.
+function(archdock_select_update_key kind list_file out_id out_key)
+  archdock_read_update_keys("${list_file}" ids keys)
+  list(LENGTH ids count)
+  if(count GREATER 1)
+    message(FATAL_ERROR "${list_file} lists ${count} update keys; Arch Dock's Update button trusts exactly one")
+  endif()
+  if(kind STREQUAL "release" AND NOT count EQUAL 1)
+    message(FATAL_ERROR "A release build needs the update key in ${list_file}, which lists none")
+  endif()
+  set(id "")
+  set(key "")
+  if(count EQUAL 1)
+    list(GET ids 0 id)
+    list(GET keys 0 key)
+  endif()
+  set(${out_id} "${id}" PARENT_SCOPE)
+  set(${out_key} "${key}" PARENT_SCOPE)
+endfunction()
+
+# Where the Update button finds its tools, pacman's lock and GitHub. A
+# rehearsal build runs the button against its own private root: it
+# installs there, its tools and pacman's lock are there, and its GitHub is a
+# test server on this PC. Every other build uses the system's places.
+function(archdock_update_places rehearsal_root feed test_keys install_prefix out_tools out_lock out_api out_downloads)
+  set(tools "/usr/bin")
+  set(lock "/var/lib/pacman/db.lck")
+  set(api "https://api.github.com")
+  set(downloads "https://github.com")
+  if(NOT rehearsal_root STREQUAL "")
+    if(NOT IS_ABSOLUTE "${rehearsal_root}" OR rehearsal_root MATCHES "[\r\n\t\"\\\\]")
+      message(FATAL_ERROR "The rehearsal root must be an absolute path without quotes or control characters")
+    endif()
+    if(test_keys STREQUAL "")
+      message(FATAL_ERROR "A rehearsal build needs its test key list (ARCHDOCK_UPDATE_TEST_KEYS)")
+    endif()
+    if(NOT feed MATCHES "^http://127\\.0\\.0\\.1:[1-9][0-9]*$")
+      message(FATAL_ERROR "A rehearsal build needs ARCHDOCK_UPDATE_REHEARSAL_FEED=http://127.0.0.1:<port>")
+    endif()
+    cmake_path(IS_PREFIX rehearsal_root "${install_prefix}" NORMALIZE inside)
+    if(NOT inside)
+      message(FATAL_ERROR "A rehearsal build installs into its root: CMAKE_INSTALL_PREFIX must lie in ${rehearsal_root}")
+    endif()
+    set(tools "${rehearsal_root}/tools")
+    set(lock "${rehearsal_root}/var/lib/pacman/db.lck")
+    set(api "${feed}")
+    set(downloads "${feed}")
+  elseif(NOT feed STREQUAL "")
+    message(FATAL_ERROR "ARCHDOCK_UPDATE_REHEARSAL_FEED is for rehearsal builds only")
+  endif()
+  set(${out_tools} "${tools}" PARENT_SCOPE)
+  set(${out_lock} "${lock}" PARENT_SCOPE)
+  set(${out_api} "${api}" PARENT_SCOPE)
+  set(${out_downloads} "${downloads}" PARENT_SCOPE)
+endfunction()
