@@ -57,8 +57,8 @@ int main(int argc, char **argv)
     QQuickWindow::setDefaultAlphaBuffer(true);
     // The bars keep the places the host gives them on the screen, as
     // plasmashell's panels do (plasma-workspace sets the same): Qt on Wayland
-    // otherwise puts every window at its screen's corner, and the dock's
-    // popups and its window past the bar place themselves from the bar's
+    // otherwise puts every window at its screen's corner, and the popups of
+    // the bar's widgets and of its dock place themselves from the bar's
     // place. Only for this program, not for what its widgets start.
     qputenv("QT_WAYLAND_DISABLE_FIXED_POSITIONS", "1");
     QApplication app(argc, argv);

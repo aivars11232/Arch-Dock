@@ -488,6 +488,7 @@ qt_add_executable(
   src/panel/PanelWindowFreePanels.cpp
   src/panel/PanelWindowNativePanels.cpp
   src/panel/PanelWindowNativePlacement.cpp
+  src/panel/FreeGeometrySettle.h
   src/panel/PanelWindowPresets.cpp
   src/panel/PanelWindowScreens.cpp
   src/panel/PanelWindowSettings.cpp
@@ -694,8 +695,9 @@ if(BUILD_TESTING)
             bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-bar-host-smoke.sh)
   set_tests_properties(bar-host-smoke PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
-  # A bar's window: the bar at its edge, and the room past it for its dock's
-  # stands and holograms while it hides at times.
+  # A bar's window: the bar at its edge, the room past it for its dock's
+  # stands and holograms, and the gap at the screen's edge a hiding bar's
+  # window covers.
   add_test(
     NAME bar-view-test
     COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
@@ -1505,6 +1507,7 @@ if(BUILD_TESTING)
     src/panel/PanelWindowFreePanels.cpp
     src/panel/PanelWindowNativePanels.cpp
     src/panel/PanelWindowNativePlacement.cpp
+    src/panel/FreeGeometrySettle.h
     src/panel/PanelWindowPresets.cpp
     src/panel/PanelWindowScreens.cpp
     src/panel/PanelWindowSettings.cpp
@@ -2145,6 +2148,32 @@ if(BUILD_TESTING)
   set_tests_properties(
     free-entry-policy-test
     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # Which window the dock is drawn in, and how a free panel's place is set.
+  add_test(
+    NAME dock-window-policy-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_DockWindowPolicy.qml)
+  set_tests_properties(
+    dock-window-policy-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # The window an always-shown Plasma edge panel's dock is drawn in: over
+  # its placeholder wherever Plasma moves it, as deep as the panel's window
+  # and the dock's reach.
+  add_test(
+    NAME overflow-host-test
+    COMMAND $<TARGET_FILE:Qt6::qmltestrunner>
+            -import ${ARCHDOCK_RENDERING_IMPORT_ROOT}
+            -input ${CMAKE_CURRENT_SOURCE_DIR}/tests/tst_OverflowHost.qml)
+  set_tests_properties(
+    overflow-host-test
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  qt_add_executable(free-geometry-settle-test tests/FreeGeometrySettleTest.cpp src/panel/FreeGeometrySettle.h)
+  target_include_directories(free-geometry-settle-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(free-geometry-settle-test PRIVATE Qt6::Core Qt6::Test)
+  add_test(NAME free-geometry-settle-test COMMAND free-geometry-settle-test)
 
   add_test(
     NAME bootstrap-coordinator-test

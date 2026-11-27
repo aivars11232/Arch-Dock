@@ -164,9 +164,9 @@ ContainmentItem {
     // the system tray's button for the icons it hides (^), in any look.
     readonly property var endCaps: dockApplet && dockApplet.barEndCaps ? dockApplet.barEndCaps
         : ({ start: 0, end: 0 })
-    // While the bar hides at times, how far past its inner side the dock's
-    // stands and holograms reach, and where they show there, in the bar's
-    // own coordinates: the bar's window reaches that far (the bar's view).
+    // How far past the bar's inner side the dock's stands and holograms
+    // reach, and where they show there, in the bar's own coordinates: the
+    // bar's window reaches that far (the bar's view).
     readonly property real wantedReach: dockApplet && dockApplet.barReach !== undefined
         ? Math.max(0, Number(dockApplet.barReach)) : 0
     readonly property var shownPastRects: dockApplet && dockApplet.barShownRects ? dockApplet.barShownRects : []
@@ -486,8 +486,53 @@ ContainmentItem {
             seatTrayExpander()
             trayExpander = null
         }
+        trayPopup = null
         expanderSearch.tries = 0
-        expanderSearch.running = trayApplet !== null && trayExpander === null
+        expanderSearch.running = trayApplet !== null && (trayExpander === null || trayPopup === null)
+    }
+    // The system tray opens its icons' popups and its hidden icons in one
+    // window of its own, not through the bar's widget container. While the
+    // bar's window reaches past the bar (its dock's stands or holograms hang
+    // there), Plasma would open it past all the window takes the pointer in,
+    // beyond what hangs past the bar; it is then placed against the bar
+    // itself, as the bar's other widgets' popups are (CompactApplet.qml).
+    property var trayPopup: null
+    function findTrayPopup(item, depth) {
+        if (!item || depth > 4)
+            return null
+        for (const child of item.data || []) {
+            if (child && child.objectName === "popupWindow" && child.visualParent !== undefined)
+                return child
+        }
+        for (const child of item.children || []) {
+            const found = findTrayPopup(child, depth + 1)
+            if (found)
+                return found
+        }
+        return null
+    }
+    Item {
+        id: trayAnchor
+        visible: false
+        readonly property Item along: root.trayApplet
+        x: root.vertical || !along ? 0 : along.Kirigami.ScenePosition.x - root.Kirigami.ScenePosition.x
+        y: !root.vertical || !along ? 0 : along.Kirigami.ScenePosition.y - root.Kirigami.ScenePosition.y
+        width: root.vertical ? root.width : (along ? along.width : 0)
+        height: root.vertical ? (along ? along.height : 0) : root.height
+    }
+    Binding {
+        target: root.trayPopup
+        property: "floating"
+        value: true
+        when: root.trayPopup !== null && root.wantedReach > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    Binding {
+        target: root.trayPopup
+        property: "visualParent"
+        value: trayAnchor
+        when: root.trayPopup !== null && root.wantedReach > 0
+        restoreMode: Binding.RestoreBindingOrValue
     }
     Timer {
         id: expanderSearch
@@ -495,15 +540,22 @@ ContainmentItem {
         interval: 500
         repeat: true
         onTriggered: {
-            const found = root.findExpander(root.trayApplet)
+            if (!root.trayPopup)
+                root.trayPopup = root.findTrayPopup(root.trayApplet, 0)
+            const found = root.trayExpander ? null : root.findExpander(root.trayApplet)
             if (found) {
                 root.trayExpander = found
                 root.trayExpanderHome = found.parent
                 root.seatTrayExpander()
+            }
+            if (root.trayExpander && root.trayPopup) {
                 running = false
             } else if (++tries >= 10) {
                 running = false
-                console.warn("Arch Dock bar: the system tray's button for its hidden icons was not found")
+                if (!root.trayExpander)
+                    console.warn("Arch Dock bar: the system tray's button for its hidden icons was not found")
+                if (!root.trayPopup)
+                    console.warn("Arch Dock bar: the system tray's popup was not found")
             }
         }
     }

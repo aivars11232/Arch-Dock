@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import org.kde.layershell 1.0 as LayerShell
+import org.kde.kirigami as Kirigami
 import ArchDock.Input 1.0
 
 // An edge panel's dock drawn past its panel. Plasma cuts what a panel draws
@@ -34,15 +35,17 @@ Window {
     readonly property rect screenRect: screen
         ? Qt.rect(screen.virtualX, screen.virtualY, screen.width, screen.height) : Qt.rect(0, 0, 1920, 1080)
     // The placeholder's place on the screen: the panel window's, which
-    // Plasma sets, and the placeholder's within it.
-    property point placeholderInPanel: Qt.point(0, 0)
-    function placeChanged() {
-        if (!placeholder || !panelWindow)
-            return
-        placeholderInPanel = placeholder.mapToItem(null, 0, 0)
-    }
-    readonly property real depth: Math.ceil((alongWidth ? (placeholder ? placeholder.height : 0)
-        : (placeholder ? placeholder.width : 0)) + Math.max(0, reach))
+    // Plasma sets, and the placeholder's within it, followed through every
+    // item it stands in (Plasma moves the dock's container when widgets
+    // beside it grow or go, and a floating panel off the screen's edge).
+    readonly property point placeholderInPanel: placeholder && panelWindow
+        ? Qt.point(placeholder.Kirigami.ScenePosition.x, placeholder.Kirigami.ScenePosition.y) : Qt.point(0, 0)
+    // As deep as the panel's window, which reaches the screen's edge across
+    // a floating panel's gap, and the dock's reach past it: nothing the dock
+    // shows past the panel is cut, and following a floating panel never
+    // resizes this window.
+    readonly property real depth: Math.ceil((panelWindow ? (alongWidth ? panelWindow.height : panelWindow.width)
+        : placeholder ? (alongWidth ? placeholder.height : placeholder.width) : 0) + Math.max(0, reach))
     // This window's own place on the screen.
     readonly property point origin: edge === "bottom" ? Qt.point(screenRect.x, screenRect.y + screenRect.height - depth)
         : edge === "right" ? Qt.point(screenRect.x + screenRect.width - depth, screenRect.y)
@@ -96,26 +99,6 @@ Window {
         }
     }
 
-    onHostingChanged: {
-        placeChanged()
-        visible = hosting
-    }
-    Component.onCompleted: {
-        placeChanged()
-        visible = hosting
-    }
-    Connections {
-        target: host.placeholder
-        function onWidthChanged() { host.placeChanged() }
-        function onHeightChanged() { host.placeChanged() }
-        function onXChanged() { host.placeChanged() }
-        function onYChanged() { host.placeChanged() }
-    }
-    Connections {
-        target: host.panelWindow
-        function onWidthChanged() { host.placeChanged() }
-        function onHeightChanged() { host.placeChanged() }
-        function onXChanged() { host.placeChanged() }
-        function onYChanged() { host.placeChanged() }
-    }
+    onHostingChanged: visible = hosting
+    Component.onCompleted: visible = hosting
 }

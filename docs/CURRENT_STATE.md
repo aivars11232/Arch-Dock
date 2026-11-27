@@ -1,5 +1,79 @@
 # Arch Dock current state
 
+## Bars and edge panels: one window per bar, popups at the bar, free places on the screen — 2026-11-27
+
+- `plasma-dock-widget/contents/ui/DockWindowPolicy.js`: `overlayWanted`
+  is true only for a dock in a Plasma panel (`plasmaPanel`, containment
+  `org.kde.panel`, known from the first frame) that is always shown; only
+  such a dock uses `OverflowHost`. `barReachWanted`: every bar whose dock
+  has stands or holograms reaches past itself in its own window (`barReach`
+  → the containment's `wantedReach` → `Bar.qml` → `BarWindow::place`),
+  hiding or always shown. An always-shown bar's dock used to go into
+  `OverflowHost`, a full-width layer-shell window over the bar, which took
+  the bar's clicks (finding 8) and which KWin's Show Desktop hid (it spares
+  only windows of the program owning the desktop window, plasmashell).
+- Bar popups: `plasma-bar-shell/contents/applet/CompactApplet.qml` finds
+  its bar (`barItem`, the ancestor with `wantedReach`); while the bar
+  reaches past itself its `AppletPopup` is `floating` with `visualParent:
+  barAnchor`, an invisible item in the containment as long as the widget
+  along the bar (`Kirigami.ScenePosition` differences) and as deep as the
+  bar across. libplasma 6.8.3 `PopupPlasmaWindowPrivate::updatePosition`
+  pads a non-floating popup's anchor to `window()->mask().boundingRect()`
+  (the bar and the shown rects); a floating one anchors to its visual parent
+  alone. The system tray is an embedded containment with its own popup
+  (`objectName: "popupWindow"`, `visualParent: root`): the bar containment
+  finds it in the tray's `data` (`findTrayPopup`, beside the expander
+  search) and binds `floating` and `visualParent` (`trayAnchor`) while
+  `wantedReach > 0` (`Binding.RestoreBindingOrValue`). Tooltips, placed the
+  same way, are left as they are (the owner's choice).
+- A hiding bar covers its floating gap: `BarHost::layoutBars` passes the
+  record's `floatingMargin` as `edgeGap` when the bar hides and nothing
+  stands between it and the screen's edge (`beside == 0`);
+  `BarWindow::place` takes the gap out of the margin (`m_gap`, at most the
+  margin) and adds it to the window's depth, `barGeometry()` leaves it out,
+  and `Bar.qml` keeps the containment off the edge by `edgeGap`, the gap in
+  its input band. KWin's edge reveal leaves the pointer at the screen's
+  edge, now inside the bar's window, so the bar sees it come and go
+  (finding 42).
+- A bar's launcher drawings (`barWidgetIconRepeater`) take the count of
+  `barWidgetIcons` as their model, each delegate reading its entry by index:
+  made anew only when widgets come or go, not each time the bar resends the
+  list (every hover).
+- `OverflowHost.qml`: `placeholderInPanel` comes from
+  `Kirigami.ScenePosition`, which follows every ancestor's x and y
+  (`placeChanged()` and its Connections are gone); `depth` is the panel
+  window's depth across its edge plus the reach (Plasma's panel window
+  includes its floating margins: 92 px round a 68 px widget). ScenePosition
+  ignores transforms, so Plasma's short edit-mode reorder slide (a
+  `Translate` on the applet's container) is not followed, only its end.
+- Free panels: the backend's move command carries `space: "screen"`
+  (`setPresetFreeHostGeometry`); the widget converts with
+  `DockWindowPolicy.freeTarget(requested, container.layout.mapToItem(null,
+  0, 0), space)`, the inverse of Plasma's scene read-back (right-to-left
+  desktops too; off only during the desktop's 200 ms `LongDropBehavior`
+  easing after a panel comes or goes), and keeps the place inside the
+  widget area (`max(0, …)`, as Plasma keeps its widgets out of panels'
+  room). A command without `space` keeps its widget-area meaning. Saved
+  records are read as screen places, with no conversion (the owner's
+  choice). `src/panel/FreeGeometrySettle.h`: when a command moves the
+  panel, the read-back waits for the place asked for (±1 px) or 400 ms
+  (`kFreeMoveSettleMs`), not just three equal samples.
+- Tests: `dock-window-policy-test`, `overflow-host-test` and
+  `free-geometry-settle-test` (new); `bar-view-test` (the edge gap),
+  `bar-host-smoke` (a floating auto-hide bar's window covers its gap and the
+  bar hides again after an edge reveal), `panel-window-capability-test`
+  `dockWindowsAndBarPopupsFollowTheirRules` (the wiring),
+  `runtime-ui-interaction-smoke` (a free panel exact under a 66 px top panel
+  and kept out of its room) and `preset-audition-matrix-defaults` S12 (a
+  preview's end and a recovery exact under a top panel). Each new check
+  fails on `4f897d1`: `evidence/BREAKAGE-FIX-S4/tests-on-old-code/`.
+- `tests/run-wayland-hardening-matrix.sh` waits for Arch Dock's record of
+  the bottom panel (`wait_for_panel_registry_value bottom nativePanelId`)
+  and for its own placement (`wait_for_applied_native_placement`) before
+  changing screens, as the profile, preset and session-startup matrices do:
+  `wait_for_owned_panel` sees only Plasma's side, and a placement asked for
+  in between failed with `containment-missing`.
+
 ## Crashes stopped: no 3D carried between windows, live textures let go, Plasma's screen-off reads — 2026-11-26
 
 - Qt Quick 3D numbers a scene's nodes per window (`QSSGRenderNodeHandle`

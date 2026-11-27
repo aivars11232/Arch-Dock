@@ -475,6 +475,15 @@ preset_defaults_group() {
     desktop="$(panel_registry_value "$id" freeDesktopContainmentId)"
     applet="$(panel_registry_value "$id" freeDockAppletId)"
     wait_for_free_host_snapshot_stable "$desktop" "$applet" default >/dev/null
+    # A plain Plasma panel at the top reserves room: Plasma's widget area then
+    # starts below it, while Plasma reports a widget's place on the screen.
+    # A preview's end and a recovery put the free panel back exactly where it
+    # stood, not lower by the top panel's depth.
+    local top_panel
+    top_panel="$(plasma_script "var p = new Panel; p.location = 'top'; p.height = 66; print(p.id);" | gvariant_string)"
+    [[ "$top_panel" =~ ^[0-9]+$ ]] || { printf 'S12 top panel not made: %s\n' "$top_panel" >&2; return 1; }
+    preset_free_place_settled "$desktop" "$applet" \
+        || { printf 'S12 the free panel did not settle under the top panel\n' >&2; return 1; }
     registry="$(panel_registry_json)"; renderer="$(preset_renderer "$id")"
     geometry="$(preset_free_geometry "$desktop" "$applet")"
     log_session_phase 'S12 existing free layout / inactive edit refusal / exact Cancel'
@@ -506,6 +515,9 @@ preset_defaults_group() {
     wait_for_free_host_snapshot_stable "$desktop" "$applet" recovery >/dev/null
     preset_require_equal "$geometry" "$(preset_free_geometry "$desktop" "$applet")" 'S12 exact free crash recovery'
     preset_require_equal "$registry" "$(panel_registry_json)" 'S12 recovery never commits'
+    plasma_script "var p = panelById($top_panel); if (p) p.remove(); print('removed');" >/dev/null
+    preset_free_place_settled "$desktop" "$applet" \
+        || { printf 'S12 the free panel did not settle after the top panel went\n' >&2; return 1; }
     # Desktop 3D editing is an audition of the panel itself.
     log_session_phase 'S13 desktop 3D edit / exact Cancel / single Apply / interruption recovery'
     local revision applied
@@ -564,6 +576,18 @@ preset_defaults_group() {
     preset_unrelated_unchanged S11; preset_no_orphans
 }
 
+# Waits until a free panel's place and the panels' list hold still (Plasma's
+# desktop eases its widgets to a changed widget area).
+preset_free_place_settled() {
+    local previous='' current attempt same=0
+    for ((attempt = 0; attempt < 150; ++attempt)); do
+        current="$(preset_free_geometry "$1" "$2")|$(panel_registry_json)"
+        if [[ "$current" == "$previous" ]]; then ((same += 1)); else same=0; previous="$current"; fi
+        ((same >= 8)) && return 0
+        sleep 0.1
+    done
+    return 1
+}
 preset_free_geometry() {
     plasma_script "var d=desktopById($1); var w=d ? d.widgetById($2) : null; if (!w) throw Error('missing free host'); var g=w.geometry; w.currentConfigGroup=['General']; print(JSON.stringify({x:Number(g.x),y:Number(g.y),width:Number(g.width),height:Number(g.height),command:String(w.readConfig('auditionRestoreGeometry',''))}));" | gvariant_string | jq -cS .
 }

@@ -105,6 +105,32 @@
   to it waits for the screen to come back.
 - **A flat 3D hologram icon's glow stands beside its solid**, not inside it.
   It looks the same.
+- **Clicks reach a bar with stands or holograms again.** An always-shown
+  bar's dock was drawn in a second, full-width see-through window over the
+  bar, which took the clicks meant for the bar's icons and widgets and was
+  hidden by Show Desktop, taking the dock with it. Every bar now draws its
+  dock in its own window, made deeper where stands or holograms hang past
+  it; there it takes the pointer only where they are.
+- **A bar's popups open at the bar.** While stands or holograms hang past a
+  bar, the popups of its widgets and of the system tray opened beyond them,
+  away from the bar; they now open at the bar's edge. Tooltips are as before.
+- **A hiding bar hides again.** A bar off the screen's edge that the edge
+  brought back stayed shown until the pointer passed over it; its window now
+  covers the gap to the screen's edge, so it hides again as the pointer goes.
+- **A bar's launcher icons stay put on hover.** They were drawn anew each
+  time the pointer moved over the bar's widgets.
+- **The dock over an edge panel stays on its place.** On an always-shown
+  edge panel with stands or holograms, the dock stayed where it first stood
+  when a widget beside it grew or moved, drawn over the widget; it now
+  follows. Its window reaches as far as the panel's own and the dock's reach,
+  so nothing at the far end is cut.
+- **Free panels stand where Panel Studio says.** Under a Plasma top panel a
+  free panel stood lower than its numbers, by the top panel's depth, and
+  every Cancel, preview end or refused change moved it lower again. Its place
+  is now a place on the screen, as Plasma reports it, and it keeps out of a
+  panel's own room, as Plasma's widgets do. Under a top panel, a free panel
+  placed before this update moves up once by the top panel's depth, to its
+  numbers.
 
 ## 0.1.1-54 — 2026-10-30
 

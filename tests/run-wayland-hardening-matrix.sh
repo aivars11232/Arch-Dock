@@ -187,7 +187,12 @@ run_wayland_hardening_matrix() {
     enabled_output_names | grep -Fxq "$HARDENING_SECONDARY"
     HARDENING_BOTTOM_HOST="$(owned_panel_record bottom)"; HARDENING_BOTTOM_HOST="${HARDENING_BOTTOM_HOST%%|*}"
     PRESET_BOTTOM_HOST="$HARDENING_BOTTOM_HOST"
+    # Plasma shows the panel before Arch Dock has recorded it and placed it:
+    # a screen change or placement asked for in between finds no panel
+    # ("containment-missing"). Wait for both, as the other matrices do.
+    wait_for_panel_registry_value bottom nativePanelId "$HARDENING_BOTTOM_HOST"
     wait_for_native_panel_placement "$HARDENING_BOTTOM_HOST" bottom bottom center baseline
+    wait_for_applied_native_placement bottom "$(panel_registry_value bottom height)" baseline
     preset_wait_idle
     ARCHDOCK_VISIBILITY_PROBE_SNAPSHOT="$XDG_RUNTIME_DIR/archdock-hardening-geometry-snapshot"
     case "$ARCHDOCK_HARDENING_MATRIX_GROUP" in

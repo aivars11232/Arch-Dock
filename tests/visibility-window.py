@@ -245,6 +245,7 @@ def instrument_interaction_stage(stage):
                                 return [p.x, p.y]; })(),
                             center: sceneCentre,
                             inputRegion: panelScene.activeInputRegionKind,
+                            widgetArea: [root.availableScreenRect.x, root.availableScreenRect.y],
                             profile: String((root.configuration.presentationProfile || {}).id || ""),
                             at: Date.now(), itemVisible: representation.visible, itemOpacity: representation.opacity,
                             windowVisible: host.visible, windowVisibility: panelScene.Window.visibility,
@@ -2822,7 +2823,8 @@ def run_interaction_matrix(free_panel):
         def free_geometry(command=None, clear=False):
             write = ""
             if command is not None:
-                payload = dict(command, panelId=free_panel, ownerToken=record["freeOwnershipToken"])
+                # A place on the screen, as Arch Dock asks for one.
+                payload = dict(command, panelId=free_panel, ownerToken=record["freeOwnershipToken"], space="screen")
                 write = "widget.writeConfig(\"auditionRestoreGeometry\", " + json.dumps(json.dumps(payload)) + ");"
             elif clear:
                 write = "widget.writeConfig(\"auditionRestoreGeometry\", \"\");"
@@ -2839,7 +2841,29 @@ def run_interaction_matrix(free_panel):
             reply = call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "(s)", (script,))
             assert reply.strip().startswith("ARCHDOCK_GEOMETRY:"), reply
             return json.loads(reply.strip().split(":", 1)[1])
-        actual = free_geometry()
+        # A Plasma panel at the top reserves room, so Plasma's widget area
+        # starts below it, while Plasma reports a widget's place on the
+        # screen. Asked for a place on the screen, the free panel stands
+        # exactly there, and a place read back and set again stays put.
+        def plasma_script(script):
+            return call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "(s)",
+                        (script,)).strip()
+        def widget_area():
+            return observations.get(("host", free_panel, ""), {}).get("widgetArea", [0, 0])
+        # Plasma's desktop eases its widgets to a changed widget area: a
+        # place is read once it has held still for a while inside the area.
+        def settled_place(description):
+            state = {"value": None, "since": 0.0}
+            def check():
+                value, now = free_geometry(), time.monotonic()
+                if value != state["value"]:
+                    state["value"], state["since"] = value, now
+                    return None
+                return value if now - state["since"] >= 0.6 and value["y"] >= widget_area()[1] else None
+            return wait_for(check, description)
+        top_panel = int(plasma_script("const p = new Panel; p.location = 'top'; p.height = 66; print(p.id);"))
+        wait_for(lambda: widget_area()[1] >= 66, "the widget area starts below a 66 px top panel")
+        actual = settled_place("the free panel settled below the top panel")
         configure(free_panel, {"x": round(actual["x"]) + 40, "y": round(actual["y"]) + 30})
         moved = free_geometry()
         assert moved == dict(actual, x=round(actual["x"]) + 40, y=round(actual["y"]) + 30), (actual, moved)
@@ -2856,6 +2880,14 @@ def run_interaction_matrix(free_panel):
         assert free_geometry() == drifted
         after = panel_call("dockConfiguration", "(s)", (free_panel,))
         assert (after["x"], after["y"]) == (before["x"], before["y"])
+        # A place in the top panel's own room keeps to the widget area's
+        # edge, as Plasma keeps its widgets: never under the panel.
+        configure(free_panel, {"y": 10})
+        kept = settled_place("the free panel kept out of the top panel's room")
+        assert kept["y"] == widget_area()[1] and kept["x"] == after["x"], (kept, widget_area(), after)
+        plasma_script(f"panelById({top_panel}).remove(); print('removed');")
+        wait_for(lambda: widget_area()[1] == 0, "the top panel gone, the widget area starts at the top again")
+        settled_place("the free panel settled with the top panel gone")
         motion([1200, 500])
         # A free panel
         # has no opening or closing mechanism. Asking it to rest collapsed is
@@ -2870,7 +2902,7 @@ def run_interaction_matrix(free_panel):
             and refused["errorMessage"] == "presentation-mechanism-unavailable", refused
         wait_for(lambda: opened(free_panel) and host_state().get("collapseProgress") == 0,
             "free panel stays open")
-        print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback; a free panel refuses to collapse and stays open", flush=True)
+        print("PASS: real Wayland wheel and optional continuous rotation in 2D/3D; owned free position read-back/rollback, exact under a 66 px top panel and kept out of its room; a free panel refuses to collapse and stays open", flush=True)
         # Last: a radius-300 ring grows the desktop widget, which keeps the place
         # it grew to, so no later step may depend on the panel's position.
         # Real free panels, with continuous animation off: free-9

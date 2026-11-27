@@ -10,6 +10,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as PlasmaDBus
 import org.kde.plasma.plasma5support as P5Support
 import "FreeEntryPolicy.js" as FreeEntryPolicy
+import "DockWindowPolicy.js" as DockWindowPolicy
 import "SceneDefinition.js" as SceneDefinition
 
 // The Arch Dock Plasma applet. One applet hosts one panel: a native edge
@@ -136,22 +137,21 @@ PlasmoidItem {
     readonly property real iconSize: Number(configuration.iconSize || 52)
     readonly property real spacing: Number(configuration.spacing || 8)
     readonly property real baseCellSize: iconSize + Math.max(4, spacing)
-    // An edge panel whose icons stand on stands, or float as holograms,
-    // reaches past its panel, which Plasma would cut: it is drawn in Arch
-    // Dock's own window over the panel (OverflowHost) - while the panel is
-    // always shown. Plasma hides an auto-hiding panel through the
-    // compositor, unseen by its widgets, and keeps it shown while a window
-    // of theirs is; such a panel draws its dock in itself as before. An Arch
-    // Dock bar that hides at times reaches past itself in its own window,
-    // made that much deeper (barReach), which hides with it.
+    // Icons on stands, or floating as holograms, reach past their panel,
+    // which would cut them. A Plasma edge panel always shown draws its dock
+    // in Arch Dock's own window over the panel (OverflowHost); one that
+    // hides at times draws it in itself (DockWindowPolicy.js). An Arch Dock
+    // bar never uses that window: its own window reaches past the bar
+    // (barReach), as deep as the stands and holograms need. That the dock
+    // stands in a Plasma panel is known from its first frame.
     readonly property bool standsOrHolograms: String(configuration.pedestalShape || "none") !== "none"
         || configuration.hologramIcons === true
-    readonly property bool dockReachesPastPanel: !freeSurface && standsOrHolograms
-        && String(configuration.visibilityMode || "always") === "always"
+    readonly property bool dockReachesPastPanel: DockWindowPolicy.overlayWanted(
+        plasmaPanel !== null, standsOrHolograms, configuration.visibilityMode)
     // Read by the bar: how far past its inner side this dock's stands and
-    // holograms reach while it hides at times, and where they show there, in
-    // the dock's own coordinates.
-    readonly property real barReach: drawsBarSurface && standsOrHolograms && !dockReachesPastPanel
+    // holograms reach, and where they show there, in the dock's own
+    // coordinates.
+    readonly property real barReach: DockWindowPolicy.barReachWanted(drawsBarSurface, standsOrHolograms)
         && activeDockRepresentation ? Math.max(0, Math.ceil(activeDockRepresentation.reachPast || 0)) : 0
     readonly property var barShownRects: barReach > 0 ? activeDockRepresentation.shownPast || [] : []
     // How thick the edge panel is across its edge: the widget's own size
@@ -543,9 +543,19 @@ PlasmoidItem {
                 return;
             // Plasma's zero-interval size-hint timer can reposition a newly
             // resized container. Move after that queued resize has settled.
+            // The place asked for is on the screen, as Plasma reports a
+            // widget's place and Panel Studio shows it; Plasma's widget area
+            // starts below a top panel and beside a side one, so the place
+            // is taken from where the area itself lies on the screen. (Set
+            // within the area as asked, the panel stood as much lower as the
+            // top panel is high, and each place read back and set again moved
+            // it lower once more.) An older Arch Dock's command gave its place
+            // in the widget area itself.
+            const target = DockWindowPolicy.freeTarget(command.requested,
+                container.layout.mapToItem(null, 0, 0), command.requested.space);
             const position = container.applet.mapToItem(container.layout, 0, 0);
-            container.x += command.requested.x - position.x;
-            container.y += command.requested.y - position.y;
+            container.x += target.x - position.x;
+            container.y += target.y - position.y;
             container.layout.save();
         }
     }
@@ -1490,7 +1500,7 @@ PlasmoidItem {
             readonly property bool authoritativeHost:
                 root.activeDockRepresentation === representation
             // How far past the panel the dock is drawn and where it shows
-            // something there (read by a bar that hides at times).
+            // something there (read by the bar it stands in).
             readonly property real reachPast: overflowHost.reach
             readonly property var shownPast: overflowHost.shownRects
 
@@ -1650,11 +1660,9 @@ PlasmoidItem {
                     barVertical: root.vertical
                     segmentPlaces: root.drawsBarSurface ? (root.barGroupPlaces || ({})) : ({})
                     // Along a bar holding other widgets, from where the bar
-                    // starts to where it ends. Drawn in the window over the bar
-                    // (where its stands or holograms reach past it), the dock
-                    // keeps the bar's own size and place in it, so it is still
-                    // in its bar there: its groups of icons keep their room
-                    // among the bar's widgets.
+                    // starts to where it ends: the dock's surface spans the
+                    // whole bar, its groups of icons keeping their room among
+                    // the bar's widgets.
                     surfaceSpanBefore: root.drawsBarSurface
                         ? Math.max(0, root.barSurfaceBefore + (root.vertical ? y : x)) : 0
                     surfaceSpanAfter: root.drawsBarSurface
@@ -1837,13 +1845,19 @@ PlasmoidItem {
                 // dock's tiles, 3D icons and holograms. The widget stays under
                 // its icon, unseen, taking its clicks and its menu; where its
                 // icon floats past the bar as a hologram, a click there opens
-                // it as a click on the widget would.
+                // it as a click on the widget would. One drawing per widget,
+                // kept while the bar's widgets only change (hover, a picture,
+                // a place): by count, each reading its widget from the list,
+                // so a drawing is made anew only when widgets come or go, not
+                // each time the bar sends the list.
                 Repeater {
                     id: barWidgetIconRepeater
-                    model: root.barWidgetIcons
+                    model: root.barWidgetIcons.length
                     delegate: Item {
                         id: widgetIconPlace
-                        required property var modelData
+                        required property int index
+                        readonly property var modelData: root.barWidgetIcons[index]
+                            || ({ id: "", icon: "", title: "", cap: false, rect: Qt.rect(0, 0, 0, 0) })
                         objectName: "bar-widget-icon-" + modelData.id
                         // On the look's start piece as large as the piece holds
                         // it; along the bar as large as the dock's own icons.

@@ -495,11 +495,14 @@ void BarHost::layoutBars()
                     roomBefore = EditRoom;
             }
             BarWindow *bar = m_bars.value(placement.id);
+            const bool hides = ArchDock::panelVisibilityModeFromString((*record)->visibilityMode)
+                != ArchDock::PanelVisibilityMode::AlwaysVisible;
+            // A bar that hides at times covers its own floating gap when
+            // nothing stands between it and the screen's edge (BarWindow).
             bar->place(edge.screen, edge.edge, freeStart + placement.start, placement.length, (*record)->thickness,
-                       (*record)->floatingMargin + beside, roomBefore, roomAfter);
-            bar->setHides(ArchDock::panelVisibilityModeFromString((*record)->visibilityMode)
-                              != ArchDock::PanelVisibilityMode::AlwaysVisible,
-                          m_edges);
+                       (*record)->floatingMargin + beside, roomBefore, roomAfter,
+                       hides && beside == 0 ? (*record)->floatingMargin : 0);
+            bar->setHides(hides, m_edges);
             if ((*record)->reservesSpace && placement.length > 0)
                 depth = std::max(depth, (*record)->thickness + (*record)->floatingMargin);
         }

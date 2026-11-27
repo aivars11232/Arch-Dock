@@ -10,11 +10,13 @@
 #include "../ScreenIdentity.h"
 #include "../integration/PlasmaPanelAdapter.h"
 #include "../integration/PlasmaPanelScreenGuard.h"
+#include "FreeGeometrySettle.h"
 #include "../model/PanelIconCapacity.h"
 #include "../model/PanelSettingsSchema.h"
 #include "../presets/PresetApplication.h"
 #include "../persistence/ConfigurationBackup.h"
 
+#include <QElapsedTimer>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -959,6 +961,9 @@ bool PanelWindow::setPresetFreeHostGeometry(const ArchDock::PanelDefinition &def
     command.insert(QStringLiteral("panelId"), definition.identity.id);
     command.insert(QStringLiteral("ownerToken"), host.freeOwnershipToken);
     command.insert(QStringLiteral("keepApart"), keepApart);
+    // The place is on the screen, as Plasma reports it back (the widget sets
+    // it within Plasma's widget area).
+    command.insert(QStringLiteral("space"), QStringLiteral("screen"));
     const QString payload = QString::fromUtf8(QJsonDocument::fromVariant(command).toJson(QJsonDocument::Compact));
     const int applied = evaluatePlasmaScriptResult(QStringLiteral(R"JS(
 var result = (function() {
@@ -988,6 +993,14 @@ var result = (function() {
         return std::abs(number(map, QStringLiteral("width")) - number(geometry, QStringLiteral("width"))) < 0.5 &&
             std::abs(number(map, QStringLiteral("height")) - number(geometry, QStringLiteral("height"))) < 0.5;
     };
+    const auto samePlace = [&](const QVariantMap &a, const QVariantMap &b) {
+        return std::abs(number(a, QStringLiteral("x")) - number(b, QStringLiteral("x"))) <= 1.0 &&
+            std::abs(number(a, QStringLiteral("y")) - number(b, QStringLiteral("y"))) <= 1.0;
+    };
+    // Whether the command moves the panel at all (FreeGeometrySettle.h).
+    const bool movesPlace = !samePlace(*current, geometry);
+    QElapsedTimer sinceCommand;
+    sinceCommand.start();
     std::optional<QVariantMap> observed;
     std::optional<QVariantMap> previous;
     int stableSamples = 0;
@@ -1002,7 +1015,9 @@ var result = (function() {
         stableSamples = observed && sameSize(*observed)
             ? (previous && *previous == *observed ? stableSamples + 1 : 1) : 0;
         previous = observed;
-        if (stableSamples >= 3) break;
+        if (ArchDock::freeGeometrySettled(stableSamples, movesPlace, observed && samePlace(*observed, geometry),
+                                          sinceCommand.elapsed()))
+            break;
     }
     // A command is not retained as active configuration. The recovery
     // journal remains authoritative if restoration cannot be verified.

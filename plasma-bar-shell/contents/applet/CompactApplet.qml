@@ -165,6 +165,37 @@ PlasmaCore.ToolTipArea {
         function onContextualActionsAboutToShow() { root.hideImmediately() }
     }
 
+    // The bar this widget stands in: the item that knows how far the bar's
+    // window reaches past the bar, found as the container's margins are.
+    readonly property Item barItem: {
+        let item = root;
+        while (item.parent) {
+            item = item.parent;
+            if (item.wantedReach !== undefined) {
+                return item;
+            }
+        }
+        return null;
+    }
+    // While the bar's window reaches past the bar (its dock's stands or
+    // holograms hang there), Plasma would open a popup past all the window
+    // takes the pointer in, beyond what hangs past the bar. The popup is then
+    // placed against this item alone: as long as the widget along the bar,
+    // as deep as the bar across it, following both as they move, so the
+    // popup opens at the bar's inner edge however it is opened.
+    readonly property bool barReachesPast: barItem !== null && Number(barItem.wantedReach) > 0
+    Item {
+        id: barAnchor
+        parent: root.barItem
+        visible: false
+        readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
+        readonly property Item along: root.compactRepresentation
+        x: vertical || !along || !parent ? 0 : along.Kirigami.ScenePosition.x - parent.Kirigami.ScenePosition.x
+        y: !vertical || !along || !parent ? 0 : along.Kirigami.ScenePosition.y - parent.Kirigami.ScenePosition.y
+        width: vertical ? (parent ? parent.width : 0) : (along ? along.width : 0)
+        height: vertical ? (along ? along.height : 0) : (parent ? parent.height : 0)
+    }
+
     PlasmaCore.AppletPopup {
         id: dialog
         objectName: "popupWindow"
@@ -180,14 +211,14 @@ PlasmaCore.ToolTipArea {
                 return Qt.TopEdge
         }
         margin: (Plasmoid.containmentDisplayHints & PlasmaCore.Types.ContainmentPrefersFloatingApplets) ? Kirigami.Units.largeSpacing : 0
-        floating: Plasmoid.location == PlasmaCore.Types.Floating
+        floating: root.barReachesPast || Plasmoid.location == PlasmaCore.Types.Floating
         removeBorderStrategy: Plasmoid.location === PlasmaCore.Types.Floating
             ? PlasmaCore.AppletPopup.AtScreenEdges
             : PlasmaCore.AppletPopup.AtScreenEdges | PlasmaCore.AppletPopup.AtPanelEdges
 
         hideOnWindowDeactivate: root.plasmoidItem && root.plasmoidItem.hideOnWindowDeactivate
         visible: root.plasmoidItem && root.plasmoidItem.expanded && fullRepresentation
-        visualParent: root.compactRepresentation
+        visualParent: root.barReachesPast ? barAnchor : root.compactRepresentation
         backgroundHints: (Plasmoid.containmentDisplayHints & PlasmaCore.Types.ContainmentPrefersOpaqueBackground) ? PlasmaCore.AppletPopup.SolidBackground : PlasmaCore.AppletPopup.StandardBackground
         appletInterface: root.plasmoidItem
 

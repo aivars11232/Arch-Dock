@@ -7,7 +7,10 @@
 # and a middle bar moves aside of a corner bar instead of covering it. Bars
 # that hide do so through KWin's own auto-hide edges: a dodging bar while a
 # window covers it, an auto-hiding one unless the pointer is on it; pushing
-# the pointer against the screen edge along a hidden bar brings it back.
+# the pointer against the screen edge along a hidden bar brings it back. A
+# floating hiding bar's window covers the gap between it and the screen's
+# edge, so the bar knows the pointer that brought it back, and hides again
+# when it goes.
 set -euo pipefail
 
 build_dir="${ARCHDOCK_BUILD_DIR:?ARCHDOCK_BUILD_DIR is required}"
@@ -261,6 +264,30 @@ pointer push 1000 715 0 3 6
 expect 'the edge brings the auto-hiding bar back' "$(printf '%s\n' '0|false' '880|false')" bar_hiding
 pointer 640 300
 expect 'the pointer gone, it hides again' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+
+# The auto-hiding bar floats 8 px off the screen's edge. Its window covers
+# that gap as well, so the pointer that brings it back at the edge is in it.
+write_records '[
+  {"id": "bar-a", "type": "empty", "edge": "bottom", "alignment": "start", "thickness": 60,
+   "lengthMode": "fixed", "fixedLength": 500, "visibilityMode": "dodge"},
+  {"id": "bar-b", "type": "empty", "edge": "bottom", "alignment": "end", "thickness": 60,
+   "lengthMode": "fixed", "fixedLength": 400, "visibilityMode": "auto-hide", "floatingMargin": 8}
+]'
+# The floating bar's window across its edge: "y|height".
+floating_bar() {
+    run_kwin_snippet 'const windows = workspace.windowList();
+for (let index = 0; index < windows.length; ++index) {
+    const w = windows[index];
+    if (w.resourceClass === "arch-dock-bars" && w.layer === 3 && w.frameGeometry.x === 880)
+        report(w.frameGeometry.y + "|" + w.frameGeometry.height);
+}'
+}
+expect 'the floating bar'"'"'s window reaches down over its gap to the edge' '652|68' floating_bar
+expect 'the floating bar hides' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
+pointer push 1000 715 0 3 6
+expect 'the edge brings the floating bar back' "$(printf '%s\n' '0|false' '880|false')" bar_hiding
+pointer 640 300
+expect 'the pointer gone, the floating bar hides again' "$(printf '%s\n' '0|false' '880|true')" bar_hiding
 
 # Asked to stop, the bar host stops at once.
 kill -TERM "$host_pid"

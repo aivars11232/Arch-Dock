@@ -96,16 +96,16 @@ QRect BarWindow::barGeometry() const
 {
     const QRect window = geometry();
     if (m_edge == QStringLiteral("top"))
-        return window.adjusted(0, 0, 0, -m_reach);
+        return window.adjusted(0, m_gap, 0, -m_reach);
     if (m_edge == QStringLiteral("left"))
-        return window.adjusted(0, 0, -m_reach, 0);
+        return window.adjusted(m_gap, 0, -m_reach, 0);
     if (m_edge == QStringLiteral("right"))
-        return window.adjusted(m_reach, 0, 0, 0);
-    return window.adjusted(0, m_reach, 0, 0);
+        return window.adjusted(m_reach, 0, -m_gap, 0);
+    return window.adjusted(0, m_reach, 0, -m_gap);
 }
 
 void BarWindow::place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
-                      int roomBefore, int roomAfter)
+                      int roomBefore, int roomAfter, int edgeGap)
 {
     using LayerShellQt::Window;
     if (!screen || length <= 0 || thickness <= 0)
@@ -115,6 +115,7 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
     }
     const bool vertical = sideEdge(edge);
     m_reach = wantedReach();
+    m_gap = std::clamp(edgeGap, 0, std::max(0, margin));
     if (QQuickItem *root = rootObject())
     {
         root->setProperty("vertical", vertical);
@@ -122,10 +123,12 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
         root->setProperty("editRoomBefore", roomBefore);
         root->setProperty("editRoomAfter", roomAfter);
         root->setProperty("barThickness", thickness);
+        root->setProperty("edgeGap", m_gap);
     }
     start -= roomBefore;
     length += roomBefore + roomAfter;
-    const int depth = thickness + m_reach;
+    margin -= m_gap;
+    const int depth = thickness + m_reach + m_gap;
 
     // Anchored to its edge and the edge's start, so that its margin along
     // the edge is where it starts.
@@ -178,7 +181,7 @@ void BarWindow::place(QScreen *screen, const QString &edge, int start, int lengt
     m_layer->setMargins(margins);
     // The compositor places the bar by its anchors and margins. Its place on
     // the screen is kept here too, as Plasma keeps a panel's, for whatever
-    // places itself from it: the dock's popups and its window past the bar.
+    // places itself from it: the popups of the bar's widgets and of its dock.
     setGeometry(QRect(at, vertical ? QSize(depth, length) : QSize(length, depth)));
     if (!isVisible())
         show();

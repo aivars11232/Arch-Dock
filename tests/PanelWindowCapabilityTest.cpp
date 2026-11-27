@@ -390,6 +390,7 @@ private slots:
     void studioShowsEachSettingOnce();
     void ownersFreeCircleOffersOnlyWhatWorks();
     void studioTruthMatrixHarnessIsTheApplet();
+    void dockWindowsAndBarPopupsFollowTheirRules();
     void studioTruthMatrix_data();
     void studioTruthMatrix();
 
@@ -7835,6 +7836,46 @@ void PanelWindowCapabilityTest::studioTruthMatrixHarnessIsTheApplet()
     for (const QString &source : {harness, applet})
         QVERIFY(source.contains(QStringLiteral("SceneDefinition.js\" as SceneDefinition")));
     QVERIFY(applet.contains(QStringLiteral("return SceneDefinition.build(configuration, {")));
+}
+
+void PanelWindowCapabilityTest::dockWindowsAndBarPopupsFollowTheirRules()
+{
+    // Which window draws a dock's stands and holograms, and where a free
+    // panel's widget goes, are decided in DockWindowPolicy.js
+    // (tst_DockWindowPolicy.qml); the dock widget must ask it. Only a Plasma
+    // panel draws its dock in Arch Dock's window over the panel: in a bar
+    // that window lay over the bar's widgets and took their clicks. A bar's
+    // launcher icons are drawn once per widget, not anew each time the bar
+    // sends its list of widgets (on every hover).
+    const QString applet = sourceText(QStringLiteral("plasma-dock-widget/contents/ui/main.qml")).simplified();
+    QVERIFY(!applet.isEmpty());
+    for (const QString &code : {
+             QStringLiteral("import \"DockWindowPolicy.js\" as DockWindowPolicy"),
+             QStringLiteral("readonly property bool dockReachesPastPanel: DockWindowPolicy.overlayWanted( "
+                            "plasmaPanel !== null, standsOrHolograms, configuration.visibilityMode)"),
+             QStringLiteral("readonly property real barReach: DockWindowPolicy.barReachWanted(drawsBarSurface, "
+                            "standsOrHolograms)"),
+             QStringLiteral("const target = DockWindowPolicy.freeTarget(command.requested, "
+                            "container.layout.mapToItem(null, 0, 0), command.requested.space);"),
+             QStringLiteral("container.x += target.x - position.x;"),
+             QStringLiteral("container.y += target.y - position.y;"),
+             QStringLiteral("model: root.barWidgetIcons.length")})
+        QVERIFY2(applet.contains(code), qPrintable(QStringLiteral("main.qml no longer has: ") + code));
+    // Arch Dock asks for a free panel's place on the screen, where Plasma
+    // reports it, and waits for a move to land (FreeGeometrySettleTest).
+    const QString presets = sourceText(QStringLiteral("src/panel/PanelWindowPresets.cpp")).simplified();
+    QVERIFY(presets.contains(
+        QStringLiteral("command.insert(QStringLiteral(\"space\"), QStringLiteral(\"screen\"));")));
+    QVERIFY(presets.contains(QStringLiteral("if (ArchDock::freeGeometrySettled(stableSamples, movesPlace, "
+                                            "observed && samePlace(*observed, geometry), sinceCommand.elapsed()))")));
+    // While a bar's window reaches past the bar, its widgets' popups open
+    // against the bar itself: Plasma would place them past all the window
+    // takes the pointer in, beyond what hangs past the bar.
+    const QString compact = sourceText(QStringLiteral("plasma-bar-shell/contents/applet/CompactApplet.qml")).simplified();
+    for (const QString &code : {
+             QStringLiteral("floating: root.barReachesPast || Plasmoid.location == PlasmaCore.Types.Floating"),
+             QStringLiteral("visualParent: root.barReachesPast ? barAnchor : root.compactRepresentation")})
+        QVERIFY2(compact.contains(code), qPrintable(QStringLiteral("CompactApplet.qml no longer has: ") + code));
 }
 
 void PanelWindowCapabilityTest::studioTruthMatrix_data()

@@ -522,3 +522,183 @@ the last four ran the next morning on the same build (696 s). The clone was
 then brought to `7fc3a32` (a report-only commit), and all 996 committed
 files are the same in the clone and the workspace. Logs:
 `evidence/BREAKAGE-FIX-S3/recheck/`.
+
+## Step 4: bars and edge panels
+
+### Report 1
+
+**The owner's choices (27 November).** Saved free-panel numbers are read the
+new way, as places on the screen, with no one-time conversion. The window
+over always-shown edge panels stays as it is. Three extras are in: a bar's
+launcher icons are not drawn anew on hover, a hiding bar hides again, and
+the far end of the holograms is not cut. Tooltips may open past what hangs
+off a bar. So the plan's tooltip change and its conversion of saved numbers
+are not done.
+
+**What was wrong, now proven** (private test desktops, the same steps on the
+previous commit, `4f897d1`, and on the new code; everything is in
+`evidence/BREAKAGE-FIX-S4/`).
+
+- **Clicks inside an always-shown bar with holograms were lost** (finding 8).
+  The bar's dock was drawn in a second, full-width see-through window over
+  the bar (1920x247 over a 720x76 bar), which took clicks meant for the bar.
+  A click on Konsole inside the bar did nothing, and so did a click on the
+  system tray's button.
+- **Show Desktop took the dock out of such a bar**: KWin hid that second
+  window, and only the clock's text stayed.
+- **The popups of a hiding bar opened far from it**: the calendar at y 175,
+  under a bar ending at y 84, past the hanging holograms.
+- **A floating hiding bar stayed shown** after the screen's edge brought it
+  back, until the pointer passed over it (finding 42). Its window did not
+  reach the screen's edge, so the bar never saw the pointer come and go.
+- **A free panel stood lower than asked under a top panel**: asked for y 210
+  under an 82 px Plasma top panel (66 px and its floating gaps), it stood at
+  y 292, and every Panel Studio Cancel, preview end or refused change moved
+  it 82 px lower again (424, 506, 588, 670, 752).
+- **The dock over an always-shown edge panel stayed where it first stood**
+  when Plasma moved it inside its panel: with a clock before it, the dock
+  was drawn over the clock, and stayed there as the clock grew.
+- **That window was 24 px too shallow**: as deep as the dock's own place and
+  its reach, not as the panel's window and the reach.
+
+**What changed.**
+
+- A dock in an Arch Dock bar is never drawn in a second window. Every bar
+  whose dock has stands or holograms makes its own window that much deeper,
+  hiding or always shown; past the bar, that window takes the pointer only
+  where the dock shows something. Only an always-shown Plasma edge panel
+  still draws its dock in Arch Dock's window over the panel.
+- While a bar's window reaches past the bar, the popups of its widgets open
+  at the bar itself: the widgets' own popups, and the system tray's (its
+  icons' popups and the hidden icons). Tooltips are left as they are.
+- A hiding bar with nothing between it and the screen's edge covers its own
+  floating gap with its window: the bar stays where it was, and the gap
+  takes the pointer with it.
+- A bar's launcher icons are drawn once per widget, not each time the bar
+  sends its list of widgets (on every hover).
+- The window over an edge panel follows the dock wherever Plasma moves it in
+  the panel, and is as deep as the panel's own window and the reach.
+- A free panel's place is a place on the screen, as Plasma reports it. The
+  widget takes it from where Plasma's widget area lies on the screen (below
+  a top panel, beside a side one, also on a right-to-left desktop) and keeps
+  it out of a panel's own room, as Plasma keeps its widgets. A command from
+  an older Arch Dock keeps its old meaning.
+- After asking a free panel to move, Arch Dock waits until Plasma shows the
+  place asked for, or 400 ms, instead of three equal readings, which could
+  come before the widget moved.
+
+**What looks different.**
+
+- Always-shown bars with holograms: clicks reach the bar, the bar stays
+  whole under Show Desktop, and its popups open at the bar.
+- Hiding bars: popups at the bar, and the bar hides again after the edge
+  brought it back.
+- Edge panels: the dock stays over its own place beside a widget that grows.
+- Free panels stand where Panel Studio's numbers say, and stay there. Under
+  a top panel, a free panel saved before this step moves up once by the top
+  panel's depth, to those numbers; a place in the top panel's own room
+  stops at the room's edge.
+- Pictures, before above and after below (BEFORE marks the old code):
+  `evidence/BREAKAGE-FIX-S4/pictures/` — `bar-B1-click-inside`,
+  `bar-B4-show-desktop`, `bar-H2-hiding-clock-popup`,
+  `bar-H4-after-edge-reveal-only`, `bar-P1-tray-popup`,
+  `edge-W1-clock-before-dock-narrow`, `edge-W2-clock-before-dock-wide`.
+
+**Measured** (private test desktops; load: three runs each, old and new
+alternating, 60 s at idle after 20 s; % of one core).
+
+| | before Step 4 | Step 4 |
+|---|---|---|
+| Clicks that reached their target on an always-shown bar with holograms (Konsole inside the bar, Konsole hanging past it, the clock, the system tray's button) | 2 of 4 | 4 of 4 |
+| The bar program's windows over that bar | 2 (the bar, a 1920x247 window over it) | 1 (the bar, 247 px deep) |
+| That bar under Show Desktop | the dock gone | whole |
+| A hiding bar's calendar, from the bar's edge | 91 px away | at the edge |
+| The system tray's popup on an always-shown bar with holograms | the click was lost | at the edge |
+| A floating auto-hide bar after an edge reveal, the pointer gone | stays shown | hides |
+| Free panel under an 82 px top panel, asked y 210 / 260 | 292 / 342 | 210 / 260 |
+| ... after 1, 2, 3 Studio Cancels | 424, 506, 588 | 260, 260, 260 |
+| ... after a preset preview ended / a refused Apply | 670 / 752 | 260 / 260 |
+| ... asked y 10, in the top panel's room | 92 | 82, the room's edge |
+| A free panel's Apply answered in | 402, 368 ms | 364, 370 ms (516 ms when kept out of a panel's room) |
+| The dock over an edge panel, a clock before it growing | over the clock, stays | beside the clock, follows |
+| The window over an always-shown edge panel | 243 px deep | 267 px (the panel's 92 and the reach) |
+| Holograms off and on 20 times, always-shown bar with 3D icons | a window made and removed each time, no crash | no window made, no crash |
+| ... 20 times, always-shown edge panel with 3D icons | no crash | no crash |
+| Second screen off and on 20 times, an edge panel and a bar with holograms on it, freed memory overwritten | 20 of 20, no crash | 20 of 20, no crash |
+| Idle, always-shown bar with holograms: bar program / KWin | 2.65 / 1.61 % (503 MB) | 2.73 / 1.58 % (491 MB) |
+| Idle, always-shown edge panel with holograms: Plasma / KWin | 2.92 / 1.55 % | 2.87 / 1.52 % |
+| Idle, the owner's ring as saved: Plasma | 6.70 % | 6.69 % |
+
+The load is the same within run-to-run noise (the bar program's runs were
+2.62-2.67 % before and 2.70-2.75 % after; Step 3's pairs varied about 1.5
+points). After the first time the second screen came back, a check of the
+edge panel's own Plasma window missed it, on the old code as on the new; the
+dock and the bar were shown there (`screen-after-2/s4-screen-return-1.png`),
+and from the second return on all three were back within 1 s.
+
+**Checks.**
+
+- An independent review: five readers by area and one for completeness,
+  each finding checked by a sceptic told to refute it. 10 findings: 7
+  confirmed, 3 refuted with reasons
+  (`evidence/BREAKAGE-FIX-S4/review/review-findings.md`). Fixed: the system
+  tray's popups, which the first version of this step still opened past the
+  holograms on always-shown bars (`review/tray-popup-without-and-with-the-fix.png`);
+  a free panel's place on right-to-left desktops; a free panel kept out of a
+  panel's own room; two comments that named the old window over a bar. Two
+  are older than this step and outside it (below).
+- New and changed tests, each failing on the previous commit and passing
+  now (`evidence/BREAKAGE-FIX-S4/tests-on-old-code/`): which window a dock is
+  drawn in and how a free place is converted (`dock-window-policy-test`, run
+  against the old rules); the window over an edge panel following the dock
+  and as deep as the panel's window (`overflow-host-test`); the free-move
+  wait (`free-geometry-settle-test`, against the old rule); a hiding bar's
+  window over its gap (`bar-view-test`); a floating auto-hide bar hiding
+  again after an edge reveal, in a private KWin (`bar-host-smoke`; on the
+  old code the bar stays shown); the wiring of all this in the dock and the
+  bar (`panel-window-capability-test`); a free panel exact under a 66 px top
+  panel and kept out of its room (`runtime-ui-interaction-smoke`; on the old
+  code 82 px low); a preview's end and a recovery exact under a top panel
+  (`preset-audition-matrix-defaults`; on the old code put back 164 px low).
+- Complete suite, run once one test at a time: 139 of 142 passed in 48
+  minutes (`evidence/BREAKAGE-FIX-S4/suite-1.log`). The Star layout's travel
+  check failed as before (`path-travel-smoke`, "an entry left the outline
+  between slots", 13.8; before this step 11.9 to 14.1). The Wayland
+  hardening tests at scales 100 and 200 failed on a race in the test
+  itself: it asked Arch Dock to move the bottom panel once Plasma showed it,
+  before Arch Dock had recorded it, and Arch Dock answered that it had no
+  such panel ("containment-missing"). The other private-session tests wait
+  for Arch Dock's record; this one now does too, and for Arch Dock's own
+  placement of the panel. Then all six hardening tests passed
+  (`suite-1-hardening-rerun.log`).
+
+**Not done, and why.**
+
+- Tooltips of a bar's widgets are not moved (the owner's choice): with
+  stands or holograms they may open past what hangs off the bar.
+- Saved free-panel numbers are not converted (the owner's choice).
+- The window over an always-shown edge panel keeps its kind (the owner's
+  choice): under Show Desktop and in Plasma's edit mode its dock stays shown,
+  before and after (`bars-before/E1-edge-show-desktop.png`,
+  `bars-after-2/E1-edge-show-desktop.png`, `sides2-after/S2-edit-mode.png`).
+  With a Plasma panel on the left, the dock stays over its own place, before
+  and after (`sides2-before`, `sides2-after`): the plan's question 6 does not
+  arise.
+- In Plasma's edit mode, a widget dragged across the dock slides for about
+  0.1 s while the dock over the panel is already at its new place.
+- Found by the review, older than this step and outside it:
+  1. On a bar on the **left** edge without stands or holograms, a widget's
+     popup and tooltip open over the bar, their left edge at the screen's
+     edge (`pictures/question5-left-bar-popup.png`; the same before and
+     after). Plasma places them against the bar window's input outline,
+     which such a bar does not set. Top, bottom and right bars are not
+     affected. This is the plan's question 5, now seen.
+  2. The line that should stand where a bar popup meets its bar is never
+     drawn: the bar's copy of Plasma's popup container names four margins
+     that do not exist (KDE fixed the same in its own copy in 2024).
+
+**For the owner to decide.**
+
+1. Left bars: give every bar's window an outline of the bar itself, so that
+   popups and tooltips open beside a left bar? Recommended: yes.
+2. The missing line under bar popups: fix it as KDE did? Recommended: yes.

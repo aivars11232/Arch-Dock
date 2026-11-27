@@ -3,8 +3,9 @@ import QtTest
 
 // An Arch Dock bar's view (the bar shell's Bar.qml): the bar's containment
 // fills the window, but for the room the window reaches past the bar's inner
-// side while the bar hides at times, for its dock's stands and holograms;
-// there only what the dock shows takes the pointer.
+// side for its dock's stands and holograms, where only what the dock shows
+// takes the pointer, and the gap at the screen's edge a hiding bar's window
+// covers, which takes the pointer with the bar.
 TestCase {
     id: testCase
     name: "BarView"
@@ -22,13 +23,14 @@ TestCase {
         }
     }
 
-    function makeView(edge, reach, shown) {
+    function makeView(edge, reach, shown, gap) {
         const component = Qt.createComponent(Qt.resolvedUrl("../plasma-bar-shell/contents/views/Bar.qml"))
         verify(component.status === Component.Ready, component.errorString())
         const vertical = edge === "left" || edge === "right"
+        const depth = 60 + reach + (gap || 0)
         const view = createTemporaryObject(component, testCase, {
-            width: vertical ? 60 + reach : 300, height: vertical ? 300 : 60 + reach,
-            vertical: vertical, edge: edge, barThickness: 60 })
+            width: vertical ? depth : 300, height: vertical ? 300 : depth,
+            vertical: vertical, edge: edge, barThickness: 60, edgeGap: gap || 0 })
         verify(view)
         view.containment = createTemporaryObject(containmentComponent, testCase,
             { wantedReach: reach, shownPastRects: shown || [] })
@@ -68,6 +70,38 @@ TestCase {
         compareRect(shape.rects[0], b[0], b[1], b[2], b[3], "the bar takes the pointer")
         const w = data.inWindow
         compareRect(shape.rects[1], w[0], w[1], w[2], w[3], "and what the dock shows past it")
+    }
+
+    // A hiding bar off the screen's edge: its window also covers the gap
+    // between the bar and the edge, where KWin shows it again; the bar keeps
+    // its place off the edge, the gap is not room past it, and the gap takes
+    // the pointer with the bar.
+    function test_aHidingBarsWindowCoversItsEdgeGap_data() {
+        return [
+            { tag: "top", edge: "top", bar: [0, 8, 300, 60], band: [0, 0, 300, 68],
+              shown: [10, 70, 20, 30], inWindow: [10, 78, 20, 30] },
+            { tag: "bottom", edge: "bottom", bar: [0, 40, 300, 60], band: [0, 40, 300, 68],
+              shown: [10, -30, 20, 30], inWindow: [10, 10, 20, 30] },
+            { tag: "left", edge: "left", bar: [8, 0, 60, 300], band: [0, 0, 68, 300],
+              shown: [70, 10, 30, 20], inWindow: [78, 10, 30, 20] },
+            { tag: "right", edge: "right", bar: [40, 0, 60, 300], band: [40, 0, 68, 300],
+              shown: [-30, 10, 30, 20], inWindow: [10, 10, 30, 20] }
+        ]
+    }
+
+    function test_aHidingBarsWindowCoversItsEdgeGap(data) {
+        const s = data.shown
+        const view = makeView(data.edge, 40, [Qt.rect(s[0], s[1], s[2], s[3])], 8)
+        const b = data.bar
+        compareRect(view.containment, b[0], b[1], b[2], b[3], "the bar keeps its place off the edge")
+        compare(view.reachPast, 40, "the gap is not room past the bar")
+        const shape = inputShape(view)
+        verify(shape.enabled)
+        compare(shape.rects.length, 2)
+        const band = data.band
+        compareRect(shape.rects[0], band[0], band[1], band[2], band[3], "the bar and the gap take the pointer")
+        const w = data.inWindow
+        compareRect(shape.rects[1], w[0], w[1], w[2], w[3], "and what the dock shows past the bar")
     }
 
     function test_noRoomNoShape() {

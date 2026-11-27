@@ -41,22 +41,27 @@ public:
 
     // How long the bar's widgets want it to be along its edge.
     [[nodiscard]] int wantedLength() const;
-    // How far past the bar's inner side what it shows reaches while the bar
-    // hides at times (its dock's stands and holograms): its window is that
-    // much deeper, so that they are not cut at the window's edge and hide
-    // with the bar. A bar always shown has its dock drawn in the dock's own
-    // window past it and asks for none.
+    // How far past the bar's inner side what it shows reaches (its dock's
+    // stands and holograms): its window is that much deeper, so that they
+    // are not cut at the window's edge, take their own clicks and hide with
+    // the bar. The dock is never drawn in a second window over the bar,
+    // which took the clicks meant for the bar's widgets.
     [[nodiscard]] int wantedReach() const;
-    // The bar on the screen: its window without the room past its inner side.
+    // The bar on the screen: its window without the room past its inner side
+    // and the gap its window covers at the screen's edge.
     [[nodiscard]] QRect barGeometry() const;
     // Stands the bar on this screen against `edge`, `start` pixels along it
     // from the edge's start (its left, or its top on a side edge), `length`
     // long, `thickness` deep and `margin` pixels off the edge. Shown unless
     // it has no length. Its window reaches `roomBefore` pixels past its start
     // and `roomAfter` past its end, for edit mode's + to stand outside it,
-    // and the wanted reach past its inner side.
+    // and the wanted reach past its inner side. Of the margin, `edgeGap` (a
+    // bar's own floating gap while it hides at times, with nothing between it
+    // and the screen's edge) is covered by its window: KWin shows such a bar
+    // when the pointer hits the screen's edge, which then lies in the bar's
+    // window, so the bar knows when the pointer came and went.
     void place(QScreen *screen, const QString &edge, int start, int length, int thickness, int margin,
-               int roomBefore = 0, int roomAfter = 0);
+               int roomBefore = 0, int roomAfter = 0, int edgeGap = 0);
 
     // Whether the bar hides at times (it auto-hides or keeps out of windows'
     // way): it then has KWin's auto-hide edge along its screen edge, by which
@@ -87,8 +92,10 @@ private:
     LayerShellQt::Window *m_layer = nullptr;
     QPointer<QScreen> m_screen;
     QString m_edge;
-    // The room the window reaches past the bar's inner side.
+    // The room the window reaches past the bar's inner side, and the gap it
+    // covers between the screen's edge and the bar.
     int m_reach = 0;
+    int m_gap = 0;
     QPointer<ScreenEdgeManager> m_edges;
     std::unique_ptr<AutoHideEdge> m_autoHide;
     QTimer m_concealTimer;

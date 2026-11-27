@@ -52,8 +52,11 @@ decoration a clock's text can reach the decoration's side edge, Plasma's
 clock drawing no smaller than its smallest font. Live window previews in a bar need the installed entry
 `org.archdock.ArchDock.Bars.desktop`, by which KWin grants the bar host the
 interfaces they use; a bar host run from a build tree runs without them.
-A bar that hides draws its stands and holograms inside itself, cut at its
-edge, as an edge panel that hides does. Over a full-screen window KWin keeps
+A bar whose dock has stands or holograms, hiding or always shown, makes its
+own window that much deeper, so they are not cut and hide with the bar; the
+tooltips of the bar's widgets may open past what hangs off the bar, where
+their popups open at the bar. An edge panel that hides draws its stands and
+holograms inside itself, cut at its edge. Over a full-screen window KWin keeps
 its screen edges shut, so a bar hidden by it comes back only when the window
 leaves full screen, as Plasma's own panels do.
 
