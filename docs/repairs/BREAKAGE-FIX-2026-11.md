@@ -505,3 +505,20 @@ tests one at a time (`profile-manager-test`, `preset-library-test`, both
 `rendering-module-import-test`). The four private-session smokes
 (`rendering-import-smoke`, `decoration-3d-smoke`, `window-move-3d-smoke`,
 `studio-truth-matrix-smoke`) and the file comparison are left, then Report 2.
+
+### Report 2
+
+Fresh clone of `origin/main` at `73254a5`, built with one job (1847 s), the
+step's tests one at a time: 13 of 13 passed (`profile-manager-test`,
+`preset-library-test`, `renderer-capability-software-test`,
+`renderer-capability-missing-module-test`, `panel-window-capability-test`,
+`plasma-panel-adapter-test`, `panel-scene-test`, `icon-scene-test`,
+`rendering-module-import-test`, `rendering-import-smoke` with the 3D checks
+under a private KWin, `decoration-3d-smoke`, `window-move-3d-smoke` with the
+carried-scene reproducer at 24 counts, 3D views made anew in a new window
+and the two-step let-go with freed memory overwritten, and
+`studio-truth-matrix-smoke`). The first nine ran before the pause (560 s);
+the last four ran the next morning on the same build (696 s). The clone was
+then brought to `7fc3a32` (a report-only commit), and all 996 committed
+files are the same in the clone and the workspace. Logs:
+`evidence/BREAKAGE-FIX-S3/recheck/`.
