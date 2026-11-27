@@ -780,3 +780,9 @@ reach another, closed popup of the same bar. A bar popup now takes input
 only while it is open, as Plasma's do. The popups still open, take clicks
 and close with Escape (`popups4-after`); the line is pinned in
 `panel-window-capability-test`.
+
+**Report 2 of the follow-up.** Fresh clone of `origin/main` at `cc3bf1f`,
+built with one job (1900 s), the follow-up's tests one at a time: 3 of 3
+passed (`bar-view-test`, `bar-host-smoke`, `panel-window-capability-test`),
+and all 1001 committed files are the same in the clone and the workspace.
+Logs: `evidence/BREAKAGE-FIX-S4/follow-up/recheck/`.
