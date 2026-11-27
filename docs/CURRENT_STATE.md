@@ -26,6 +26,20 @@
   search) and binds `floating` and `visualParent` (`trayAnchor`) while
   `wantedReach > 0` (`Binding.RestoreBindingOrValue`). Tooltips, placed the
   same way, are left as they are (the owner's choice).
+- Every bar window has an input outline (`Bar.qml` `WindowInputShape`
+  always enabled; the whole window when nothing reaches past the bar):
+  libplasma places a non-floating popup's and a tooltip's anchor by the
+  mask's bounding rect, and an empty mask gave `QRect()` at the window's
+  corner, so a left bar's popups and tooltips opened over it. The bar
+  shell's `CompactApplet.qml` separator anchors by the popup's padding
+  (`-dialog.topPadding` …; the `*Margin` names it used do not exist), with
+  `appletParent.extraWidth/extraHeight` and content margins, as Plasma
+  6.8.3's own shell does; the content margins are bindings on the bar's
+  current edge (`separatorShown`), cleared from content that leaves the
+  popup (`contentBesideSeparator`), where Plasma sets them once. The popup's
+  `appletParent` is `enabled: dialog.visible` (QTBUG-146992: a hidden window
+  counts as active while its transient parent has the focus, so its
+  shortcuts matched), as in Plasma's own container.
 - A hiding bar covers its floating gap: `BarHost::layoutBars` passes the
   record's `floatingMargin` as `edgeGap` when the bar hides and nothing
   stands between it and the screen's edge (`beside == 0`);

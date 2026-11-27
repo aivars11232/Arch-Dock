@@ -724,3 +724,59 @@ this step is the fix; `tests-on-old-code/runtime-ui-on-4f897d1-2.log`). The
 clone was brought to `f68b257`, where `runtime-ui-interaction-smoke` passed
 2 of 2, and all 1001 committed files are the same in the clone and the
 workspace. Logs: `evidence/BREAKAGE-FIX-S4/recheck/`.
+
+### Follow-up: the owner's answers (27 November)
+
+The owner chose to fix both things the review had found outside the step:
+left bars' popups and tooltips, and the missing line under bar popups.
+
+**What changed.**
+
+- Every bar's window has an input outline, the whole window when nothing
+  hangs past the bar. Plasma places the popups and tooltips of a bar's
+  widgets against that outline's bounds; with none it put them at the
+  window's corner, which on a bar along the left edge is over the bar.
+- The line where a bar's popup meets the bar is drawn, as Plasma 6.8.3
+  draws it on its own panels: placed by the popup's padding (the bar's copy
+  named four margins that do not exist), with a pixel of room beside the
+  content. The content keeps clear of the line on whichever edge the bar
+  stands, also after the bar moves to another edge (the review found that
+  Plasma's own copy sets this once; here it follows the edge).
+
+**Before and after** (private test desktop; `evidence/BREAKAGE-FIX-S4/`
+`popups2-before` = `4e0c003`, `popups2-after` and `popups3-after` = this
+follow-up).
+
+| | before | after |
+|---|---|---|
+| A left bar without stands or holograms: the clock's calendar | at x 0, over the bar | at x 76, beside it |
+| ... the clock's tooltip | at x 0, over the bar | at x 76, beside it |
+| The line where a popup meets its bar (top, bottom after a move, left) | not drawn | drawn (a 1 px line, the popup 1 px larger for it) |
+| Top, right and bottom bars, the system tray's popup | at the bar | at the bar |
+
+Pictures: `pictures/follow-up-left-bar-popup.png`,
+`pictures/follow-up-left-bar-tooltip.png`, `pictures/follow-up-popup-line.png`
+(eight times enlarged: the line is as faint as on Plasma's own panels).
+
+**Checks.**
+
+- An independent review of the follow-up (two readers, each finding checked
+  by a sceptic): 2 confirmed, 1 refuted
+  (`review/follow-up-review.md`). Fixed: the content's margin beside the line
+  now follows the bar's edge. The other confirmed one is older than this
+  follow-up and outside it (below).
+- Tests: `bar-view-test` (a bar with nothing past it has the whole window as
+  its outline, on all four edges; it fails on `4e0c003`), the line's
+  placement pinned in `panel-window-capability-test`, `bar-host-smoke`.
+- Complete suite on the follow-up before the owner's last answer: 141 of
+  142 passed in 50 minutes, the Star layout's travel check failing as before
+  (13.8) (`suite-2.log`). After the last change: 141 of 142 again in 52 minutes, the Star check failing as always (15.8; it varies from run to run, 11.9 to 15.8 so far) (`suite-3.log`).
+
+**The owner's answer (27 November): take that over too.** Plasma 6.8.3's
+own popup container turns off a closed popup's input (a workaround for a Qt
+bug that counts a hidden window as active while its parent has the focus);
+the bar's copy lacked it, so a keyboard shortcut in one bar popup could also
+reach another, closed popup of the same bar. A bar popup now takes input
+only while it is open, as Plasma's do. The popups still open, take clicks
+and close with Escape (`popups4-after`); the line is pinned in
+`panel-window-capability-test`.

@@ -114,6 +114,10 @@
 - **A bar's popups open at the bar.** While stands or holograms hang past a
   bar, the popups of its widgets and of the system tray opened beyond them,
   away from the bar; they now open at the bar's edge. Tooltips are as before.
+  On a bar along the left edge, popups and tooltips opened over the bar
+  itself; they now open beside it. A bar's popups also have the thin line
+  where they meet the bar, as on Plasma's own panels, and a closed popup no
+  longer answers keyboard shortcuts meant for an open one.
 - **A hiding bar hides again.** A bar off the screen's edge that the edge
   brought back stayed shown until the pointer passed over it; its window now
   covers the gap to the screen's edge, so it hides again as the pointer goes.

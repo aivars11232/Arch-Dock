@@ -104,10 +104,22 @@ TestCase {
         compareRect(shape.rects[1], w[0], w[1], w[2], w[3], "and what the dock shows past the bar")
     }
 
-    function test_noRoomNoShape() {
-        const view = makeView("top", 0)
-        compareRect(view.containment, 0, 0, 300, 60, "the bar fills its window")
-        verify(!inputShape(view).enabled, "the whole window takes the pointer, as before")
+    // With nothing past the bar the whole window is its outline: Plasma
+    // places the bar's popups and tooltips against the outline's bounds, and
+    // with none put them at the window's corner, over a bar on the left.
+    function test_noRoomTheWholeBarIsTheOutline_data() {
+        return [ { tag: "top", edge: "top" }, { tag: "bottom", edge: "bottom" },
+                 { tag: "left", edge: "left" }, { tag: "right", edge: "right" } ]
+    }
+
+    function test_noRoomTheWholeBarIsTheOutline(data) {
+        const view = makeView(data.edge, 0)
+        const vertical = data.edge === "left" || data.edge === "right"
+        compareRect(view.containment, 0, 0, vertical ? 60 : 300, vertical ? 300 : 60, "the bar fills its window")
+        const shape = inputShape(view)
+        verify(shape.enabled, "the window has an outline")
+        compare(shape.rects.length, 1)
+        compareRect(shape.rects[0], 0, 0, vertical ? 60 : 300, vertical ? 300 : 60, "the whole window, so all of it takes the pointer")
     }
 
     function test_theBarKeepsItsDepthWhileTheWindowGrows() {
@@ -115,11 +127,11 @@ TestCase {
         const view = makeView("top", 0)
         view.containment.wantedReach = 40
         compareRect(view.containment, 0, 0, 300, 60, "the bar keeps its depth")
-        verify(!inputShape(view).enabled)
+        compare(inputShape(view).rects.length, 1, "the bar alone until the window grows")
         view.height = 100
         compare(view.reachPast, 40, "the room past the bar is what the window has grown by")
         compareRect(view.containment, 0, 0, 300, 60, "the bar stays at its edge")
-        verify(inputShape(view).enabled)
+        compareRect(inputShape(view).rects[0], 0, 0, 300, 60, "the bar takes the pointer, the room past it does not")
     }
 
     function test_editRoomAndReach() {

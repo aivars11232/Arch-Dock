@@ -7876,6 +7876,18 @@ void PanelWindowCapabilityTest::dockWindowsAndBarPopupsFollowTheirRules()
              QStringLiteral("floating: root.barReachesPast || Plasmoid.location == PlasmaCore.Types.Floating"),
              QStringLiteral("visualParent: root.barReachesPast ? barAnchor : root.compactRepresentation")})
         QVERIFY2(compact.contains(code), qPrintable(QStringLiteral("CompactApplet.qml no longer has: ") + code));
+    // The line where a popup meets its bar is placed by the popup's padding,
+    // as in Plasma's own popup container (there are no such margins: the
+    // line was never drawn), with a pixel of room beside the content.
+    for (const QString &code : {
+             QStringLiteral("topMargin: -dialog.topPadding"), QStringLiteral("leftMargin: -dialog.leftPadding"),
+             QStringLiteral("rightMargin: -dialog.rightPadding"), QStringLiteral("bottomMargin: -dialog.bottomPadding"),
+             QStringLiteral("target: appletParent extraHeight: 1 extraWidth: 0"),
+             QStringLiteral("target: appletParent extraHeight: 0 extraWidth: 1")})
+        QVERIFY2(compact.contains(code), qPrintable(QStringLiteral("CompactApplet.qml no longer has: ") + code));
+    QVERIFY(!compact.contains(QStringLiteral("dialog.topMargin")));
+    // A closed popup takes no input, as in Plasma's own popup container.
+    QVERIFY(compact.contains(QStringLiteral("enabled: dialog.visible")));
 }
 
 void PanelWindowCapabilityTest::studioTruthMatrix_data()

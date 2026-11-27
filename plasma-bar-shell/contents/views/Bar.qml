@@ -51,10 +51,14 @@ Item {
     // Past the bar the window takes the pointer only where the dock shows
     // something (given in the containment's coordinates); everywhere else
     // there it passes through to what lies under it. The bar's own part
-    // reaches the window's outer side, the edge gap with it.
+    // reaches the window's outer side, the edge gap with it. The outline is
+    // set even with nothing past the bar (then the whole window): Plasma
+    // places the popups and tooltips of the bar's widgets against its
+    // bounds, and without one it put them at the window's corner, over a
+    // bar on the left edge.
     WindowInputShape {
         window: root.Window.window
-        enabled: root.reachPast > 0
+        enabled: true
         rects: {
             const along = root.vertical ? root.height : root.width
             const across = (root.vertical ? root.width : root.height) - root.reachPast

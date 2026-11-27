@@ -42,11 +42,37 @@ PlasmaCore.ToolTipArea {
         root.visible = true;
     }
 
+    // Whether the popup draws its line where it meets the bar: on a bar's
+    // edge, and with nothing between the popup and the bar.
+    readonly property bool separatorShown: [PlasmaCore.Types.TopEdge, PlasmaCore.Types.LeftEdge,
+        PlasmaCore.Types.RightEdge, PlasmaCore.Types.BottomEdge].includes(Plasmoid.location) && !dialog.margin
+    // The content kept clear of that line, on whichever edge the bar stands
+    // now (a bar moved to another edge keeps its widgets), and a content item
+    // that leaves the popup without the margin it had there.
+    property Item contentBesideSeparator: null
     onFullRepresentationChanged: {
+        if (contentBesideSeparator && contentBesideSeparator !== fullRepresentation) {
+            contentBesideSeparator.anchors.topMargin = 0;
+            contentBesideSeparator.anchors.bottomMargin = 0;
+            contentBesideSeparator.anchors.leftMargin = 0;
+            contentBesideSeparator.anchors.rightMargin = 0;
+        }
+        contentBesideSeparator = fullRepresentation;
         if (fullRepresentation) {
             fullRepresentation.anchors.fill = null;
             fullRepresentation.parent = appletParent;
             fullRepresentation.anchors.fill = appletParent;
+
+            // This avoids the content being drawn underneath the
+            // separator between the panel and the applet.
+            fullRepresentation.anchors.topMargin = Qt.binding(() => root.separatorShown
+                && Plasmoid.location === PlasmaCore.Types.TopEdge ? separator.height : 0);
+            fullRepresentation.anchors.bottomMargin = Qt.binding(() => root.separatorShown
+                && Plasmoid.location === PlasmaCore.Types.BottomEdge ? separator.height : 0);
+            fullRepresentation.anchors.leftMargin = Qt.binding(() => root.separatorShown
+                && Plasmoid.location === PlasmaCore.Types.LeftEdge ? separator.width : 0);
+            fullRepresentation.anchors.rightMargin = Qt.binding(() => root.separatorShown
+                && Plasmoid.location === PlasmaCore.Types.RightEdge ? separator.width : 0);
         }
     }
 
@@ -242,22 +268,33 @@ PlasmaCore.ToolTipArea {
 
             focus: true
 
+            // A closed popup takes no input: Qt counts a hidden window as
+            // active while its parent window has the focus, so the keyboard
+            // shortcuts in one of the bar's closed popups would answer while
+            // another of its popups is open (Qt bug QTBUG-146992; Plasma's
+            // own popup container does the same).
+            enabled: dialog.visible
+
             Keys.onEscapePressed: {
                 root.plasmoidItem.expanded = false;
             }
 
-            Layout.minimumWidth: fullRepresentation ? fullRepresentation.Layout.minimumWidth : 0
-            Layout.minimumHeight: fullRepresentation ? fullRepresentation.Layout.minimumHeight : 0
+            // The separator's pixel along the bar, kept beside the content.
+            property real extraWidth: 0
+            property real extraHeight: 0
 
-            Layout.maximumWidth: fullRepresentation ? fullRepresentation.Layout.maximumWidth : Infinity
-            Layout.maximumHeight: fullRepresentation ? fullRepresentation.Layout.maximumHeight : Infinity
+            Layout.minimumWidth: fullRepresentation ? fullRepresentation.Layout.minimumWidth + extraWidth : 0
+            Layout.minimumHeight: fullRepresentation ? fullRepresentation.Layout.minimumHeight + extraHeight : 0
+
+            Layout.maximumWidth: fullRepresentation ? fullRepresentation.Layout.maximumWidth + extraWidth : Infinity
+            Layout.maximumHeight: fullRepresentation ? fullRepresentation.Layout.maximumHeight + extraHeight : Infinity
 
             implicitWidth: {
                 if (root.fullRepresentation !== null) {
                     /****/ if (root.fullRepresentation.Layout.preferredWidth > 0) {
-                        return root.fullRepresentation.Layout.preferredWidth;
+                        return root.fullRepresentation.Layout.preferredWidth + extraWidth;
                     } else if (root.fullRepresentation.implicitWidth > 0) {
-                        return root.fullRepresentation.implicitWidth;
+                        return root.fullRepresentation.implicitWidth + extraWidth;
                     }
                 }
                 return Kirigami.Units.iconSizes.sizeForLabels * 35;
@@ -265,9 +302,9 @@ PlasmaCore.ToolTipArea {
             implicitHeight: {
                 if (root.fullRepresentation !== null) {
                     /****/ if (fullRepresentation.Layout.preferredHeight > 0) {
-                        return fullRepresentation.Layout.preferredHeight;
+                        return fullRepresentation.Layout.preferredHeight + extraHeight;
                     } else if (fullRepresentation.implicitHeight > 0) {
-                        return fullRepresentation.implicitHeight;
+                        return fullRepresentation.implicitHeight + extraHeight;
                     }
                 }
                 return Kirigami.Units.iconSizes.sizeForLabels * 25;
@@ -283,13 +320,12 @@ PlasmaCore.ToolTipArea {
             KSvg.SvgItem {
                 id: separator
                 // Only draw for popups of panel applets, not desktop applets
-                visible: [PlasmaCore.Types.TopEdge, PlasmaCore.Types.LeftEdge, PlasmaCore.Types.RightEdge, PlasmaCore.Types.BottomEdge]
-                    .includes(Plasmoid.location) && !dialog.margin
+                visible: root.separatorShown
                 anchors {
-                    topMargin: -dialog.topMargin
-                    leftMargin: -dialog.leftMargin
-                    rightMargin: -dialog.rightMargin
-                    bottomMargin: -dialog.bottomMargin
+                    topMargin: -dialog.topPadding
+                    leftMargin: -dialog.leftPadding
+                    rightMargin: -dialog.rightPadding
+                    bottomMargin: -dialog.bottomPadding
                 }
                 z: 999 /* Draw the line on top of the applet */
                 elementId: (Plasmoid.location === PlasmaCore.Types.TopEdge || Plasmoid.location === PlasmaCore.Types.BottomEdge) ? "horizontal-line" : "vertical-line"
@@ -309,6 +345,11 @@ PlasmaCore.ToolTipArea {
                             target: separator
                             height: 1
                         }
+                        PropertyChanges {
+                            target: appletParent
+                            extraHeight: 1
+                            extraWidth: 0
+                        }
                     },
                     State {
                         when: Plasmoid.location === PlasmaCore.Types.LeftEdge
@@ -323,6 +364,11 @@ PlasmaCore.ToolTipArea {
                         PropertyChanges {
                             target: separator
                             width: 1
+                        }
+                        PropertyChanges {
+                            target: appletParent
+                            extraHeight: 0
+                            extraWidth: 1
                         }
                     },
                     State {
@@ -339,6 +385,11 @@ PlasmaCore.ToolTipArea {
                             target: separator
                             width: 1
                         }
+                        PropertyChanges {
+                            target: appletParent
+                            extraHeight: 0
+                            extraWidth: 1
+                        }
                     },
                     State {
                         when: Plasmoid.location === PlasmaCore.Types.BottomEdge
@@ -353,6 +404,11 @@ PlasmaCore.ToolTipArea {
                         PropertyChanges {
                             target: separator
                             height: 1
+                        }
+                        PropertyChanges {
+                            target: appletParent
+                            extraHeight: 1
+                            extraWidth: 0
                         }
                     }
                 ]
